@@ -4,7 +4,7 @@
 [![Codacy Badge](https://api.codacy.com/project/badge/Coverage/ce1befc6db9e42fabbb3e9e48c75d9e6)](https://www.codacy.com/app/andyrjohnson82/ulit?utm_source=github.com&utm_medium=referral&utm_content=andyrj/ulit&utm_campaign=Badge_Coverage)
 [![Build Status](https://travis-ci.org/andyrj/ulit.svg?branch=master)](https://travis-ci.org/andyrj/ulit)
 
-Tagged Template Literal html template library.  Inspired by lit-html/hyperHTML.
+*WIP* Tagged Template Literal html template library.  Inspired by lit-html/hyperHTML.
 
 TODO:
 1. Render arrays passed as expression to template
