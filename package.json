@@ -1,6 +1,6 @@
 {
   "name": "ulit",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "minimalist tagged template literal library",
   "main": "dist/ulit.js",
   "jsnext:main": "src/index.js",
