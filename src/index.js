@@ -97,6 +97,7 @@ function updateNode(part, value) {
 
 function updateArray(part, value) {
   // TODO: add logic for rendering arrays...
+  
 }
 
 export function render(template, target = null, part = null) {
