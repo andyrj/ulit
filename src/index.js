@@ -99,6 +99,38 @@ function updateArray(part, value) {
   // TODO: add logic for rendering arrays...
 }
 
+export function render(template, target = null, part = null) {
+  const parent = target != null ? target.parentNode : document.body;
+  let instance =
+    target.__template ||
+    (parent &&
+      parent.childNodes &&
+      parent.childNodes.length > 0 &&
+      parent.childNodes[0].__template)
+      ? parent.childNodes[0].__template
+      : null;
+  if (instance) {
+    instance.update(template.values);
+    return;
+  }
+  if (target == null) {
+    template.update();
+    if (parent.childNodes.length > 0) {
+      while (parent.hasChildNodes) {
+        parent.removeChild(parent.lastChild);
+      }
+    }
+    parent.appendChild(template.fragment.content);
+    parent.childNodes[0].__template = template;
+  } else if (target.nodeType === COMMENT_NODE && target === part.end) {
+    template.update();
+    template.fragment.content.__template = template;
+    part.target = template.fragment.content.firstChild;
+    part.end = template.fragment.content.lastChild;
+    parent.replaceChild(template.fragment.content, target);
+  }
+}
+
 function set(part, value) {
   const target = part.target;
   if (Array.isArray(target)) {
@@ -147,7 +179,7 @@ function TemplateResult(template, exprs) {
           result.fragment.content,
           child,
           generateParts(cloneExprs, parts)
-        )
+        );
       });
       initialized = true;
     } else {
@@ -193,36 +225,4 @@ export function html(strs, ...exprs) {
     templateCache.set(strs, template);
   }
   return TemplateResult(template, exprs);
-}
-
-export function render(template, target = null, part = null) {
-  const parent = target != null ? target.parentNode : document.body;
-  let instance =
-    target.__template ||
-    (parent &&
-      parent.childNodes &&
-      parent.childNodes.length > 0 &&
-      parent.childNodes[0].__template)
-      ? parent.childNodes[0].__template
-      : null;
-  if (instance) {
-    instance.update(template.values);
-    return;
-  }
-  if (target == null) {
-    template.update();
-    if (parent.childNodes.length > 0) {
-      while (parent.hasChildNodes) {
-        parent.removeChild(parent.lastChild);
-      }
-    }
-    parent.appendChild(template.fragment.content);
-    parent.childNodes[0].__template = template;
-  } else if (target.nodeType === COMMENT_NODE && target === part.end) {
-    template.update();
-    template.fragment.content.__template = template;
-    part.target = template.fragment.content.firstChild;
-    part.end = template.fragment.content.lastChild;
-    parent.replaceChild(template.fragment.content, target);
-  }
 }
