@@ -46,6 +46,7 @@ function generateParts(exprs, parts) {
         [].forEach.call(element.attributes, attr => {
           if (attr.nodeValue === "{{}}") {
             parts.push({
+              id: Symbol(),
               target: [element, attr.nodeName],
               expression: exprs.shift(),
               end: null
@@ -54,6 +55,7 @@ function generateParts(exprs, parts) {
         });
       } else if (nodeType === COMMENT_NODE && nodeValue === "{{}}") {
         parts.push({
+          id: Symbol(),
           target: element,
           expression: exprs.shift(),
           end: element
@@ -97,7 +99,7 @@ function updateNode(part, value) {
 
 function updateArray(part, value) {
   // TODO: add logic for rendering arrays...
-  
+
 }
 
 export function render(template, target = null, part = null) {
@@ -205,7 +207,7 @@ function TemplateResult(template, exprs) {
       if (isDirective(target, expression)) {
         expression(newValue => {
           set(part, newValue);
-        });
+        }, part.id);
       } else {
         set(part, expression);
       }
