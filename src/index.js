@@ -49,7 +49,8 @@ function generateParts(exprs, parts) {
               id: Symbol(),
               target: [element, attr.nodeName],
               expression: exprs.shift(),
-              end: null
+              end: null,
+              dispose: null
             });
           }
         });
@@ -58,7 +59,8 @@ function generateParts(exprs, parts) {
           id: Symbol(),
           target: element,
           expression: exprs.shift(),
-          end: element
+          end: element,
+          dispose: null
         });
       }
     }
@@ -95,6 +97,23 @@ function updateNode(part, value) {
   const parent = element.parentNode;
   parent.replaceChild(value, element);
   part.target = part.end = value;
+}
+
+function flushPart(part) {
+  if (part.target !== part.end || part.end != null) {
+    const parent = part.target.parentNode;
+    let lastNode = part.end;
+    while (lastNode) {
+      const nextNode = lastNode.previousSibling;
+      parent.removeChild(lastNode);
+      if (nextNode !== part.target) {
+        lastNode = nextNode;
+      } else {
+        lastNode = null;
+      }
+    }
+  }
+  return part.target;
 }
 
 function updateArray(part, value) {
@@ -167,9 +186,16 @@ function isDirective(target, expression) {
 
 function TemplateResult(template, exprs) {
   const parts = [];
-  const result = {};
+  let disposed = false;
+  const result = {
+    template,
+    values: exprs,
+    dispose() {
+      disposed = true;
+      parts.forEach(part => typeof part.dispose === "function" ? part.dispose() : null);
+    }
+  };
   let initialized = false;
-  result.values = exprs;
   result.update = values => {
     if (values) {
       result.values = values;
@@ -207,7 +233,11 @@ function TemplateResult(template, exprs) {
       if (isDirective(target, expression)) {
         expression(newValue => {
           set(part, newValue);
-        }, part.id);
+        },
+        dispose => {
+          part.dispose = dispose;
+        },
+        part.id);
       } else {
         set(part, expression);
       }
