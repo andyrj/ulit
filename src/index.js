@@ -101,12 +101,12 @@ function updateAttribute(element, name, value) {
 function updateTextNode(part, value) {
   const element = part.start;
   const parent = element.parentNode;
-  if (element.nodeType === COMMENT_NODE && typeof value === "string") {
+  if (element.nodeType === TEXT_NODE && element.nodeValue !== value) {
+    element.nodeValue = value;
+  } else if (element.nodeType === COMMENT_NODE && typeof value === "string") {
     const newNode = document.createTextNode(value);
     parent.replaceChild(newNode, element);
     part.start = part.end = newNode;
-  } else if (element.nodeType === TEXT_NODE && element.nodeValue !== value) {
-    element.nodeValue = value;
   }
 }
 
@@ -136,7 +136,6 @@ function flushPart(part) {
 
 function updateArray(part, value) {
   // TODO: add logic for rendering arrays...
-
 }
 
 export function render(template, target = null, part = null) {
@@ -246,20 +245,24 @@ function TemplateResult(template, parts, exprs) {
   return result;
 }
 
+function flushPath() {
+  while(walkPath.length > 0) {
+    walkPath.pop();
+  }
+}
+
 export function html(strs, ...exprs) {
-  const html = strs.join("{{}}");
+  const markup = strs.join("{{}}");
   let { template, parts } = templateCache.get(strs) || { template: null, parts: [] };
   if (template == null) {
     template = document.createElement("template");
-    template.innerHTML = html;
+    template.innerHTML = markup;
     const setupFn = templateSetup(parts);
-    console.log(parts);
+    flushPath();
     [].forEach.call(template.content.children, (child, i) => {
       walkPath.push(i);
       walkDOM(template.content, child, setupFn);
-      while(walkPath.length > 0) {
-        walkPath.pop();
-      }
+      flushPath();
     });
     templateCache.set(strs, { template, parts });
   }
