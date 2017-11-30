@@ -160,11 +160,11 @@ export function render(template, target = document.body, part = null) {
     }
     target.appendChild(template.fragment.content);
     target.childNodes[0].__template = template;
-  } else if (target.nodeType === COMMENT_NODE && target === part.end) {
+  } else if (target.nodeType === COMMENT_NODE) {
     template.update();
     part.start = template.fragment.content.firstChild;
     part.end = template.fragment.content.lastChild;
-    target.replaceChild(template.fragment.content, target);
+    target.parentNode.replaceChild(template.fragment.content, target);
     part.start.__template = template;
   }
 }

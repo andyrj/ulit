@@ -9,6 +9,7 @@ test.beforeEach(t => {
   global.document = dom.window.document;
 });
 
+/*
 test("tagged template literal should handle static templates", t => {
   const template = html`<div id="test">test</div>`;
   template.update();
@@ -61,13 +62,14 @@ test("tagged template literal should handle dynamic child interspersed with stat
   template.update();
   t.is(template.fragment.content.firstChild.outerHTML, "<div><br>before<div>test</div><br>after</div>");
 });
-
+*/
 test("tagged template literal should handle nested template", t => {
   const nested = html`<div id="test">test</div>`;
   const template = html`<div>${nested}</div>`;
-  render(template);
-  t.is(document.body.firstChild.firstChild.id, "test");
-  t.is(document.body.firstChild.firstChild.firstChild.nodeValue, "test");
+  template.update();
+  console.log(template.fragment.content.firstChild.firstChild);
+  t.is(template.fragment.content.firstChild.firstChild.id, "test");
+  t.is(template.fragment.content.firstChild.firstChild.firstChild.nodeValue, "test");
 
   /*
   const template1 = html`<div>${html`<div id="test">test</div>`}</div>`;
@@ -76,7 +78,7 @@ test("tagged template literal should handle nested template", t => {
   t.is(template1.fragment.content.firstChild.firstChild.firstChild.nodeValue, "test");
   */
 });
-
+/*
 test("tagged template literal should allow an expression which changes types between renders", t => {
   const str = "test";
   const div = document.createElement("div");
@@ -97,3 +99,4 @@ test("tagged template literal directives should work", t => {
   lastUpdate("test123");
   t.is(template.fragment.content.firstChild.firstChild.nodeValue, "test123");
 });
+*/
