@@ -218,9 +218,6 @@ function TemplateResult(template, parts, exprs) {
         result.fragment = document.importNode(template, true);
         parts.forEach(part => {
           part.start = followPath(result.fragment.content, part.path);
-          if (part.start === undefined && part.path[0] === 0 && part.path[1] === 2 ) {
-            console.log(result, part.path, result.fragment.content.childNodes[0].childNodes[2].nodeValue);
-          }
         });
       }
       parts.forEach((part, i) => {
