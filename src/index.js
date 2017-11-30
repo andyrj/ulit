@@ -5,36 +5,31 @@ const templateCache = new Map();
 const walkPath = [];
 
 function walkDOM(parent, element, fn) {
-  fn(parent, element);
+  element && fn(parent, element);
+  element || (element = parent);
   if (element.childNodes.length > 0) {
-    const cloneNodes = [].slice.call(element.childNodes, 0);
-    cloneNodes.forEach((child, i) => {
-      walkPath.push(i);
+    [].forEach.call(element.childNodes, (child, index) => {
+      walkPath.push(index);
       walkDOM(element, child, fn);
       walkPath.pop();
     });
   }
 }
 
-function followPath(parent, pointer) {
-  const cPath = pointer.slice(0);
-  let element;
-  if (parent != null) {
-    while(cPath.length > 0) {
-      const raw = cPath.unshift();
-      const num = parseInt(raw);
-      if (num !== NaN) {
-        if (element == null) {
-          element = parent.childNodes[num];
-        } else {
-          element = element.childNodes[num];
-        }
-      } else {
-        element = [element, raw];
-      }
-    }
+function followPath(node, pointer) {
+  if (pointer.length === 0) {
+    return node;
   }
-  return element;
+  const cPath = pointer.slice(0);
+  const curr = cPath.shift();
+  const num = parseInt(curr);
+  if (typeof curr === "string") {
+    return [node, curr];
+  } else if (!isNaN(num)) {
+    return followPath(node.childNodes[num], cPath);
+  } else {
+    throw new RangeError("part path not found");
+  }
 }
 
 function templateSetup(parts) {
@@ -54,9 +49,12 @@ function templateSetup(parts) {
           }
           if (i < end) {
             nodes.push(document.createComment("{{}}"));
+            const adjustedPath = walkPath.slice(0);
+            const len = adjustedPath.length - 1;
+            adjustedPath[len] += cursor;
             parts.push({
               id: Symbol(),
-              path: walkPath.concat(cursor),
+              path: adjustedPath,
               start: null,
               end: null,
               dispose: null
@@ -138,35 +136,36 @@ function updateArray(part, value) {
   // TODO: add logic for rendering arrays...
 }
 
-export function render(template, target = null, part = null) {
-  const parent = target != null ? target.parentNode : document.body;
-  let instance =
-    target.__template ||
-    (parent &&
-      parent.childNodes &&
-      parent.childNodes.length > 0 &&
-      parent.childNodes[0].__template)
-      ? parent.childNodes[0].__template
-      : null;
+export function render(template, target = document.body, part = null) {
+  let instance;
+  if (target.__template) {
+    instance = target.__template;
+  } else if (
+    target.childNodes &&
+    target.childNodes.length > 0 &&
+    target.childNodes[0].__template
+  ) {
+    instance = target.childNodes[0].__template;
+  }
   if (instance) {
     instance.update(template.values);
     return;
   }
-  if (target == null) {
+  if (part == null) {
     template.update();
-    if (parent.childNodes.length > 0) {
-      while (parent.hasChildNodes) {
-        parent.removeChild(parent.lastChild);
+    if (target.childNodes.length > 0) {
+      while (target.hasChildNodes) {
+        target.removeChild(target.lastChild);
       }
     }
-    parent.appendChild(template.fragment.content);
-    parent.childNodes[0].__template = template;
+    target.appendChild(template.fragment.content);
+    target.childNodes[0].__template = template;
   } else if (target.nodeType === COMMENT_NODE && target === part.end) {
     template.update();
-    template.fragment.content.__template = template;
     part.start = template.fragment.content.firstChild;
     part.end = template.fragment.content.lastChild;
-    parent.replaceChild(template.fragment.content, target);
+    target.replaceChild(template.fragment.content, target);
+    part.start.__template = template;
   }
 }
 
@@ -203,30 +202,30 @@ function isDirective(target, expression) {
 
 function TemplateResult(template, parts, exprs) {
   let disposed = false;
-  let initialized = false;
   const result = {
     template,
     fragment: null,
+    values: exprs,
     dispose() {
       disposed = true;
       parts.forEach(part => typeof part.dispose === "function" ? part.dispose() : null);
     },
     update(values) {
-      if (values == null) {
-        values = exprs;
-      } else {
-        exprs = values;
+      if (values != null) {
+        result.values = values;
       }
-      if (!initialized) {
+      if (!result.fragment) {
         result.fragment = document.importNode(template, true);
         parts.forEach(part => {
           part.start = followPath(result.fragment.content, part.path);
+          if (part.start === undefined && part.path[0] === 0 && part.path[1] === 2 ) {
+            console.log(result, part.path, result.fragment.content.childNodes[0].childNodes[2].nodeValue);
+          }
         });
-        initialized = true;
       }
       parts.forEach((part, i) => {
         const target = part.start;
-        const expression = values[i];
+        const expression = result.values[i];
         if (isDirective(target, expression)) {
           expression(newValue => {
             set(part, newValue);
@@ -241,14 +240,7 @@ function TemplateResult(template, parts, exprs) {
       });
     } 
   };
-  initialized = false;
   return result;
-}
-
-function flushPath() {
-  while(walkPath.length > 0) {
-    walkPath.pop();
-  }
 }
 
 export function html(strs, ...exprs) {
@@ -257,13 +249,7 @@ export function html(strs, ...exprs) {
   if (template == null) {
     template = document.createElement("template");
     template.innerHTML = markup;
-    const setupFn = templateSetup(parts);
-    flushPath();
-    [].forEach.call(template.content.children, (child, i) => {
-      walkPath.push(i);
-      walkDOM(template.content, child, setupFn);
-      flushPath();
-    });
+    walkDOM(template.content, null, templateSetup(parts));
     templateCache.set(strs, { template, parts });
   }
   return TemplateResult(template, parts, exprs);
