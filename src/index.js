@@ -80,7 +80,7 @@ function templateSetup(parts) {
         }
       });
     }
-  }
+  };
 }
 
 function updateAttribute(element, name, value) {
