@@ -251,3 +251,10 @@ export function html(strs, ...exprs) {
   }
   return TemplateResult(template, parts, exprs);
 }
+
+export function until(promise, defaultContent) {
+  return ({ update, id, addDisposer }) => {
+    update(defaultContent);
+    return promise;
+  };
+}
