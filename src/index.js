@@ -220,19 +220,14 @@ function TemplateResult(template, parts, exprs) {
         result.fragment = document.importNode(template, true);
         parts.forEach(part => {
           part.start = followPath(result.fragment.content, part.path);
+          part.update = newValue => set(part, newValue);
         });
       }
       parts.forEach((part, i) => {
         const target = part.start;
         const expression = result.values[i];
         if (isDirective(target, expression)) {
-          expression(newValue => {
-            set(part, newValue);
-          },
-          dispose => {
-            part.dispose = dispose;
-          },
-          part.id);
+          expression(part);
         } else {
           set(part, expression);
         }

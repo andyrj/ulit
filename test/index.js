@@ -92,7 +92,7 @@ test("tagged template literal should allow an expression which changes types bet
 
 test("tagged template literal directives should work", async t => {
   let lastUpdate;
-  const template = await html`<div>${(update) => {lastUpdate = update}}</div>`;
+  const template = await html`<div>${part => {lastUpdate = part.update}}</div>`;
   template.update();
   lastUpdate("test");
   t.is(template.fragment.content.firstChild.firstChild.nodeValue, "test");
