@@ -253,8 +253,38 @@ export function html(strs, ...exprs) {
 }
 
 export function until(promise, defaultContent) {
-  return ({ update, id, addDisposer }) => {
+  return ({ update }) => {
     update(defaultContent);
     return promise;
   };
+}
+
+function defaultKeyFn(item) {
+  return item.key;
+}
+
+function defaultTemplateFn(item, key) {
+  return html`${item.value}`;
+}
+
+const keyMapCache = new Map();
+export function repeat(items, keyFn = defaultKeyFn, templateFn = defaultTemplateFn) {
+  return ({ update, id, addDisposer }) => {
+    const keyMapPair = keyMapCache.get(id);
+    if (!keyMapPair) {
+      let templates;
+      let newKeyMap;
+      items.forEach(item => {
+        const key = keyFn(item);
+        const template = templateFn(item, key);
+        templates.push(template);
+        newKeyMap.push({ key, template });
+      });
+      keyMapCache.set(id, newKeyMap);
+      update(templates);
+    } else {
+      const newMap = items.map(item => keyFn(item));
+      // TODO: do key comparisons here to efficiently add/move/remove dom nodes
+    }
+  }
 }
