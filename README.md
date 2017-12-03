@@ -7,10 +7,9 @@
 *WIP* Tagged Template Literal html template library.  Inspired by lit-html/hyperHTML.
 
 TODO:
-1. Render arrays passed as expression to template
-2. Write helpers for repeat() and until()
-3. Add logic to hydrate from SSR
-4. get test coverage up to 100/100
+1. Handle iterable expressions
+2. Write helper for repeat()
+3. get test coverage up to 100/100
 
 ```jsx
 // example code will go here...
