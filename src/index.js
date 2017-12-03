@@ -2,6 +2,7 @@ const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 const templateCache = new Map();
+const hashCache = new Map();
 const walkPath = [];
 
 function walkDOM(parent, element, fn) {
@@ -240,14 +241,42 @@ function TemplateResult(template, parts, exprs) {
   return result;
 }
 
-export function html(strs, ...exprs) {
-  const markup = strs.join("{{}}");
-  let { template, parts } = templateCache.get(strs) || { template: null, parts: [] };
+function hex(buffer) {
+  const hexCodes = [];
+  const padding = "00000000";
+  const view = new DataView(buffer);
+  for (var i = 0; i < view.byteLength; i += 4) {
+    hexCodes.push(
+      (padding + view.getUint32(i).toString(16)).slice(-padding.length)
+    );
+  }
+  return hexCodes.join("");
+}
+
+const sha256 = str => {
+  const utf8er = new window.TextEncoder("utf-8");
+  return window.crypto.subtle
+    .digest("SHA-256", utf8er.encode(str))
+    .then(hash => {
+      return hex(hash);
+    });
+};
+
+export async function html(strs, ...exprs) {
+  let hash = hashCache.get(strs);
+  if (!hash) {
+    hash = await sha256(strs);
+    hashCache.set(strs, hash);
+  }
+  let { template, parts } = 
+    templateCache.get(hash) ||
+    document.getElementById(`template-${hash}`) ||
+    { template: null, parts: [] };
   if (template == null) {
     template = document.createElement("template");
-    template.innerHTML = markup;
+    template.innerHTML = strs.join("{{}}");
     walkDOM(template.content, null, templateSetup(parts));
-    templateCache.set(strs, { template, parts });
+    templateCache.set(hash, { template, parts });
   }
   return TemplateResult(template, parts, exprs);
 }
