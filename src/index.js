@@ -207,6 +207,7 @@ function TemplateResult(template, parts, exprs) {
     template,
     fragment: null,
     values: exprs,
+    parts,
     dispose() {
       disposed = true;
       parts.forEach(part => typeof part.dispose === "function" ? part.dispose() : null);
@@ -253,8 +254,11 @@ function hex(buffer) {
   return hexCodes.join("");
 }
 
-const sha256 = str => {
-  const utf8er = new window.TextEncoder("utf-8");
+let utf8er;
+function sha256(str) {
+  if (utf8er == null) {
+    utf8er = new window.TextEncoder("utf-8");
+  }
   return window.crypto.subtle
     .digest("SHA-256", utf8er.encode(str))
     .then(hash => {
