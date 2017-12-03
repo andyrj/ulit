@@ -262,22 +262,41 @@ const sha256 = str => {
     });
 };
 
+function parseSerializedParts(nodeValue) {
+  if (nodeValue.startsWith("{{parts:") && nodeValue.endsWith("}}")) {
+    return JSON.parse(nodeValue.split("{{parts:").slice(0, -2));
+  } else {
+    return [];
+  }
+}
+
+function removeFirstChild(parent) {
+  return parent.removeChild(parent.firstChild);
+}
+
+function checkForSerialized(hash) {
+  const template = document.getElementById(`template-${hash}`);
+  // <!--{{parts:[[0,1,1],...]}}-->
+  const parts = template != null ? parseSerializedParts(removeFirstChild(template.content).nodeValue) : [];
+  const result = { template, parts };
+  template && templateCache.set(hash, result);
+  return result;
+}
+
 export async function html(strs, ...exprs) {
   let hash = hashCache.get(strs);
   if (!hash) {
     hash = await sha256(strs);
     hashCache.set(strs, hash);
   }
-  let { template, parts } = 
-    templateCache.get(hash) ||
-    document.getElementById(`template-${hash}`) ||
-    { template: null, parts: [] };
-  if (template == null) {
+  let { template, parts } = templateCache.get(hash) || checkForSerialized(hash);
+  if (template == null) {  
     template = document.createElement("template");
     template.innerHTML = strs.join("{{}}");
     walkDOM(template.content, null, templateSetup(parts));
     templateCache.set(hash, { template, parts });
   }
+  
   return TemplateResult(template, parts, exprs);
 }
 
