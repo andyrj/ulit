@@ -33,6 +33,24 @@ function followPath(node, pointer) {
   }
 }
 
+function Part(path, id = Symbol(), start = null, end = null) {
+  const disposers = [];
+  let part = { id, path, start, end };
+  part.update = newValue => set(part, newValue);
+  part.addDisposer = handler => {
+    if (typeof handler === "function" && disposers.indexOf(handler) === -1) {
+      disposers.push(handler);
+    }
+  };
+  part.removeDisposer = handler => {
+    const index = disposers.indexOf(handler);
+    if (index > -1) {
+      disposers.splice(index, 1);
+    }
+  }
+  return part;
+}
+
 function templateSetup(parts) {
   return function(parent, element) {
     const nodeType = element.nodeType;
@@ -53,13 +71,7 @@ function templateSetup(parts) {
             const adjustedPath = walkPath.slice(0);
             const len = adjustedPath.length - 1;
             adjustedPath[len] += cursor;
-            parts.push({
-              id: Symbol(),
-              path: adjustedPath,
-              start: null,
-              end: null,
-              dispose: null
-            });
+            parts.push(Part(adjustedPath));
             cursor++;
           }
         });
@@ -71,13 +83,7 @@ function templateSetup(parts) {
     } else if (nodeType === ELEMENT_NODE) {
       [].forEach.call(element.attributes, attr => {
         if (attr.nodeValue === "{{}}") {
-          parts.push({
-            id: Symbol(),
-            path: walkPath.concat(attr.nodeName),
-            start: null,
-            end: null,
-            dispose: null
-          });
+          parts.push(Part(walkPath.concat(attr.nodeName)));
         }
       });
     }
@@ -202,15 +208,17 @@ function isDirective(target, expression) {
 }
 
 function TemplateResult(template, parts, exprs) {
-  let disposed = false;
   const result = {
     template,
     fragment: null,
     values: exprs,
     parts,
     dispose() {
-      disposed = true;
-      parts.forEach(part => typeof part.dispose === "function" ? part.dispose() : null);
+      parts.forEach(part =>
+        part.disposers.forEach(
+          dispose => typeof dispose === "function" && dispose()
+        )
+      );
     },
     update(values) {
       if (values != null) {
@@ -232,7 +240,7 @@ function TemplateResult(template, parts, exprs) {
           set(part, expression);
         }
       });
-    } 
+    }
   };
   return result;
 }
@@ -259,7 +267,7 @@ function sha256(str) {
     .then(hash => {
       return hex(hash);
     });
-};
+}
 
 function parseSerializedParts(nodeValue) {
   if (nodeValue.startsWith("{{parts:") && nodeValue.endsWith("}}")) {
@@ -276,7 +284,10 @@ function removeFirstChild(parent) {
 function checkForSerialized(hash) {
   const template = document.getElementById(`template-${hash}`);
   // <!--{{parts:[[0,1,1],...]}}-->
-  const parts = template != null ? parseSerializedParts(removeFirstChild(template.content).nodeValue) : [];
+  const parts =
+    template != null
+      ? parseSerializedParts(removeFirstChild(template.content).nodeValue)
+      : [];
   const result = { template, parts };
   template && templateCache.set(hash, result);
   return result;
@@ -289,13 +300,13 @@ export async function html(strs, ...exprs) {
     hashCache.set(strs, hash);
   }
   let { template, parts } = templateCache.get(hash) || checkForSerialized(hash);
-  if (template == null) {  
+  if (template == null) {
     template = document.createElement("template");
     template.innerHTML = strs.join("{{}}");
     walkDOM(template.content, null, templateSetup(parts));
     templateCache.set(hash, { template, parts });
   }
-  
+
   return TemplateResult(template, parts, exprs);
 }
 
@@ -310,13 +321,18 @@ function defaultKeyFn(item) {
   return item.key;
 }
 
-function defaultTemplateFn(item, key) {
+function defaultTemplateFn(item) {
   return html`${item.value}`;
 }
 
 const keyMapCache = new Map();
-export function repeat(items, keyFn = defaultKeyFn, templateFn = defaultTemplateFn) {
-  return ({ update, id, addDisposer }) => {
+export function repeat(
+  items,
+  keyFn = defaultKeyFn,
+  templateFn = defaultTemplateFn
+) {
+  return part => {
+    const id = part.id;
     const keyMapPair = keyMapCache.get(id);
     if (!keyMapPair) {
       let templates;
@@ -328,10 +344,10 @@ export function repeat(items, keyFn = defaultKeyFn, templateFn = defaultTemplate
         newKeyMap.push({ key, template });
       });
       keyMapCache.set(id, newKeyMap);
-      update(templates);
+      part.update(templates);
     } else {
       const newMap = items.map(item => keyFn(item));
       // TODO: do key comparisons here to efficiently add/move/remove dom nodes
     }
-  }
+  };
 }
