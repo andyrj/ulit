@@ -207,9 +207,9 @@ function isDirective(target, expression) {
   );
 }
 
-function TemplateResult(template, parts, exprs) {
+function TemplateResult(key, template, parts, exprs) {
   const result = {
-    template,
+    key,
     fragment: null,
     values: exprs,
     parts,
@@ -307,7 +307,7 @@ export async function html(strs, ...exprs) {
     templateCache.set(hash, { template, parts });
   }
 
-  return TemplateResult(template, parts, exprs);
+  return TemplateResult(strs, template, parts, exprs);
 }
 
 export function until(promise, defaultContent) {
