@@ -51,6 +51,7 @@ function Part(path, id = Symbol(), start = null, end = null) {
   return part;
 }
 
+// TODO: check if attribute part has svg parent, add this bool to part paths, for set() to use setAttributeNS()...
 function templateSetup(parts) {
   return function(parent, element) {
     const nodeType = element.nodeType;
@@ -122,6 +123,7 @@ function updateNode(part, value) {
   part.start = part.end = value;
 }
 
+// TODO: update this after changing to use comment node markers for template/part
 function flushPart(part) {
   if (part.start !== part.end || part.end != null) {
     const parent = part.start.parentNode;
@@ -137,10 +139,6 @@ function flushPart(part) {
     }
   }
   return part.start;
-}
-
-function updateArray(part, value) {
-  // TODO: add logic for rendering arrays...
 }
 
 export function render(template, target = document.body, part = null) {
@@ -350,4 +348,8 @@ export function repeat(
       // TODO: do key comparisons here to efficiently add/move/remove dom nodes
     }
   };
+}
+
+function updateArray(part, value) {
+  // TODO: add logic for rendering arrays...
 }
