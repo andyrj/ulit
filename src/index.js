@@ -104,41 +104,37 @@ function updateAttribute(element, name, value) {
   }
 }
 
-function updateTextNode(part, value) {
-  const element = part.start;
-  const parent = element.parentNode;
-  if (element.nodeType === TEXT_NODE && element.nodeValue !== value) {
-    element.nodeValue = value;
-  } else if (element.nodeType === COMMENT_NODE && typeof value === "string") {
-    const newNode = document.createTextNode(value);
-    parent.replaceChild(newNode, element);
-    part.start = part.end = newNode;
-  }
-}
-
 function updateNode(part, value) {
   const element = part.start;
   const parent = element.parentNode;
-  parent.replaceChild(value, element);
-  part.start = part.end = value;
-}
-
-// TODO: update this after changing to use comment node markers for template/part
-function flushPart(part) {
-  if (part.start !== part.end || part.end != null) {
-    const parent = part.start.parentNode;
-    let lastNode = part.end;
-    while (lastNode) {
-      const nextNode = lastNode.previousSibling;
-      parent.removeChild(lastNode);
-      if (nextNode !== part.start) {
-        lastNode = nextNode;
-      } else {
-        lastNode = null;
-      }
+  if (value.nodeType) {
+    parent.replaceChild(value, element);
+    part.start = part.end = value;
+  } else {
+    if (element.nodeType === TEXT_NODE && element.nodeValue !== value) {
+      element.nodeValue = value;
+    } else if (element.nodeType === COMMENT_NODE && typeof value === "string") {
+      const newNode = document.createTextNode(value);
+      parent.replaceChild(newNode, element);
+      part.start = part.end = newNode;
     }
   }
-  return part.start;
+}
+
+function flushPart(part) {
+  const start = part.start;
+  const parent = start.parentNode;
+  const end = part.end;
+  if (start === end) {
+    return;
+  } else {
+    let curr = end.previousSibling;
+    while (curr != null && curr !== start) {
+      const nextNode = curr.previousSibling;
+      parent.removeChild(curr);
+      curr = nextNode;
+    }
+  }
 }
 
 export function render(template, target = document.body, part = null) {
@@ -175,25 +171,27 @@ export function render(template, target = document.body, part = null) {
 }
 
 function set(part, value) {
-  const target = part.start;
-  if (Array.isArray(target)) {
-    const element = target[0];
-    const name = target[1];
-    updateAttribute(element, name, value);
+  const start = part.start;
+  const end = part.end;
+  if (typeof end === "string") {
+    updateAttribute(start, end, value);
   } else {
-    if (typeof value === "string") {
-      updateTextNode(part, value);
-    } else if (value.nodeType === ELEMENT_NODE && target !== value) {
-      updateNode(part, value);
-    } else if (value.values && value.update) {
-      render(value, target, part);
-    } else if (Array.isArray(value)) {
-      updateArray(part, value);
-    } else if (value.then) {
+    if (value.then) {
       value.then(promised => {
         set(part, promised);
       });
+    } else if (value.values && value.update) {
+      render(value, start, part);
+    } else if (Array.isArray(value)) {
+      updateArray(part, value);
+    } else {
+      updateNode(part, value);
     }
+    /*else if (typeof value === "string") {
+      updateTextNode(part, value);
+    } else if (value.nodeType === ELEMENT_NODE && start !== value) {
+      updateNode(part, value);
+    } */
   }
 }
 
@@ -225,7 +223,13 @@ function TemplateResult(key, template, parts, exprs) {
       if (!result.fragment) {
         result.fragment = document.importNode(template, true);
         parts.forEach(part => {
-          part.start = followPath(result.fragment.content, part.path);
+          const target = followPath(result.fragment.content, part.path);
+          if (Array.isArray(target)) {
+            part.start = target[0];
+            part.end = target[1];
+          } else {
+            part.start = target;
+          }
           part.update = newValue => set(part, newValue);
         });
       }
@@ -267,9 +271,9 @@ function sha256(str) {
     });
 }
 
-function parseSerializedParts(nodeValue) {
-  if (nodeValue.startsWith("{{parts:") && nodeValue.endsWith("}}")) {
-    return JSON.parse(nodeValue.split("{{parts:").slice(0, -2));
+function parseSerializedParts(value) {
+  if (value.startsWith("{{ps:") && value.endsWith("}}")) {
+    return JSON.parse(value.split("{{ps:")[1].slice(0, -2));
   } else {
     return [];
   }
