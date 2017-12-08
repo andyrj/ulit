@@ -163,8 +163,8 @@ export function render(template, target = document.body) {
     instance.update(template.values);
     return;
   }
+  template.update();
   if (part == null) {
-    template.update();
     if (target.childNodes.length > 0) {
       while (target.hasChildNodes) {
         target.removeChild(target.lastChild);
@@ -172,11 +172,12 @@ export function render(template, target = document.body) {
     }
     target.appendChild(template.fragment.content);
     target.childNodes[0].__template = template;
-  } else if (target.nodeType === COMMENT_NODE) {
-    template.update();
+  } else {
+    const start = part.start;
+    const parent = start.parentNode;
     part.start = template.fragment.content.firstChild;
     part.end = template.fragment.content.lastChild;
-    target.parentNode.replaceChild(template.fragment.content, target);
+    parent.replaceChild(template.fragment.content, start);
     part.start.__template = template;
   }
 }
