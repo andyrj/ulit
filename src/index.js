@@ -143,17 +143,19 @@ function flushPart(part) {
   return start;
 }
 
-export function render(template, target = document.body, part = null) {
-  let instance;
-  if (target.__template) {
-    instance = target.__template;
-  } else if (
+function getChildTemplate(target) {
+  if (
     target.childNodes &&
     target.childNodes.length > 0 &&
     target.childNodes[0].__template
   ) {
-    instance = target.childNodes[0].__template;
+    return target.childNodes[0].__template;
   }
+}
+
+export function render(template, target = document.body) {
+  const instance = target.__template || getChildTemplate(target);
+  const part = target.nodeType == null ? target : null;
   if (instance) {
     instance.update(template.values);
     return;
@@ -187,7 +189,7 @@ function set(part, value) {
         set(part, promised);
       });
     } else if (value.values && value.update) {
-      render(value, start, part);
+      render(value, part);
     } else if (Array.isArray(value)) {
       updateArray(part, value);
     } else if (value.nodeType) {
@@ -249,31 +251,6 @@ function TemplateResult(key, template, parts, exprs) {
   };
   return result;
 }
-/*
-function hex(buffer) {
-  const hexCodes = [];
-  const padding = "00000000";
-  const view = new DataView(buffer);
-  for (var i = 0; i < view.byteLength; i += 4) {
-    hexCodes.push(
-      (padding + view.getUint32(i).toString(16)).slice(-padding.length)
-    );
-  }
-  return hexCodes.join("");
-}
-
-let utf8er;
-function sha256(str) {
-  if (utf8er == null) {
-    utf8er = new window.TextEncoder("utf-8");
-  }
-  return window.crypto.subtle
-    .digest("SHA-256", utf8er.encode(str))
-    .then(hash => {
-      return hex(hash);
-    });
-}
-*/
 
 function parseSerializedParts(value) {
   if (value.startsWith("{{ps:") && value.endsWith("}}")) {
@@ -307,7 +284,7 @@ function checkForSerialized(hash) {
 }
 
 export function html(strs, ...exprs) {
-  const b64 = atob(strs);
+  const b64 = btoa(strs);
   let { template, parts } = templateCache.get(b64) || checkForSerialized(b64);
   if (template == null) {
     template = document.createElement("template");
