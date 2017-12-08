@@ -2,7 +2,6 @@ const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 const templateCache = new Map();
-const hashCache = new Map();
 const walkPath = [];
 
 function walkDOM(parent, element, fn) {
@@ -107,17 +106,24 @@ function updateAttribute(element, name, value) {
 function updateNode(part, value) {
   const element = part.start;
   const parent = element.parentNode;
-  if (value.nodeType) {
-    parent.replaceChild(value, element);
+  if (element !== value) {
+    parent.replaceChild(value, flushPart(part));
     part.start = part.end = value;
-  } else {
-    if (element.nodeType === TEXT_NODE && element.nodeValue !== value) {
-      element.nodeValue = value;
-    } else if (element.nodeType === COMMENT_NODE && typeof value === "string") {
-      const newNode = document.createTextNode(value);
-      parent.replaceChild(newNode, element);
-      part.start = part.end = newNode;
-    }
+  }
+}
+
+function updateTextNode(part, value) {
+  const element = part.start;
+  const parent = element.parentNode;
+  if (part.start !== part.end) {
+    flushPart(part);
+  }
+  if (element.nodeType === TEXT_NODE && element.nodeValue !== value) {
+    element.nodeValue = value;
+  } else if (element.nodeType !== TEXT_NODE) {
+    const newNode = document.createTextNode(value);
+    parent.replaceChild(newNode, element);
+    part.start = part.end = newNode;
   }
 }
 
@@ -126,15 +132,15 @@ function flushPart(part) {
   const parent = start.parentNode;
   const end = part.end;
   if (start === end) {
-    return;
-  } else {
-    let curr = end.previousSibling;
-    while (curr != null && curr !== start) {
-      const nextNode = curr.previousSibling;
-      parent.removeChild(curr);
-      curr = nextNode;
-    }
+    return start;
   }
+  let curr = end != null ? end.previousSibling : null;
+  while (curr != null && curr !== start) {
+    const nextNode = curr.previousSibling;
+    parent.removeChild(curr);
+    curr = nextNode;
+  }
+  return start;
 }
 
 export function render(template, target = document.body, part = null) {
@@ -184,14 +190,11 @@ function set(part, value) {
       render(value, start, part);
     } else if (Array.isArray(value)) {
       updateArray(part, value);
+    } else if (value.nodeType) {
+      updateNode(part, value);
     } else {
-      updateNode(part, value);
-    }
-    /*else if (typeof value === "string") {
       updateTextNode(part, value);
-    } else if (value.nodeType === ELEMENT_NODE && start !== value) {
-      updateNode(part, value);
-    } */
+    }
   }
 }
 
@@ -246,7 +249,7 @@ function TemplateResult(key, template, parts, exprs) {
   };
   return result;
 }
-
+/*
 function hex(buffer) {
   const hexCodes = [];
   const padding = "00000000";
@@ -270,6 +273,7 @@ function sha256(str) {
       return hex(hash);
     });
 }
+*/
 
 function parseSerializedParts(value) {
   if (value.startsWith("{{ps:") && value.endsWith("}}")) {
@@ -279,34 +283,37 @@ function parseSerializedParts(value) {
   }
 }
 
-function removeFirstChild(parent) {
-  return parent.removeChild(parent.firstChild);
+function isFirstChildSerializedParts(parent) {
+  const child = parent.firstChild;
+  return (
+    child.nodeType === COMMENT_NODE &&
+    child.nodeValue.startsWith("{{parts:") &&
+    child.nodeValue.endsWith("}}")
+  );
 }
 
 function checkForSerialized(hash) {
   const template = document.getElementById(`template-${hash}`);
   // <!--{{parts:[[0,1,1],...]}}-->
   const parts =
-    template != null
-      ? parseSerializedParts(removeFirstChild(template.content).nodeValue)
+    template != null && isFirstChildSerializedParts(template.content)
+      ? parseSerializedParts(
+          template.content.removeChild(template.content.firstChild).nodeValue
+        )
       : [];
   const result = { template, parts };
   template && templateCache.set(hash, result);
   return result;
 }
 
-export async function html(strs, ...exprs) {
-  let hash = hashCache.get(strs);
-  if (!hash) {
-    hash = await sha256(strs);
-    hashCache.set(strs, hash);
-  }
-  let { template, parts } = templateCache.get(hash) || checkForSerialized(hash);
+export function html(strs, ...exprs) {
+  const b64 = atob(strs);
+  let { template, parts } = templateCache.get(b64) || checkForSerialized(b64);
   if (template == null) {
     template = document.createElement("template");
     template.innerHTML = strs.join("{{}}");
     walkDOM(template.content, null, templateSetup(parts));
-    templateCache.set(hash, { template, parts });
+    templateCache.set(b64, { template, parts });
   }
 
   return TemplateResult(strs, template, parts, exprs);

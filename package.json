@@ -38,6 +38,7 @@
   "homepage": "https://github.com/andyrj/ulit#readme",
   "dependencies": {},
   "devDependencies": {
+    "atob": "^2.0.3",
     "ava": "^0.22.0",
     "babel-cli": "^6.26.0",
     "babel-core": "^6.26.0",
@@ -49,6 +50,7 @@
     "babel-preset-env": "^1.6.1",
     "babel-preset-stage-1": "^6.24.1",
     "babel-register": "^6.26.0",
+    "btoa": "^1.1.2",
     "codacy-coverage": "^2.0.3",
     "eslint": "^4.9.0",
     "eslint-config-airbnb": "^15.1.0",
@@ -63,13 +65,11 @@
     "ink-docstrap": "^1.3.0",
     "jsdoc": "^3.5.5",
     "jsdom": "^11.3.0",
-    "node-webcrypto-ossl": "^1.0.32",
     "nyc": "^11.2.1",
     "prettier": "^1.6.1",
     "rollup": "^0.50.0",
     "rollup-plugin-babel": "^3.0.2",
-    "rollup-plugin-babel-minify": "^3.1.2",
-    "text-encoding": "^0.6.4"
+    "rollup-plugin-babel-minify": "^3.1.2"
   },
   "peerDependencies": {},
   "ava": {
