@@ -204,12 +204,19 @@ function set(part, value) {
   }
 }
 
-function isDirective(target, expression) {
-  return (
-    typeof expression === "function" &&
-    ((Array.isArray(target) && !target[1].startsWith("on")) ||
-      !Array.isArray(target))
-  );
+function isDirective(part, expression) {
+  if (typeof expression === "function") {
+    if (typeof part.end !== "string") {
+      return true;
+    } else {
+      if (part.end.startsWith("on")) {
+        return false;
+      }
+      return true;
+    }
+  } else {
+    return false;
+  }
 }
 
 function TemplateResult(key, template, parts, exprs) {
@@ -245,7 +252,7 @@ function TemplateResult(key, template, parts, exprs) {
       parts.forEach((part, i) => {
         const target = part.start;
         const expression = result.values[i];
-        if (isDirective(target, expression)) {
+        if (isDirective(part, expression)) {
           expression(part);
         } else {
           set(part, expression);
