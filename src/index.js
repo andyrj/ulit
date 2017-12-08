@@ -154,8 +154,11 @@ function getChildTemplate(target) {
 }
 
 export function render(template, target = document.body) {
-  const instance = target.__template || getChildTemplate(target);
   const part = target.nodeType == null ? target : null;
+  const instance =
+    target.__template ||
+    (part && part.start && part.start.__template) ||
+    getChildTemplate(target);
   if (instance) {
     instance.update(template.values);
     return;
