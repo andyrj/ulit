@@ -188,16 +188,23 @@ function set(part, value) {
   if (typeof end === "string") {
     updateAttribute(start, end, value);
   } else {
+    if (
+      typeof value !== "string" &&
+      !Array.isArray(value) &&
+      typeof value[Symbol.iterator] === "function"
+    ) {
+      value = Array.from(value);
+    }
     if (value.then) {
       value.then(promised => {
         set(part, promised);
       });
     } else if (value.values && value.update) {
       render(value, part);
-    } else if (Array.isArray(value)) {
-      updateArray(part, value);
     } else if (value.nodeType) {
       updateNode(part, value);
+    } else if (Array.isArray(value)) {
+      updateArray(part, value);
     } else {
       updateTextNode(part, value);
     }
