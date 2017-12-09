@@ -250,7 +250,6 @@ function TemplateResult(key, template, parts, exprs) {
         });
       }
       parts.forEach((part, i) => {
-        const target = part.start;
         const expression = result.values[i];
         if (isDirective(part, expression)) {
           expression(part);
