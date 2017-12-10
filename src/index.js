@@ -1,3 +1,4 @@
+const SVG_NS = "https://www.w3.org/2000/svg";
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
@@ -32,9 +33,9 @@ function followPath(node, pointer) {
   }
 }
 
-function Part(path, id = Symbol(), start = null, end = null) {
+function Part(path, isSVG = false, id = Symbol(), start = null, end = null) {
   const disposers = [];
-  let part = { id, path, start, end };
+  let part = { id, path, start, end, isSVG };
   part.update = newValue => set(part, newValue);
   part.addDisposer = handler => {
     if (typeof handler === "function" && disposers.indexOf(handler) === -1) {
@@ -50,11 +51,25 @@ function Part(path, id = Symbol(), start = null, end = null) {
   return part;
 }
 
+function isSVGChild(node) {
+  let result = false;
+  let cur = node;
+  while (cur != null) {
+    if (cur.nodeName === "SVG") {
+      return true;
+    } else {
+      cur = cur.parentNode;
+    }
+  }
+  return result;
+}
+
 // TODO: check if attribute part has svg parent, add this bool to part paths, for set() to use setAttributeNS()...
 function templateSetup(parts) {
   return function(parent, element) {
     const nodeType = element.nodeType;
     if (nodeType === TEXT_NODE) {
+      const isSVG = isSVGChild(element);
       const text = element.nodeValue;
       const split = text.split("{{}}");
       const end = split.length - 1;
@@ -71,7 +86,7 @@ function templateSetup(parts) {
             const adjustedPath = walkPath.slice(0);
             const len = adjustedPath.length - 1;
             adjustedPath[len] += cursor;
-            parts.push(Part(adjustedPath));
+            parts.push(Part(adjustedPath, isSVG));
             cursor++;
           }
         });
@@ -81,24 +96,35 @@ function templateSetup(parts) {
         parent.removeChild(element);
       }
     } else if (nodeType === ELEMENT_NODE) {
+      const isSVG = isSVGChild(element);
       [].forEach.call(element.attributes, attr => {
         if (attr.nodeValue === "{{}}") {
-          parts.push(Part(walkPath.concat(attr.nodeName)));
+          parts.push(Part(walkPath.concat(attr.nodeName), isSVG));
         }
       });
     }
   };
 }
 
-function updateAttribute(element, name, value) {
+function updateAttribute(part, value) {
+  const element = part.start;
+  const name = part.end;
   try {
     element[name] = value == null ? "" : value;
   } catch (_) {} // eslint-disable-line
   if (typeof expr !== "function") {
     if (value == null) {
-      element.removeAttribute(name);
+      if (part.isSVG) {
+        element.removeAttributeNS(SVG_NS, name);
+      } else {
+        element.removeAttribute(name);
+      }
     } else {
-      element.setAttribute(name, value);
+      if (part.isSVG) {
+        element.setAttributeNS(SVG_NS, name, value);
+      } else {
+        element.setAttribute(name, value);
+      }
     }
   }
 }
@@ -160,7 +186,12 @@ export function render(template, target = document.body) {
     (part && part.start && part.start.__template) ||
     getChildTemplate(target);
   if (instance) {
-    instance.update(template.values);
+    if (instance.key === template.key) {
+      instance.update(template.values);
+    } else {
+      // TODO: handle case where new template is being rendered to this target...
+      instance.dispose();
+    }
     return;
   }
   template.update();
@@ -186,7 +217,7 @@ function set(part, value) {
   const start = part.start;
   const end = part.end;
   if (typeof end === "string") {
-    updateAttribute(start, end, value);
+    updateAttribute(part, value);
   } else {
     if (
       typeof value !== "string" &&
@@ -215,10 +246,9 @@ function isDirective(part, expression) {
   if (typeof expression === "function") {
     if (typeof part.end !== "string") {
       return true;
+    } else if (part.end.startsWith("on")) {
+      return false;
     } else {
-      if (part.end.startsWith("on")) {
-        return false;
-      }
       return true;
     }
   } else {
@@ -326,6 +356,25 @@ function defaultKeyFn(item) {
 
 function defaultTemplateFn(item) {
   return html`${item.value}`;
+}
+
+function pullPart(part) {
+  const frag = document.createDocumentFragment();
+  const stack = [];
+  const parent = part.start.parentNode;
+  let cur = part.end;
+  while (cur != null) {
+    const next = cur.previousSibling;
+    stack.push(parent.removeChild(cur));
+    cur = next;
+    if (cur === part.start) {
+      cur = null;
+    }
+  }
+  while (stack.length > 0) {
+    frag.appendChild(stack.pop());
+  }
+  return frag;
 }
 
 const keyMapCache = new Map();

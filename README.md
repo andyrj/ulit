@@ -7,7 +7,7 @@
 *WIP* Tagged Template Literal html template library.  Inspired by lit-html/hyperHTML.
 
 TODO:
-1. Handle iterable expressions
+1. complete array support, add DocumentFragment support...
 2. Write helper for repeat()
 3. get test coverage up to 100/100
 
