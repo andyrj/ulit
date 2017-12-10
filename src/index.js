@@ -385,9 +385,10 @@ function pullPart(part) {
   while (cur != null) {
     const next = cur.previousSibling;
     stack.push(parent.removeChild(cur));
-    cur = next;
     if (cur === part.start) {
       cur = null;
+    } else {
+      cur = next;
     }
   }
   while (stack.length > 0) {
