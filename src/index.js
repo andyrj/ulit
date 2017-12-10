@@ -277,6 +277,7 @@ function TemplateResult(key, template, parts, exprs) {
           dispose => typeof dispose === "function" && dispose()
         )
       );
+      result.start = result.end = flushPart(result);
     },
     update(values) {
       if (values != null) {
