@@ -3,6 +3,7 @@ const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 const templateCache = new Map();
+const b64Cache = new Map();
 const walkPath = [];
 
 function walkDOM(parent, element, fn) {
@@ -47,7 +48,7 @@ function Part(path, isSVG = false, id = Symbol(), start = null, end = null) {
     if (index > -1) {
       disposers.splice(index, 1);
     }
-  }
+  };
   return part;
 }
 
@@ -64,7 +65,6 @@ function isSVGChild(node) {
   return result;
 }
 
-// TODO: check if attribute part has svg parent, add this bool to part paths, for set() to use setAttributeNS()...
 function templateSetup(parts) {
   return function(parent, element) {
     const nodeType = element.nodeType;
@@ -346,7 +346,11 @@ function checkForSerialized(hash) {
 }
 
 export function html(strs, ...exprs) {
-  const b64 = btoa(strs);
+  let b64 = b64Cache.get(strs);
+  if (!b64) {
+    b64 = btoa(strs);
+    b64Cache.set(strs, b64);
+  }
   let { template, parts } = templateCache.get(b64) || checkForSerialized(b64);
   if (template == null) {
     template = document.createElement("template");
@@ -354,7 +358,6 @@ export function html(strs, ...exprs) {
     walkDOM(template.content, null, templateSetup(parts));
     templateCache.set(b64, { template, parts });
   }
-
   return TemplateResult(strs, template, parts, exprs);
 }
 
@@ -415,6 +418,7 @@ export function repeat(
     } else {
       const newMap = items.map(item => keyFn(item));
       // TODO: do key comparisons here to efficiently add/move/remove dom nodes
+
     }
   };
 }
