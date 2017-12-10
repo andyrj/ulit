@@ -214,9 +214,7 @@ export function render(template, target = document.body) {
 }
 
 function set(part, value) {
-  const start = part.start;
-  const end = part.end;
-  if (typeof end === "string") {
+  if (typeof part.end === "string") {
     updateAttribute(part, value);
   } else {
     if (
@@ -243,10 +241,11 @@ function set(part, value) {
 }
 
 function isDirective(part, expression) {
+  const end = part.end;
   if (typeof expression === "function") {
-    if (typeof part.end !== "string") {
+    if (typeof end !== "string") {
       return true;
-    } else if (part.end.startsWith("on")) {
+    } else if (end.startsWith("on")) {
       return false;
     } else {
       return true;
@@ -256,10 +255,20 @@ function isDirective(part, expression) {
   }
 }
 
+function isPartComment(node) {
+  if (node.nodeType === COMMENT_NODE && node.nodeValue === "{{}}") {
+    return true;
+  } else {
+    return false;
+  }
+}
+
 function TemplateResult(key, template, parts, exprs) {
   const result = {
     key,
     fragment: null,
+    start: null,
+    end: null,
     values: exprs,
     parts,
     dispose() {
@@ -275,6 +284,12 @@ function TemplateResult(key, template, parts, exprs) {
       }
       if (!result.fragment) {
         result.fragment = document.importNode(template, true);
+        const templateStart = result.fragment.content.firstChild;
+        const templateEnd = result.fragment.content.lastChild;
+        result.start = isPartComment(templateStart) ? parts[0] : templateStart;
+        result.end = isPartComment(templateEnd)
+          ? parts[parts.length - 1]
+          : templateEnd;
         parts.forEach(part => {
           const target = followPath(result.fragment.content, part.path);
           if (Array.isArray(target)) {
@@ -326,7 +341,7 @@ function checkForSerialized(hash) {
         )
       : [];
   const result = { template, parts };
-  template && templateCache.set(hash, result);
+  template && !templateCache.has(hash) && templateCache.set(hash, result);
   return result;
 }
 
