@@ -34,6 +34,37 @@ function followPath(node, pointer) {
   }
 }
 
+function updateArray(part, value) {
+  // TODO: add logic for rendering arrays...
+}
+
+function set(part, value) {
+  if (typeof part.end === "string") {
+    updateAttribute(part, value);
+  } else {
+    if (
+      typeof value !== "string" &&
+      !Array.isArray(value) &&
+      typeof value[Symbol.iterator] === "function"
+    ) {
+      value = Array.from(value);
+    }
+    if (value.then) {
+      value.then(promised => {
+        set(part, promised);
+      });
+    } else if (value.values && value.update) {
+      render(value, part);
+    } else if (value.nodeType) {
+      updateNode(part, value);
+    } else if (Array.isArray(value)) {
+      updateArray(part, value);
+    } else {
+      updateTextNode(part, value);
+    }
+  }
+}
+
 function Part(path, isSVG = false, id = Symbol(), start = null, end = null) {
   const disposers = [];
   let part = { id, path, start, end, isSVG };
@@ -153,22 +184,6 @@ function updateTextNode(part, value) {
   }
 }
 
-function flushPart(part) {
-  const start = part.start;
-  const parent = start.parentNode;
-  const end = part.end;
-  if (start === end) {
-    return start;
-  }
-  let curr = end != null ? end.previousSibling : null;
-  while (curr != null && curr !== start) {
-    const nextNode = curr.previousSibling;
-    parent.removeChild(curr);
-    curr = nextNode;
-  }
-  return start;
-}
-
 function getChildTemplate(target) {
   if (
     target.childNodes &&
@@ -213,32 +228,7 @@ export function render(template, target = document.body) {
   }
 }
 
-function set(part, value) {
-  if (typeof part.end === "string") {
-    updateAttribute(part, value);
-  } else {
-    if (
-      typeof value !== "string" &&
-      !Array.isArray(value) &&
-      typeof value[Symbol.iterator] === "function"
-    ) {
-      value = Array.from(value);
-    }
-    if (value.then) {
-      value.then(promised => {
-        set(part, promised);
-      });
-    } else if (value.values && value.update) {
-      render(value, part);
-    } else if (value.nodeType) {
-      updateNode(part, value);
-    } else if (Array.isArray(value)) {
-      updateArray(part, value);
-    } else {
-      updateTextNode(part, value);
-    }
-  }
-}
+
 
 function isDirective(part, expression) {
   const end = part.end;
@@ -261,6 +251,22 @@ function isPartComment(node) {
   } else {
     return false;
   }
+}
+
+function flushPart(part) {
+  const start = part.start;
+  const parent = start.parentNode;
+  const end = part.end;
+  if (start === end) {
+    return start;
+  }
+  let curr = end != null ? end.previousSibling : null;
+  while (curr != null && curr !== start) {
+    const nextNode = curr.previousSibling;
+    parent.removeChild(curr);
+    curr = nextNode;
+  }
+  return start;
 }
 
 function TemplateResult(key, template, parts, exprs) {
@@ -435,8 +441,4 @@ export function repeat(
 
     }
   };
-}
-
-function updateArray(part, value) {
-  // TODO: add logic for rendering arrays...
 }
