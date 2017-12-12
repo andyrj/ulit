@@ -280,6 +280,7 @@ function TemplateResult(key, template, parts, exprs) {
       result.start = result.end = flushPart(result);
     },
     update(values) {
+      const lastValues = result.values;
       if (values != null) {
         result.values = values;
       }
@@ -303,11 +304,12 @@ function TemplateResult(key, template, parts, exprs) {
         });
       }
       parts.forEach((part, i) => {
-        const expression = result.values[i];
-        if (isDirective(part, expression)) {
-          expression(part);
+        const oldVal = lastValues[i];
+        const newVal = result.values[i];
+        if (isDirective(part, newVal)) {
+          newVal(part, oldVal);
         } else {
-          set(part, expression);
+          set(part, newVal, oldVal);
         }
       });
     }
