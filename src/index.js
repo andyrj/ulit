@@ -4,6 +4,7 @@ const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 const templateCache = new Map();
 const idCache = new Map();
+const keyMapCache = new Map();
 const walkPath = [];
 
 function walkDOM(parent, element, fn) {
@@ -34,13 +35,146 @@ function followPath(node, pointer) {
   }
 }
 
-function updateArray(part, value) {
-  // TODO: add logic for rendering arrays...
+function updateAttribute(part, value) {
+  const element = part.start;
+  const name = part.end;
+  try {
+    element[name] = value == null ? "" : value;
+  } catch (_) {} // eslint-disable-line
+  if (typeof expr !== "function") {
+    if (value == null) {
+      if (part.isSVG) {
+        element.removeAttributeNS(SVG_NS, name);
+      } else {
+        element.removeAttribute(name);
+      }
+    } else {
+      if (part.isSVG) {
+        element.setAttributeNS(SVG_NS, name, value);
+      } else {
+        element.setAttribute(name, value);
+      }
+    }
+  }
 }
 
-function set(part, value) {
+function updateNode(part, value) {
+  const element = part.start;
+  const parent = element.parentNode;
+  if (element !== value) {
+    parent.replaceChild(value, flushPart(part));
+    part.start = part.end = value;
+  }
+}
+
+function updateTextNode(part, value) {
+  const element = part.start;
+  const parent = element.parentNode;
+  if (part.start !== part.end) {
+    flushPart(part);
+  }
+  if (element.nodeType === TEXT_NODE && element.nodeValue !== value) {
+    element.nodeValue = value;
+  } else if (element.nodeType !== TEXT_NODE) {
+    const newNode = document.createTextNode(value);
+    parent.replaceChild(newNode, element);
+    part.start = part.end = newNode;
+  }
+}
+
+function isTemplate(obj) {
+  return obj && obj.values && obj.parts && obj.update;
+}
+
+function defaultKeyFn(item, index) {
+  return index;
+}
+
+function defaultTemplateFn(item) {
+  return html`${item}`;
+}
+
+export function repeat(
+  items,
+  keyFn = defaultKeyFn,
+  templateFn = defaultTemplateFn
+) {
+  return part => {
+    const parent = part.start.parentNode;
+    let init = false;
+    const id = part.id;
+    const map = keyMapCache.get(id);
+
+    /* old code...
+    const id = part.id;
+    const keyMapPair = keyMapCache.get(id);
+    if (!keyMapPair) {
+      let templates;
+      let newKeyMap;
+      items.forEach(item => {
+        const key = keyFn(item);
+        const template = templateFn(item, key);
+        templates.push(template);
+        newKeyMap.push({ key, template });
+      });
+      keyMapCache.set(id, newKeyMap);
+      part.update(templates);
+    } else {
+      const newMap = items.map(keyFn);
+    */
+      // TODO: do key comparisons here to efficiently add/move/remove dom nodes
+      /* new code...
+      const parent = part.start.parentNode;
+      let init = false;
+      const meta = part.meta.array || (init = true && []);
+      const normalized = value.map(entry => {
+        if (isTemplate(entry)) {
+          return entry;
+        }
+        return defaultTemplateFn(value);
+      });
+      const normLen = normalized.length;
+      const metaLen = meta.length;
+      const maxLen = Math.max(normLen, metaLen);
+      if (init) {
+        const nodes = [];
+        normalized.map(template => {
+          nodes.push([document.createComment("{{}}"), template]);
+        });
+        nodes.forEach(entry => {
+          parent.insertBefore(entry[0], part.start);
+          render(entry[1], entry[0]);
+        });
+        parent.removeChild(part.start);
+        part.start = nodes[0][1].start;
+        part.end = nodes[normLen - 1][1].end;
+      } else {
+        let i = 0;
+        for (; i < maxLen; i++) {
+          if (i < normLen && i < metaLen) {
+            meta[i].update(normalized[i].values);
+          } else if (i < normLen && i > metaLen) {
+            // add
+            meta[i] = normalized[i];
+            meta[i].update();
+          } else if (i > normLen && i < metaLen) {
+            // remove
+
+          }
+        }
+      }
+    }*/
+  };
+}
+// saving bytes by sharing code for repeat and updateArray(),
+// defaultKeyFn and defaultTemplateFn === updateArray()
+function updateArray(part, value) {
+  repeat(value)(part);
+}
+
+function set(part, value, oldValue) {
   if (typeof part.end === "string") {
-    updateAttribute(part, value);
+    updateAttribute(part, value, oldValue);
   } else {
     if (
       typeof value !== "string" &&
@@ -51,9 +185,9 @@ function set(part, value) {
     }
     if (value.then) {
       value.then(promised => {
-        set(part, promised);
+        set(part, promised, oldValue);
       });
-    } else if (value.values && value.update) {
+    } else if (isTemplate(value)) {
       render(value, part);
     } else if (value.nodeType) {
       updateNode(part, value);
@@ -67,17 +201,25 @@ function set(part, value) {
 
 function Part(path, isSVG = false, id = Symbol(), start = null, end = null) {
   const disposers = [];
-  let part = { id, path, start, end, isSVG };
-  part.update = newValue => set(part, newValue);
-  part.addDisposer = handler => {
-    if (typeof handler === "function" && disposers.indexOf(handler) === -1) {
-      disposers.push(handler);
-    }
-  };
-  part.removeDisposer = handler => {
-    const index = disposers.indexOf(handler);
-    if (index > -1) {
-      disposers.splice(index, 1);
+  const part = {
+    id,
+    path,
+    start,
+    end,
+    isSVG,
+    update(newValue) {
+      set(part, newValue);
+    },
+    addDisposer(handler) {
+      if (typeof handler === "function" && disposers.indexOf(handler) === -1) {
+        disposers.push(handler);
+      }
+    },
+    removeDisposer(handler) {
+      const index = disposers.indexOf(handler);
+      if (index > -1) {
+        disposers.splice(index, 1);
+      }
     }
   };
   return part;
@@ -137,53 +279,6 @@ function templateSetup(parts) {
   };
 }
 
-function updateAttribute(part, value) {
-  const element = part.start;
-  const name = part.end;
-  try {
-    element[name] = value == null ? "" : value;
-  } catch (_) {} // eslint-disable-line
-  if (typeof expr !== "function") {
-    if (value == null) {
-      if (part.isSVG) {
-        element.removeAttributeNS(SVG_NS, name);
-      } else {
-        element.removeAttribute(name);
-      }
-    } else {
-      if (part.isSVG) {
-        element.setAttributeNS(SVG_NS, name, value);
-      } else {
-        element.setAttribute(name, value);
-      }
-    }
-  }
-}
-
-function updateNode(part, value) {
-  const element = part.start;
-  const parent = element.parentNode;
-  if (element !== value) {
-    parent.replaceChild(value, flushPart(part));
-    part.start = part.end = value;
-  }
-}
-
-function updateTextNode(part, value) {
-  const element = part.start;
-  const parent = element.parentNode;
-  if (part.start !== part.end) {
-    flushPart(part);
-  }
-  if (element.nodeType === TEXT_NODE && element.nodeValue !== value) {
-    element.nodeValue = value;
-  } else if (element.nodeType !== TEXT_NODE) {
-    const newNode = document.createTextNode(value);
-    parent.replaceChild(newNode, element);
-    part.start = part.end = newNode;
-  }
-}
-
 function getChildTemplate(target) {
   if (
     target.childNodes &&
@@ -227,8 +322,6 @@ export function render(template, target = document.body) {
     part.start.__template = template;
   }
 }
-
-
 
 function isDirective(part, expression) {
   const end = part.end;
@@ -313,7 +406,7 @@ function TemplateResult(key, template, parts, exprs) {
         const oldVal = lastValues[i];
         const newVal = result.values[i];
         if (isDirective(part, newVal)) {
-          newVal(part, oldVal);
+          newVal(part);
         } else {
           set(part, newVal, oldVal);
         }
@@ -387,14 +480,6 @@ export function until(promise, defaultContent) {
   };
 }
 
-function defaultKeyFn(item) {
-  return item.key;
-}
-
-function defaultTemplateFn(item) {
-  return html`${item.value}`;
-}
-
 function pullPart(part) {
   const frag = document.createDocumentFragment();
   const stack = [];
@@ -413,32 +498,4 @@ function pullPart(part) {
     frag.appendChild(stack.pop());
   }
   return frag;
-}
-
-const keyMapCache = new Map();
-export function repeat(
-  items,
-  keyFn = defaultKeyFn,
-  templateFn = defaultTemplateFn
-) {
-  return part => {
-    const id = part.id;
-    const keyMapPair = keyMapCache.get(id);
-    if (!keyMapPair) {
-      let templates;
-      let newKeyMap;
-      items.forEach(item => {
-        const key = keyFn(item);
-        const template = templateFn(item, key);
-        templates.push(template);
-        newKeyMap.push({ key, template });
-      });
-      keyMapCache.set(id, newKeyMap);
-      part.update(templates);
-    } else {
-      const newMap = items.map(item => keyFn(item));
-      // TODO: do key comparisons here to efficiently add/move/remove dom nodes
-
-    }
-  };
 }
