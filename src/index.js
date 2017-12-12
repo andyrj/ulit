@@ -3,7 +3,7 @@ const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 const templateCache = new Map();
-const b64Cache = new Map();
+const idCache = new Map();
 const walkPath = [];
 
 function walkDOM(parent, element, fn) {
@@ -348,18 +348,43 @@ function checkForSerialized(hash) {
   return result;
 }
 
-export function html(strs, ...exprs) {
-  let b64 = b64Cache.get(strs);
-  if (!b64) {
-    b64 = btoa(strs);
-    b64Cache.set(strs, b64);
+/*
+String.prototype.hashCode = function() {
+    var hash = 0;
+    if (this.length == 0) {
+        return hash;
+    }
+    for (var i = 0; i < this.length; i++) {
+        char = this.charCodeAt(i);
+        hash = ((hash<<5)-hash)+char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash;
+}
+*/
+
+function generateId(strs) {
+  const templateStr = strs.toString();
+  let hash = 0;
+  if (templateStr.length === 0) {
+    return hash;
   }
-  let { template, parts } = templateCache.get(b64) || checkForSerialized(b64);
+  for (let i = 0; i < templateStr.length; i++) {
+    const char = templateStr.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash;
+  }
+  return hash;
+}
+
+export function html(strs, ...exprs) {
+  const id = idCache.get(strs) || generateId(strs);
+  let { template, parts } = templateCache.get(id) || checkForSerialized(id);
   if (template == null) {
     template = document.createElement("template");
     template.innerHTML = strs.join("{{}}");
     walkDOM(template.content, null, templateSetup(parts));
-    templateCache.set(b64, { template, parts });
+    templateCache.set(id, { template, parts });
   }
   return TemplateResult(strs, template, parts, exprs);
 }
