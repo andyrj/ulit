@@ -325,8 +325,13 @@ export function render(template, target = document.body) {
     if (instance.key === template.key) {
       instance.update(template.values);
     } else {
-      // TODO: handle case where new template is being rendered to this target...
       instance.dispose();
+      const fragment = document.createDocumentFragment();
+      const comment = document.createComment("{{}}");
+      fragment.appendChild(comment);
+      render(template, comment);
+      fragment.content.firstChild.__template = template;
+      instance.start.parentNode.replace(fragment, instance.start);
     }
     return;
   }
