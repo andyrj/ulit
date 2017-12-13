@@ -192,25 +192,21 @@ export function repeat(
         delete map[key];
       }
     });
-    let j = 0;
-    for (i = 0; i < maxLen; ) {
+    for (i = 0; i < maxLen; i++) {
       const newKey = keys[i];
       const newTemplate = normalized[i];
-      const oldKey = list[j];
+      const oldKey = list[i];
       const oldPart = map[oldKey];
       const newKeyIndexOldList = list.indexOf(newKey);
       if (oldKey === newKey) {
-        // update existing part in right position...
         oldPart.update(newTemplate);
-        j++;
       } else if (newKeyIndexOldList > -1) {
         const p = map[newKey];
         const move = pullPart(p);
         p.update(newTemplate);
-        parent.insertBefore(move.fragment, list[j].start);
+        parent.insertBefore(move.fragment, list[i].start);
         list.splice(newKeyIndexOldList, 1);
-        list.splice(j, 0, move.part);
-        j++;
+        list.splice(i, 0, move.part);
       } else {
         // add part...
         const fragment = document.createDocumentFragment();
@@ -218,11 +214,9 @@ export function repeat(
         fragment.appendChild(node);
         const newPart = Part(null, Symbol(), node, node);
         render(newTemplate, newPart);
-        parent.insertBefore(fragment, list[j].start);
-        list.splice(j, 0, newPart);
-        j++;
+        parent.insertBefore(fragment, list[i].start);
+        list.splice(i, 0, newPart);
       }
-      i++;
     }
   };
 }
