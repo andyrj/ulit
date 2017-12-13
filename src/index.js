@@ -147,7 +147,6 @@ export function repeat(
 ) {
   return part => {
     const parent = part.start.parentNode;
-    const path = part.path;
     const target = part.start;
     const id = part.id;
     const normalized = items.map(item => {
@@ -157,7 +156,6 @@ export function repeat(
       return templateFn(item);
     });
     const keys = items.map((item, index) => keyFn(item, index));
-    // TODO: change datastructure...  map: {[key]:Part}, list: Array<key>
     let { map, list } = keyMapCache.get(id);
     let i = 0;
     if (!map && part.start.nodeType === COMMENT_NODE) {
