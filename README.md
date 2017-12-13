@@ -8,6 +8,7 @@
 
 TODO:
 1. get test coverage up to 100/100
+2. Add SSR (already prepared for this with part serialization in first comment nodeValue, and part paths...)
 
 ```jsx
 // example code will go here...
