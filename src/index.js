@@ -121,7 +121,7 @@ function Part(path, isSVG = false, id = Symbol(), start = null, end = null) {
 }
 
 function pullPart(part) {
-  const frag = document.createDocumentFragment();
+  const fragment = document.createDocumentFragment();
   const stack = [];
   const parent = part.start.parentNode;
   let cur = part.end;
@@ -135,9 +135,9 @@ function pullPart(part) {
     }
   }
   while (stack.length > 0) {
-    frag.appendChild(stack.pop());
+    fragment.appendChild(stack.pop());
   }
-  return frag;
+  return { part, fragment };
 }
 
 export function repeat(
@@ -157,6 +157,7 @@ export function repeat(
       return templateFn(item);
     });
     const keys = items.map((item, index) => keyFn(item, index));
+    // TODO: change datastructure...  map: {[key]:Part}, list: Array<key>
     let { map, list } = keyMapCache.get(id);
     let i = 0;
     if (!map && part.start.nodeType === COMMENT_NODE) {
@@ -165,6 +166,7 @@ export function repeat(
       const fragment = document.createDocumentFragment();
       let len = keys.length;
       for (; i < len; i++) {
+        const key = keys[i];
         const node = document.createComment("{{}}");
         let newPart = Part(null, part.isSVG, Symbol(), node, node);
         if (i === 0) {
@@ -173,7 +175,7 @@ export function repeat(
           part.end = newPart;
         }
         list.push(newPart);
-        map[keys[i]] = i;
+        map[key] = newPart;
         fragment.appendChild(node);
         render(normalized[i], newPart);
       }
@@ -184,25 +186,43 @@ export function repeat(
     const normLen = normalized.length;
     const oldLen = list.length;
     const maxLen = Math.max(normLen, oldLen);
-    const pulledParts = {};
-    for (i = 0; i < maxLen; i++) {
-      if (i < normLen && i < oldLen) {
-        const newPart = normalized[i];
-        const newKey = newPart.id;
-        if (map[newKey] === i) {
-          list[i].update(normalized[i].values);
-        } else {
-          const pulledFrag = pullPart(list[i]);
-          pulledParts[list[i].id] = { fragment: pulledFrag, part: list[i] };
-        }
-      } else if (i < normLen && i > oldLen) {
-        // add
-        //list[i] = normalized[i];
-        //meta[i].update();
-      } else if (i > normLen && i < oldLen) {
-        // remove
-        parent.removeChild(flushPart(list[i]));
+    Object.keys(map).forEach(key => {
+      if (keys.indexOf(key) === -1) {
+        const partToRemove = map[key];
+        pullPart(partToRemove);
+        list.splice(list.indexOf(partToRemove), 1);
+        delete map[key];
       }
+    });
+    let j = 0;
+    for (i = 0; i < maxLen; ) {
+      const newKey = keys[i];
+      const newTemplate = normalized[i];
+      const oldKey = list[j];
+      const oldPart = map[oldKey];
+      const newKeyIndexOldList = list.indexOf(newKey);
+      if (oldKey === newKey) {
+        // update existing part in right position...
+        oldPart.update(newTemplate);
+        j++;
+      } else if (newKeyIndexOldList > -1) {
+        const move = pullPart(list[newKeyIndexOldList]);
+        parent.insertBefore(move.fragment, list[j].start);
+        list.splice(newKeyIndexOldList, 1);
+        list.splice(j, 0, move.part);
+        j++;
+      } else {
+        // add part...
+        const fragment = document.createDocumentFragment();
+        const node = document.createComment("{{}}");
+        fragment.appendChild(node);
+        const newPart = Part(null, Symbol(), node, node);
+        render(newTemplate, newPart);
+        parent.insertBefore(fragment, list[j].start);
+        list.splice(j, 0, newPart);
+        j++;
+      }
+      i++;
     }
   };
 }
