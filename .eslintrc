@@ -44,7 +44,7 @@
     ],
     "space-before-function-paren": 0,
     "max-statements": [
-      2, 20
+      0, 22
     ],
     "max-depth": [
       2, 5

@@ -94,6 +94,52 @@ function defaultTemplateFn(item) {
   return html`${item}`;
 }
 
+function Part(path, isSVG = false, id = Symbol(), start = null, end = null) {
+  const disposers = [];
+  const part = {
+    id,
+    path,
+    start,
+    end,
+    isSVG,
+    update(newValue) {
+      set(part, newValue);
+    },
+    addDisposer(handler) {
+      if (typeof handler === "function" && disposers.indexOf(handler) === -1) {
+        disposers.push(handler);
+      }
+    },
+    removeDisposer(handler) {
+      const index = disposers.indexOf(handler);
+      if (index > -1) {
+        disposers.splice(index, 1);
+      }
+    }
+  };
+  return part;
+}
+
+function pullPart(part) {
+  const frag = document.createDocumentFragment();
+  const stack = [];
+  const parent = part.start.parentNode;
+  let cur = part.end;
+  while (cur != null) {
+    const next = cur.previousSibling;
+    stack.push(parent.removeChild(cur));
+    if (cur === part.start) {
+      cur = null;
+    } else {
+      cur = next;
+    }
+  }
+  while (stack.length > 0) {
+    frag.appendChild(stack.pop());
+  }
+  return frag;
+}
+
 export function repeat(
   items,
   keyFn = defaultKeyFn,
@@ -101,69 +147,63 @@ export function repeat(
 ) {
   return part => {
     const parent = part.start.parentNode;
-    let init = false;
+    const path = part.path;
+    const target = part.start;
     const id = part.id;
-    const map = keyMapCache.get(id);
-
-    /* old code...
-    const id = part.id;
-    const keyMapPair = keyMapCache.get(id);
-    if (!keyMapPair) {
-      let templates;
-      let newKeyMap;
-      items.forEach(item => {
-        const key = keyFn(item);
-        const template = templateFn(item, key);
-        templates.push(template);
-        newKeyMap.push({ key, template });
-      });
-      keyMapCache.set(id, newKeyMap);
-      part.update(templates);
-    } else {
-      const newMap = items.map(keyFn);
-    */
-      // TODO: do key comparisons here to efficiently add/move/remove dom nodes
-      /* new code...
-      const parent = part.start.parentNode;
-      let init = false;
-      const meta = part.meta.array || (init = true && []);
-      const normalized = value.map(entry => {
-        if (isTemplate(entry)) {
-          return entry;
-        }
-        return defaultTemplateFn(value);
-      });
-      const normLen = normalized.length;
-      const metaLen = meta.length;
-      const maxLen = Math.max(normLen, metaLen);
-      if (init) {
-        const nodes = [];
-        normalized.map(template => {
-          nodes.push([document.createComment("{{}}"), template]);
-        });
-        nodes.forEach(entry => {
-          parent.insertBefore(entry[0], part.start);
-          render(entry[1], entry[0]);
-        });
-        parent.removeChild(part.start);
-        part.start = nodes[0][1].start;
-        part.end = nodes[normLen - 1][1].end;
-      } else {
-        let i = 0;
-        for (; i < maxLen; i++) {
-          if (i < normLen && i < metaLen) {
-            meta[i].update(normalized[i].values);
-          } else if (i < normLen && i > metaLen) {
-            // add
-            meta[i] = normalized[i];
-            meta[i].update();
-          } else if (i > normLen && i < metaLen) {
-            // remove
-
-          }
-        }
+    const normalized = items.map(item => {
+      if (isTemplate(item)) {
+        return item;
       }
-    }*/
+      return templateFn(item);
+    });
+    const keys = items.map((item, index) => keyFn(item, index));
+    let { map, list } = keyMapCache.get(id);
+    let i = 0;
+    if (!map && part.start.nodeType === COMMENT_NODE) {
+      map = {};
+      list = [];
+      const fragment = document.createDocumentFragment();
+      let len = keys.length;
+      for (; i < len; i++) {
+        const node = document.createComment("{{}}");
+        let newPart = Part(null, part.isSVG, Symbol(), node, node);
+        if (i === 0) {
+          part.start = newPart;
+        } else if (i === len) {
+          part.end = newPart;
+        }
+        list.push(newPart);
+        map[keys[i]] = i;
+        fragment.appendChild(node);
+        render(normalized[i], newPart);
+      }
+      keyMapCache.set(id, { map, list });
+      parent.replaceChild(fragment, target);
+      return;
+    }
+    const normLen = normalized.length;
+    const oldLen = list.length;
+    const maxLen = Math.max(normLen, oldLen);
+    const pulledParts = {};
+    for (i = 0; i < maxLen; i++) {
+      if (i < normLen && i < oldLen) {
+        const newPart = normalized[i];
+        const newKey = newPart.id;
+        if (map[newKey] === i) {
+          list[i].update(normalized[i].values);
+        } else {
+          const pulledFrag = pullPart(list[i]);
+          pulledParts[list[i].id] = { fragment: pulledFrag, part: list[i] };
+        }
+      } else if (i < normLen && i > oldLen) {
+        // add
+        //list[i] = normalized[i];
+        //meta[i].update();
+      } else if (i > normLen && i < oldLen) {
+        // remove
+        parent.removeChild(flushPart(list[i]));
+      }
+    }
   };
 }
 // saving bytes by sharing code for repeat and updateArray(),
@@ -197,32 +237,6 @@ function set(part, value, oldValue) {
       updateTextNode(part, value);
     }
   }
-}
-
-function Part(path, isSVG = false, id = Symbol(), start = null, end = null) {
-  const disposers = [];
-  const part = {
-    id,
-    path,
-    start,
-    end,
-    isSVG,
-    update(newValue) {
-      set(part, newValue);
-    },
-    addDisposer(handler) {
-      if (typeof handler === "function" && disposers.indexOf(handler) === -1) {
-        disposers.push(handler);
-      }
-    },
-    removeDisposer(handler) {
-      const index = disposers.indexOf(handler);
-      if (index > -1) {
-        disposers.splice(index, 1);
-      }
-    }
-  };
-  return part;
 }
 
 function isSVGChild(node) {
@@ -478,24 +492,4 @@ export function until(promise, defaultContent) {
     update(defaultContent);
     return promise;
   };
-}
-
-function pullPart(part) {
-  const frag = document.createDocumentFragment();
-  const stack = [];
-  const parent = part.start.parentNode;
-  let cur = part.end;
-  while (cur != null) {
-    const next = cur.previousSibling;
-    stack.push(parent.removeChild(cur));
-    if (cur === part.start) {
-      cur = null;
-    } else {
-      cur = next;
-    }
-  }
-  while (stack.length > 0) {
-    frag.appendChild(stack.pop());
-  }
-  return frag;
 }
