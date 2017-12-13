@@ -208,7 +208,6 @@ export function repeat(
         list.splice(newKeyIndexOldList, 1);
         list.splice(i, 0, move.part);
       } else {
-        // add part...
         const fragment = document.createDocumentFragment();
         const node = document.createComment("{{}}");
         fragment.appendChild(node);
@@ -220,8 +219,7 @@ export function repeat(
     }
   };
 }
-// saving bytes by sharing code for repeat and updateArray(),
-// defaultKeyFn and defaultTemplateFn === updateArray()
+
 function updateArray(part, value) {
   repeat(value)(part);
 }
