@@ -204,7 +204,9 @@ export function repeat(
         oldPart.update(newTemplate);
         j++;
       } else if (newKeyIndexOldList > -1) {
-        const move = pullPart(list[newKeyIndexOldList]);
+        const p = map[newKey];
+        const move = pullPart(p);
+        p.update(newTemplate);
         parent.insertBefore(move.fragment, list[j].start);
         list.splice(newKeyIndexOldList, 1);
         list.splice(j, 0, move.part);
