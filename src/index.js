@@ -172,7 +172,7 @@ export function repeat(
         } else if (i === len) {
           part.end = newPart;
         }
-        list.push(newPart);
+        list.push(key);
         map[key] = newPart;
         fragment.appendChild(node);
         render(normalized[i], newPart);
