@@ -14,14 +14,14 @@ test.beforeEach(t => {
   global.window.btoa = btoa;
 });
 
-test("tagged template literal should handle static templates", t => {
+test("static templates", t => {
   const template = html`<div id="test">test</div>`;
   template.update();
   t.is(template.fragment.content.firstChild.id, "test");
   t.is(template.fragment.content.firstChild.firstChild.nodeValue, "test");
 });
 
-test("tagged template literal should handle dynamic template with string child", t => {
+test("dynamic template with string child", t => {
   const str = "test";
   const template = html`<div id="test">${str}</div>`;
   template.update();
@@ -29,7 +29,7 @@ test("tagged template literal should handle dynamic template with string child",
   t.is(template.fragment.content.firstChild.firstChild.nodeValue, str);
 });
 
-test("tagged template literal should handle dom nodes", t => {
+test("dom nodes", t => {
   const node = document.createElement("div");
   node.id = "test";
   const template = html`<div>${node}</div>`;
@@ -37,7 +37,7 @@ test("tagged template literal should handle dom nodes", t => {
   t.is(template.fragment.content.firstChild.firstChild.id, "test");
 });
 
-test("tagged template literal should handle dynamic nodes dispersed in static nodes", t => {
+test("dynamic nodes dispersed in static nodes", t => {
   const str = "dynamic";
   const template = html`<div>This is static, this is ${str}</div>`;
   template.update();
@@ -52,14 +52,14 @@ test("tagged template literal should handle dynamic nodes dispersed in static no
   t.is(template2.fragment.content.firstChild.innerHTML, "in the middle it's dynamic!");
 })
 
-test("tagged template literal should handle dynamic attributes", t => {
+test("dynamic attributes", t => {
   const str = "test";
   const template = html`<div id=${str}>test</div>`;
   template.update();
   t.is(template.fragment.content.firstChild.id, str);
 });
 
-test("tagged template literal should handle dynamic child interspersed with static nodes", t => {
+test("dynamic child interspersed with static nodes", t => {
   const node = document.createElement("div");
   node.innerHTML = "test";
   const template = html`<div><br>before${node}<br>after</div>`;
@@ -67,7 +67,7 @@ test("tagged template literal should handle dynamic child interspersed with stat
   t.is(template.fragment.content.firstChild.outerHTML, "<div><br>before<div>test</div><br>after</div>");
 });
 
-test("tagged template literal should handle nested template", t => {
+test("nested templates", t => {
   const nested = html`<div id="test">test</div>`;
   const template = html`<div>${nested}</div>`;
   render(template);
@@ -80,7 +80,7 @@ test("tagged template literal should handle nested template", t => {
   t.is(template1.fragment.content.firstChild.firstChild.firstChild.nodeValue, "test");
 });
 
-test("tagged template literal should allow an expression which changes types between renders", t => {
+test("expression can change part types between renders", t => {
   const str = "test";
   const div = document.createElement("div");
   div.id = "test";
@@ -91,7 +91,7 @@ test("tagged template literal should allow an expression which changes types bet
   t.is(template.fragment.content.firstChild.firstChild.id, "test");
 });
 
-test("tagged template literal directives should work", t => {
+test("directives", t => {
   let lastUpdate;
   const template = html`<div>${part => {lastUpdate = part.update}}</div>`;
   template.update();
@@ -126,12 +126,18 @@ test("nested templates should update in place", t => {
   t.is(document.body.firstChild.firstChild.firstChild.nodeValue, "123");
 });
 
-/*
-test("setting function to non-event handler attribute should work", t => {
-  let count = 0;
-  const test = () => count++;
-  const template = html`<div test=${test}>test</div>`;
-  render(template);
-  t.is(document.body.firstChild.test !== undefined, true);
+test("attribute directives should work as expected", t => {
+  const template = str => html`<div id=${part => part.update(str)}>test</div>`;
+  render(template("test"));
+  t.is(document.body.firstChild.id === "test", true);
+  render(template("test1"));
+  t.is(document.body.firstChild.id === "test1", true);
 });
-*/
+
+test("templates should be able to start and end with parts", t => {
+  const test = "test";
+  const test1 = "test1";
+  const template = html`${test} and ${test1}`;
+  render(template);
+  t.is(document.body.innerHTML === "test and test1", true);
+});

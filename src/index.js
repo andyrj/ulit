@@ -419,7 +419,9 @@ function TemplateResult(key, template, parts, exprs) {
         result.fragment = document.importNode(template, true);
         const templateStart = result.fragment.content.firstChild;
         const templateEnd = result.fragment.content.lastChild;
-        result.start = isPartComment(templateStart) ? parts[0] : templateStart;
+        result.start = isPartComment(templateStart)
+          ? result.parts[0]
+          : templateStart;
         result.end = isPartComment(templateEnd)
           ? parts[parts.length - 1]
           : templateEnd;
