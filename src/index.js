@@ -20,7 +20,7 @@ function walkDOM(parent, element, fn) {
 }
 
 function followPath(node, pointer) {
-  if (pointer.length === 0) {
+  if (pointer.length === 0 || node == null) {
     return node;
   }
   const cPath = pointer.slice(0);
@@ -331,6 +331,8 @@ export function render(template, target = document.body) {
       fragment.appendChild(comment);
       render(template, comment);
       fragment.content.firstChild.__template = template;
+      target.start = fragment.content.firstChild;
+      target.end = fragment.content.lastChild;
       instance.start.parentNode.replace(fragment, instance.start);
     }
     return;
@@ -381,14 +383,13 @@ function flushPart(part) {
   const start = part.start;
   const parent = start.parentNode;
   const end = part.end;
-  if (start === end) {
-    return start;
-  }
+  if (start !== end) {
   let curr = end != null ? end.previousSibling : null;
   while (curr != null && curr !== start) {
     const nextNode = curr.previousSibling;
     parent.removeChild(curr);
     curr = nextNode;
+  }
   }
   return start;
 }

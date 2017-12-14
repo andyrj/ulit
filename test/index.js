@@ -70,9 +70,9 @@ test("tagged template literal should handle dynamic child interspersed with stat
 test("tagged template literal should handle nested template", t => {
   const nested = html`<div id="test">test</div>`;
   const template = html`<div>${nested}</div>`;
-  template.update();
-  t.is(template.fragment.content.firstChild.firstChild.id, "test");
-  t.is(template.fragment.content.firstChild.firstChild.firstChild.nodeValue, "test");
+  render(template);
+  t.is(document.body.firstChild.firstChild.id, "test");
+  t.is(document.body.firstChild.firstChild.firstChild.nodeValue, "test");
 
   const template1 = html`<div>${html`<div id="test">test</div>`}</div>`;
   template1.update();
@@ -111,7 +111,8 @@ test("null should remove attribute", t => {
 });
 
 test("setting event handler should work", t => {
-  const template = html`<div onclick=${e => {}}>test</div>`;
+  const handler = e => {};
+  const template = html`<div onclick=${handler}>test</div>`;
   render(template);
   t.is(document.body.firstChild.onclick !== undefined, true);
 });
@@ -124,18 +125,18 @@ test("invalid part paths should throw on init", t => {
   });
 });
 
-/*
 test("nested templates should update in place", t => {
-  //console.log(document.body.innerHTML);
+  console.log("+++++");
   const nested = str => html`<div>${str}</div>`;
   const template = str => html`<div>${nested(str)}</div>`;
   render(template("test"));
-  //console.log(document.body.childNodes[0]);
+  //console.log(document.body.innerHTML);
   t.is(document.body.firstChild.firstChild.firstChild.nodeValue, "test");
-  render(template("123"));
-  t.is(document.body.firstChild.firstChild.firstChild.nodeValue, "123");
+  // render(template("123"));
+  // t.is(document.body.firstChild.firstChild.firstChild.nodeValue, "123");
+  console.log("-----");
 });
-*/
+
 /*
 test("setting function to non-event handler attribute should work", t => {
   let count = 0;
