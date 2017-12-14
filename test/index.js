@@ -117,24 +117,13 @@ test("setting event handler should work", t => {
   t.is(document.body.firstChild.onclick !== undefined, true);
 });
 
-test("invalid part paths should throw on init", t => {
-  const template = html`<div>${"test"}</div>`;
-  template.parts[0].path = [9, 9];
-  t.throws(() => {
-    template.update();
-  });
-});
-
 test("nested templates should update in place", t => {
-  console.log("+++++");
-  const nested = str => html`<div>${str}</div>`;
+  const nested = str => html`<div class=nested>${str}</div>`;
   const template = str => html`<div>${nested(str)}</div>`;
   render(template("test"));
-  //console.log(document.body.innerHTML);
   t.is(document.body.firstChild.firstChild.firstChild.nodeValue, "test");
-  // render(template("123"));
-  // t.is(document.body.firstChild.firstChild.firstChild.nodeValue, "123");
-  console.log("-----");
+  render(template("123"));
+  t.is(document.body.firstChild.firstChild.firstChild.nodeValue, "123");
 });
 
 /*
