@@ -384,12 +384,12 @@ function flushPart(part) {
   const parent = start.parentNode;
   const end = part.end;
   if (start !== end) {
-  let curr = end != null ? end.previousSibling : null;
-  while (curr != null && curr !== start) {
-    const nextNode = curr.previousSibling;
-    parent.removeChild(curr);
-    curr = nextNode;
-  }
+    let curr = end != null ? end.previousSibling : null;
+    while (curr != null && curr !== start) {
+      const nextNode = curr.previousSibling;
+      parent.removeChild(curr);
+      curr = nextNode;
+    }
   }
   return start;
 }
