@@ -141,3 +141,13 @@ test("templates should be able to start and end with parts", t => {
   render(template);
   t.is(document.body.innerHTML === "test and test1", true);
 });
+
+test("invalid part paths should throw on init", t => {
+  const template = html`<div>${"test"}</div>`;
+  const orig = template.parts[0].path;
+  template.parts[0].path = [9, 9]; // BE CAREFUL MUTATING PARTS
+  t.throws(() => {
+    template.update();
+  });
+  template.parts[0].path = orig; // clean up after your cache poison for coverage...
+});
