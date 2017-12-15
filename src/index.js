@@ -63,13 +63,15 @@ function updateNode(part, value) {
   const element = part.start;
   const parent = element.parentNode;
   if (element !== value) {
-    const newStart = value.firstChild || value;
-    const newEnd = value.lastChild || value;
-      parent.replaceChild(value, flushPart(part));
-      part.start = newStart;
-      part.end = newEnd;
-    }
+    const newStart =
+      value.nodeType === DOCUMENT_FRAGMENT ? value.firstChild : value;
+    const newEnd =
+      value.nodeType === DOCUMENT_FRAGMENT ? value.lastChild : value;
+    parent.replaceChild(value, flushPart(part));
+    part.start = newStart;
+    part.end = newEnd;
   }
+}
 
 function updateTextNode(part, value) {
   const element = part.start;
@@ -334,20 +336,23 @@ export function render(template, target = document.body) {
       const comment = document.createComment("{{}}");
       fragment.appendChild(comment);
       render(template, comment);
-      fragment.content.firstChild.__template = template;
-      target.start = fragment.content.firstChild;
-      target.end = fragment.content.lastChild;
+      template.start = fragment.content.firstChild;
+      template.end = fragment.content.lastChild;
+      template.start.__template = template;
       instance.start.parentNode.replace(fragment, instance.start);
     }
     return;
   }
   template.update();
   if (part == null) {
+    // TODO: figure out how to fix the broken part.end here...
     if (target.childNodes.length > 0) {
       while (target.hasChildNodes) {
         target.removeChild(target.lastChild);
       }
     }
+    template.start = template.fragment.content.firstChild;
+    template.end = template.fragment.content.lastChild;
     target.appendChild(template.fragment.content);
     target.childNodes[0].__template = template;
   } else {

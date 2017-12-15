@@ -152,22 +152,23 @@ test("invalid part paths should throw on init", t => {
   template.parts[0].path = orig;
 });
 
-/*
 test("fragments", t => {
+  console.log("+++++");
   const fragment = document.createDocumentFragment();
   fragment.appendChild(document.createTextNode("test"));
   fragment.appendChild(document.createTextNode("test1"));
   const template = frag => html`<div>${frag}</div>`;
-  render(template(fragment));
+  const f1 = template(fragment);
+  render(f1);
   t.is(document.body.innerHTML === "<div>testtest1</div>", true);
-  console.log("+++++");
+  t.is(f1.parts[0].start !== f1.parts[0].end, true);
   const fragment1 = document.createDocumentFragment();
   const div = document.createElement("div");
   div.appendChild(document.createTextNode("test"));
+  div.appendChild(document.createElement("br"));
   div.appendChild(document.createTextNode("test1"));
   fragment1.appendChild(div);
   render(template(fragment1));
-  t.is(document.body.innerHTML, "<div><div>testtest1</div></div>");
+  t.is(document.body.innerHTML, "<div><div>test<br>test1</div></div>");
   console.log("-----");
 });
-*/
