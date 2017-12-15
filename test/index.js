@@ -145,9 +145,27 @@ test("templates should be able to start and end with parts", t => {
 test("invalid part paths should throw on init", t => {
   const template = html`<div>${"test"}</div>`;
   const orig = template.parts[0].path;
-  template.parts[0].path = [9, 9]; // BE CAREFUL MUTATING PARTS
+  template.parts[0].path = [9, 9];
   t.throws(() => {
     template.update();
   });
-  template.parts[0].path = orig; // clean up after your cache poison for coverage...
+  template.parts[0].path = orig;
+});
+
+test("fragments", t => {
+  const fragment = document.createDocumentFragment();
+  fragment.appendChild(document.createTextNode("test"));
+  fragment.appendChild(document.createTextNode("test1"));
+  const template = frag => html`<div>${frag}</div>`;
+  render(template(fragment));
+  t.is(document.body.innerHTML === "<div>testtest1</div>", true);
+  console.log("+++++");
+  const fragment1 = document.createDocumentFragment();
+  const div = document.createElement("div");
+  div.appendChild(document.createTextNode("test"));
+  div.appendChild(document.createTextNode("test1"));
+  fragment1.appendChild(div);
+  render(template(fragment1));
+  t.is(document.body.innerHTML, "<div><div>testtest1</div></div>");
+  console.log("-----");
 });

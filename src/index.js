@@ -2,6 +2,7 @@ const SVG_NS = "https://www.w3.org/2000/svg";
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
+const DOCUMENT_FRAGMENT = 11;
 const templateCache = new Map();
 const idCache = new Map();
 const keyMapCache = new Map();
@@ -62,8 +63,16 @@ function updateNode(part, value) {
   const element = part.start;
   const parent = element.parentNode;
   if (element !== value) {
-    parent.replaceChild(value, flushPart(part));
-    part.start = part.end = value;
+    if (value.nodeType === DOCUMENT_FRAGMENT) {
+      const newStart = value.firstChild;
+      const newEnd = value.lastChild;
+      parent.replaceChild(value, flushPart(part));
+      part.start = newStart;
+      part.end = newEnd;
+    } else {
+      parent.replaceChild(value, flushPart(part));
+      part.start = part.end = value;
+    }
   }
 }
 
@@ -224,9 +233,9 @@ function updateArray(part, value) {
   repeat(value)(part);
 }
 
-function set(part, value, oldValue) {
+function set(part, value) {
   if (typeof part.end === "string") {
-    updateAttribute(part, value, oldValue);
+    updateAttribute(part, value);
   } else {
     if (
       typeof value !== "string" &&
@@ -237,7 +246,7 @@ function set(part, value, oldValue) {
     }
     if (value.then) {
       value.then(promised => {
-        set(part, promised, oldValue);
+        set(part, promised);
       });
     } else if (isTemplate(value)) {
       render(value, part);
@@ -385,7 +394,7 @@ function flushPart(part) {
   const end = part.end;
   if (start !== end) {
     let curr = end != null ? end.previousSibling : null;
-    while (curr != null && curr !== start) {
+    while (curr !== start && curr != null) {
       const nextNode = curr.previousSibling;
       parent.removeChild(curr);
       curr = nextNode;
@@ -411,7 +420,6 @@ function TemplateResult(key, template, parts, exprs) {
       result.start = result.end = flushPart(result);
     },
     update(values) {
-      const lastValues = result.values;
       if (values != null) {
         result.values = values;
       }
@@ -433,16 +441,14 @@ function TemplateResult(key, template, parts, exprs) {
           } else {
             part.start = target;
           }
-          part.update = newValue => set(part, newValue);
         });
       }
       parts.forEach((part, i) => {
-        const oldVal = lastValues[i];
         const newVal = result.values[i];
         if (isDirective(part, newVal)) {
           newVal(part);
         } else {
-          set(part, newVal, oldVal);
+          part.update(newVal);
         }
       });
     }
@@ -469,7 +475,7 @@ function isFirstChildSerializedParts(parent) {
 
 function checkForSerialized(hash) {
   const template = document.getElementById(`template-${hash}`);
-  // <!--{{parts:[[0,1,1],...]}}-->
+  // <!--{{parts:[{ path: [0,1,1], isSVG: true }, ...]}}-->
   const parts =
     template != null && isFirstChildSerializedParts(template.content)
       ? parseSerializedParts(
