@@ -63,18 +63,13 @@ function updateNode(part, value) {
   const element = part.start;
   const parent = element.parentNode;
   if (element !== value) {
-    if (value.nodeType === DOCUMENT_FRAGMENT) {
-      const newStart = value.firstChild;
-      const newEnd = value.lastChild;
+    const newStart = value.firstChild || value;
+    const newEnd = value.lastChild || value;
       parent.replaceChild(value, flushPart(part));
       part.start = newStart;
       part.end = newEnd;
-    } else {
-      parent.replaceChild(value, flushPart(part));
-      part.start = part.end = value;
     }
   }
-}
 
 function updateTextNode(part, value) {
   const element = part.start;
