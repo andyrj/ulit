@@ -2,7 +2,7 @@ import test from "ava";
 import { JSDOM } from "jsdom";
 import atob from "atob";
 import btoa from "btoa";
-import { html, render } from "../src";
+import { html, render, flushPart, pullPart } from "../src";
 
 test.beforeEach(t => {
   const dom = new JSDOM("<!DOCTYPE html><head></head><body></body></html>");
@@ -80,27 +80,6 @@ test("nested templates", t => {
   t.is(template1.fragment.content.firstChild.firstChild.firstChild.nodeValue, "test");
 });
 
-test("expression can change part types between renders", t => {
-  const str = "test";
-  const div = document.createElement("div");
-  div.id = "test";
-  const template = html`<div>${str}</div>`;
-  template.update();
-  t.is(template.fragment.content.firstChild.firstChild.nodeValue, "test");
-  template.update([div]);
-  t.is(template.fragment.content.firstChild.firstChild.id, "test");
-});
-
-test("directives", t => {
-  let lastUpdate;
-  const template = html`<div>${part => {lastUpdate = part.update}}</div>`;
-  template.update();
-  lastUpdate("test");
-  t.is(template.fragment.content.firstChild.firstChild.nodeValue, "test");
-  lastUpdate("test123");
-  t.is(template.fragment.content.firstChild.firstChild.nodeValue, "test123");
-});
-
 test("null should remove attribute", t => {
   const template = enable => html`<div enabled=${enable}>test</div>`;
   render(template(true));
@@ -153,7 +132,6 @@ test("invalid part paths should throw on init", t => {
 });
 
 test("fragments", t => {
-  console.log("+++++");
   const fragment = document.createDocumentFragment();
   fragment.appendChild(document.createTextNode("test"));
   fragment.appendChild(document.createTextNode("test1"));
@@ -170,5 +148,25 @@ test("fragments", t => {
   fragment1.appendChild(div);
   render(template(fragment1));
   t.is(document.body.innerHTML, "<div><div>test<br>test1</div></div>");
-  console.log("-----");
+});
+
+test("expression can change part types between renders", t => {
+  const str = "test";
+  const div = document.createElement("div");
+  div.id = "test";
+  const template = html`<div>${str}</div>`;
+  template.update();
+  t.is(template.fragment.content.firstChild.firstChild.nodeValue, "test");
+  template.update([div]);
+  t.is(template.fragment.content.firstChild.firstChild.id, "test");
+});
+
+test("directives", t => {
+  let lastUpdate;
+  const template = html`<div>${part => {lastUpdate = part.update}}</div>`;
+  render(template);
+  lastUpdate("test");
+  t.is(document.body.firstChild.firstChild.nodeValue, "test");
+  lastUpdate("test123");
+  t.is(document.body.firstChild.firstChild.nodeValue, "test123");
 });

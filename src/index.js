@@ -63,10 +63,9 @@ function updateNode(part, value) {
   const element = part.start;
   const parent = element.parentNode;
   if (element !== value) {
-    const newStart =
-      value.nodeType === DOCUMENT_FRAGMENT ? value.firstChild : value;
-    const newEnd =
-      value.nodeType === DOCUMENT_FRAGMENT ? value.lastChild : value;
+    const isFrag = value.nodeType === DOCUMENT_FRAGMENT;
+    const newStart = isFrag ? value.firstChild : value;
+    const newEnd = isFrag ? value.lastChild : value;
     parent.replaceChild(value, flushPart(part));
     part.start = newStart;
     part.end = newEnd;
@@ -126,19 +125,15 @@ function Part(path, isSVG = false, id = Symbol(), start = null, end = null) {
   return part;
 }
 
-function pullPart(part) {
+export function pullPart(part) {
   const fragment = document.createDocumentFragment();
   const stack = [];
   const parent = part.start.parentNode;
   let cur = part.end;
-  while (cur != null) {
+  while (cur !== part.start && cur != null) {
     const next = cur.previousSibling;
     stack.push(parent.removeChild(cur));
-    if (cur === part.start) {
-      cur = null;
-    } else {
-      cur = next;
-    }
+    cur = next;
   }
   while (stack.length > 0) {
     fragment.appendChild(stack.pop());
@@ -345,7 +340,6 @@ export function render(template, target = document.body) {
   }
   template.update();
   if (part == null) {
-    // TODO: figure out how to fix the broken part.end here...
     if (target.childNodes.length > 0) {
       while (target.hasChildNodes) {
         target.removeChild(target.lastChild);
@@ -388,12 +382,12 @@ function isPartComment(node) {
   }
 }
 
-function flushPart(part) {
+export function flushPart(part) {
   const start = part.start;
   const parent = start.parentNode;
   const end = part.end;
   if (start !== end) {
-    let curr = end != null ? end.previousSibling : null;
+    let curr = end;
     while (curr !== start && curr != null) {
       const nextNode = curr.previousSibling;
       parent.removeChild(curr);
@@ -440,6 +434,7 @@ function TemplateResult(key, template, parts, exprs) {
             part.end = target[1];
           } else {
             part.start = target;
+            part.end = target;
           }
         });
       }
