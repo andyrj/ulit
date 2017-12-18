@@ -125,10 +125,20 @@ function Part(path, isSVG = false, id = Symbol(), start = null, end = null) {
   return part;
 }
 
+function findParentNode(part) {
+  if (part != null && part.start != null) {
+    if (part.nodeType && part.parentNode) {
+      return part.parentNode;
+    } else {
+      return findParentNode(part.start);
+    }
+  }
+}
+
 export function pullPart(part) {
   const fragment = document.createDocumentFragment();
   const stack = [];
-  const parent = part.start.parentNode;
+  const parent = findParentNode(part);
   let cur = part.end;
   while (cur !== part.start && cur != null) {
     const next = cur.previousSibling;
@@ -147,8 +157,8 @@ export function repeat(
   templateFn = defaultTemplateFn
 ) {
   return part => {
-    const parent = part.start.parentNode;
     const target = part.start;
+    const parent = findParentNode(part);
     const id = part.id;
     const normalized = items.map(item => {
       if (isTemplate(item)) {
@@ -157,9 +167,15 @@ export function repeat(
       return templateFn(item);
     });
     const keys = items.map((item, index) => keyFn(item, index));
-    let { map, list } = keyMapCache.get(id);
+    const cacheEntry = keyMapCache.get(id);
+    let map;
+    let list;
+    if (cacheEntry) {
+      map = cacheEntry.map;
+      list = cacheEntry.list;
+    }
     let i = 0;
-    if (!map && part.start.nodeType === COMMENT_NODE) {
+    if (!map && target.nodeType === COMMENT_NODE) {
       map = {};
       list = [];
       const fragment = document.createDocumentFragment();
@@ -167,7 +183,7 @@ export function repeat(
       for (; i < len; i++) {
         const key = keys[i];
         const node = document.createComment("{{}}");
-        let newPart = Part(null, part.isSVG, Symbol(), node, node);
+        let newPart = Part([0], part.isSVG, Symbol(), node, node);
         if (i === 0) {
           part.start = newPart;
         } else if (i === len) {
@@ -179,6 +195,7 @@ export function repeat(
         render(normalized[i], newPart);
       }
       keyMapCache.set(id, { map, list });
+      // TODO: figure out why parent is nullish here...
       parent.replaceChild(fragment, target);
       return;
     }
@@ -212,8 +229,9 @@ export function repeat(
         const fragment = document.createDocumentFragment();
         const node = document.createComment("{{}}");
         fragment.appendChild(node);
-        const newPart = Part(null, Symbol(), node, node);
+        const newPart = Part([0], Symbol(), node, node);
         render(newTemplate, newPart);
+        // TODO: finish logic here to correctly update array/iterable/repeat...
         parent.insertBefore(fragment, list[i].start);
         list.splice(i, 0, newPart);
       }
@@ -334,7 +352,7 @@ export function render(template, target = document.body) {
       template.start = fragment.content.firstChild;
       template.end = fragment.content.lastChild;
       template.start.__template = template;
-      instance.start.parentNode.replace(fragment, instance.start);
+      findParentNode(instance.start).replaceChild(fragment, instance.start);
     }
     return;
   }
@@ -483,7 +501,7 @@ function checkForSerialized(hash) {
 }
 
 function generateId(strs) {
-  const templateStr = strs.toString();
+  const templateStr = strs != null ? strs.toString() : "";
   let hash = 0;
   if (templateStr.length === 0) {
     return hash;

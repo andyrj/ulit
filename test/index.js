@@ -170,3 +170,17 @@ test("directives", t => {
   lastUpdate("test123");
   t.is(document.body.firstChild.firstChild.nodeValue, "test123");
 });
+
+test("arrays", t => {
+  console.log("+++++");
+  const arr = [1, 2 ,3];
+  const template = html`<div>${arr}</div>`;
+  render(template);
+  t.is(document.body.innerHTML, "<div>123</div>");
+  arr[0] = 3;
+  arr[1] = 2;
+  arr[2] = 1;
+  render(template);
+  t.is(document.body.innerHTML, "<div>321</div>");
+  console.log("-----");
+});
