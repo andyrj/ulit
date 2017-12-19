@@ -1,3 +1,4 @@
+/* flow.js */
 const SVG_NS = "https://www.w3.org/2000/svg";
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
@@ -8,7 +9,7 @@ const idCache = new Map();
 const keyMapCache = new Map();
 const walkPath = [];
 
-function walkDOM(parent, element, fn) {
+function walkDOM(parent: HTMLElement, element: ?HTMLElement, fn: Function) {
   element && fn(parent, element);
   element || (element = parent);
   if (element.childNodes.length > 0) {
@@ -20,7 +21,7 @@ function walkDOM(parent, element, fn) {
   }
 }
 
-function followPath(node, pointer) {
+function followPath(node: ?HTMLElement, pointer: Array<string | number>) {
   if (pointer.length === 0 || node == null) {
     return node;
   }
@@ -36,7 +37,7 @@ function followPath(node, pointer) {
   }
 }
 
-function updateAttribute(part, value) {
+function updateAttribute(part: Part, value: any) {
   const element = part.start;
   const name = part.end;
   try {
@@ -59,7 +60,7 @@ function updateAttribute(part, value) {
   }
 }
 
-function updateNode(part, value) {
+function updateNode(part: Part, value: any) {
   const element = part.start;
   const parent = element.parentNode;
   if (element !== value) {
@@ -72,7 +73,7 @@ function updateNode(part, value) {
   }
 }
 
-function updateTextNode(part, value) {
+function updateTextNode(part: Part, value: any) {
   const element = part.start;
   const parent = element.parentNode;
   if (part.start !== part.end) {
@@ -87,19 +88,36 @@ function updateTextNode(part, value) {
   }
 }
 
-function isTemplate(obj) {
+function isTemplate(obj: any): boolean {
   return obj && obj.values && obj.parts && obj.update;
 }
 
-function defaultKeyFn(item, index) {
+function defaultKeyFn(item: any, index: string): Array<any> {
   return index;
 }
 
-function defaultTemplateFn(item) {
+function defaultTemplateFn(item: any): TemplateResult {
   return html`${item}`;
 }
 
-function Part(path, isSVG = false, id = Symbol(), start = null, end = null) {
+type Part = {
+  id: any,
+  path: Array<string | number>,
+  start: ?HTMLElement | Part,
+  end: ?HTMLElement | Part | string,
+  isSVG: ?boolean,
+  update: Function,
+  addDisposer: Function,
+  removeDisposer: Function
+};
+
+function createPart(
+  path: Array<string | number>,
+  isSVG?: boolean = false,
+  id?: any = Symbol(),
+  start?: ?HTMLElement = null,
+  end?: ?HTMLElement | string = null
+): Part {
   const disposers = [];
   const part = {
     id,
@@ -125,7 +143,7 @@ function Part(path, isSVG = false, id = Symbol(), start = null, end = null) {
   return part;
 }
 
-function findParentNode(part) {
+function findParentNode(part: ?Part): ?HTMLElement {
   if (part != null && part.start != null) {
     if (part.nodeType && part.parentNode) {
       return part.parentNode;
@@ -135,7 +153,12 @@ function findParentNode(part) {
   }
 }
 
-export function pullPart(part) {
+type PulledPart = {
+  part: Part,
+  fragment: DocumentFragment
+};
+
+export function pullPart(part: Part): PulledPart {
   const fragment = document.createDocumentFragment();
   const stack = [];
   const parent = findParentNode(part);
@@ -151,12 +174,24 @@ export function pullPart(part) {
   return { part, fragment };
 }
 
+type Directive = Part => void;
+
+type PartValue =
+  | number
+  | string
+  | HTMLElement
+  | DocumentFragment
+  | Promise
+  | Directive
+  | Array<PartValue>
+  | TemplateResult;
+
 export function repeat(
-  items,
-  keyFn = defaultKeyFn,
-  templateFn = defaultTemplateFn
-) {
-  return part => {
+  items: Array<any>,
+  keyFn: typeof defaultKeyFn = defaultKeyFn,
+  templateFn: typeof defaultTemplateFn = defaultTemplateFn
+): Directive {
+  return (part: Part) => {
     const target = part.start;
     const parent = findParentNode(part);
     const id = part.id;
@@ -183,7 +218,7 @@ export function repeat(
       for (; i < len; i++) {
         const key = keys[i];
         const node = document.createComment("{{}}");
-        let newPart = Part([0], part.isSVG, Symbol(), node, node);
+        let newPart = createPart([0], part.isSVG, Symbol(), node, node);
         if (i === 0) {
           part.start = newPart;
         } else if (i === len) {
@@ -229,7 +264,7 @@ export function repeat(
         const fragment = document.createDocumentFragment();
         const node = document.createComment("{{}}");
         fragment.appendChild(node);
-        const newPart = Part([0], Symbol(), node, node);
+        const newPart = createPart([0], Symbol(), node, node);
         render(newTemplate, newPart);
         // TODO: finish logic here to correctly update array/iterable/repeat...
         parent.insertBefore(fragment, list[i].start);
@@ -239,11 +274,11 @@ export function repeat(
   };
 }
 
-function updateArray(part, value) {
+function updateArray(part: Part, value: PartValue) {
   repeat(value)(part);
 }
 
-function set(part, value) {
+function set(part: Part, value: PartValue) {
   if (typeof part.end === "string") {
     updateAttribute(part, value);
   } else {
@@ -270,7 +305,7 @@ function set(part, value) {
   }
 }
 
-function isSVGChild(node) {
+function isSVGChild(node: ?HTMLElement): boolean {
   let result = false;
   let cur = node;
   while (cur != null) {
@@ -283,7 +318,9 @@ function isSVGChild(node) {
   return result;
 }
 
-function templateSetup(parts) {
+type WalkFn = (parent: HTMLElement, element: HTMLElement) => void;
+
+function templateSetup(parts: Array<Part>): WalkFn {
   return function(parent, element) {
     const nodeType = element.nodeType;
     if (nodeType === TEXT_NODE) {
@@ -304,7 +341,7 @@ function templateSetup(parts) {
             const adjustedPath = walkPath.slice(0);
             const len = adjustedPath.length - 1;
             adjustedPath[len] += cursor;
-            parts.push(Part(adjustedPath, isSVG));
+            parts.push(createPart(adjustedPath, isSVG));
             cursor++;
           }
         });
@@ -317,14 +354,15 @@ function templateSetup(parts) {
       const isSVG = isSVGChild(element);
       [].forEach.call(element.attributes, attr => {
         if (attr.nodeValue === "{{}}") {
-          parts.push(Part(walkPath.concat(attr.nodeName), isSVG));
+          parts.push(createPart(walkPath.concat(attr.nodeName), isSVG));
         }
       });
     }
   };
 }
 
-function getChildTemplate(target) {
+function getChildTemplate(target: ?HTMLElement): ?TemplateResult {
+  if (target == null) return;
   if (
     target.childNodes &&
     target.childNodes.length > 0 &&
@@ -334,7 +372,10 @@ function getChildTemplate(target) {
   }
 }
 
-export function render(template, target = document.body) {
+export function render(
+  template: TemplateResult,
+  target?: HTMLElement = document.body
+): void {
   const part = target.nodeType == null ? target : null;
   const instance =
     target.__template ||
@@ -377,7 +418,7 @@ export function render(template, target = document.body) {
   }
 }
 
-function isDirective(part, expression) {
+function isDirective(part: Part, expression: any) {
   const end = part.end;
   if (typeof expression === "function") {
     if (typeof end !== "string") {
@@ -392,7 +433,7 @@ function isDirective(part, expression) {
   }
 }
 
-function isPartComment(node) {
+function isPartComment(node: ?HTMLElement): boolean {
   if (node.nodeType === COMMENT_NODE && node.nodeValue === "{{}}") {
     return true;
   } else {
@@ -400,9 +441,9 @@ function isPartComment(node) {
   }
 }
 
-export function flushPart(part) {
+export function flushPart(part: Part): HTMLElement | Part {
   const start = part.start;
-  const parent = start.parentNode;
+  const parent = findParentNode(start);
   const end = part.end;
   if (start !== end) {
     let curr = end;
@@ -415,7 +456,23 @@ export function flushPart(part) {
   return start;
 }
 
-function TemplateResult(key, template, parts, exprs) {
+type TemplateResult = {
+  key: string,
+  fragment: DocumentFragment,
+  start: ?HTMLElement | Part,
+  end: ?HTMLElement | Part,
+  values: Array<PartValue>,
+  parts: Array<Part>,
+  dispose: () => void,
+  update: (values: Array<PartValue>) => void
+};
+
+function createTemplateResult(
+  key: string,
+  template: HTMLElement,
+  parts: Array<Part>,
+  exprs: Array<PartValue>
+): TemplateResult {
   const result = {
     key,
     fragment: null,
@@ -469,7 +526,7 @@ function TemplateResult(key, template, parts, exprs) {
   return result;
 }
 
-function parseSerializedParts(value) {
+function parseSerializedParts(value: string): Array<?Part> {
   if (value.startsWith("{{ps:") && value.endsWith("}}")) {
     return JSON.parse(value.split("{{ps:")[1].slice(0, -2));
   } else {
@@ -477,7 +534,7 @@ function parseSerializedParts(value) {
   }
 }
 
-function isFirstChildSerializedParts(parent) {
+function isFirstChildSerializedParts(parent: HTMLElement): boolean {
   const child = parent.firstChild;
   return (
     child.nodeType === COMMENT_NODE &&
@@ -486,8 +543,13 @@ function isFirstChildSerializedParts(parent) {
   );
 }
 
-function checkForSerialized(hash) {
-  const template = document.getElementById(`template-${hash}`);
+type DeserializedTemplate = {
+  template: HTMLElement,
+  parts: Array<Part>
+};
+
+function checkForSerialized(id: string): DeserializedTemplate {
+  const template = document.getElementById(`template-${id}`);
   // <!--{{parts:[{ path: [0,1,1], isSVG: true }, ...]}}-->
   const parts =
     template != null && isFirstChildSerializedParts(template.content)
@@ -496,11 +558,11 @@ function checkForSerialized(hash) {
         )
       : [];
   const result = { template, parts };
-  template && !templateCache.has(hash) && templateCache.set(hash, result);
+  template && !templateCache.has(id) && templateCache.set(id, result);
   return result;
 }
 
-function generateId(strs) {
+function generateId(strs: Array<string>): string {
   const templateStr = strs != null ? strs.toString() : "";
   let hash = 0;
   if (templateStr.length === 0) {
@@ -514,7 +576,7 @@ function generateId(strs) {
   return hash;
 }
 
-export function html(strs, ...exprs) {
+export function html(strs: Array<string>, ...exprs: PartValue): TemplateResult {
   const id = idCache.get(strs) || generateId(strs);
   let { template, parts } = templateCache.get(id) || checkForSerialized(id);
   if (template == null) {
@@ -523,10 +585,10 @@ export function html(strs, ...exprs) {
     walkDOM(template.content, null, templateSetup(parts));
     templateCache.set(id, { template, parts });
   }
-  return TemplateResult(strs, template, parts, exprs);
+  return createTemplateResult(strs, template, parts, exprs);
 }
 
-export function until(promise, defaultContent) {
+export function until(promise: Promise, defaultContent: PartValue) {
   return ({ update }) => {
     update(defaultContent);
     return promise;
