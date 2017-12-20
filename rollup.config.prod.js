@@ -13,7 +13,7 @@ export default {
     babel({
       babelrc: false,
       presets: [["env", { modules: false }]],
-      plugins: []
+      plugins: ["transform-flow-strip-types"]
     }),
     minify({ comments: false })
   ],

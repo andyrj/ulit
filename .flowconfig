@@ -1,6 +1,10 @@
 [ignore]
+.*/dist
+.*/coverage
+.*/test
 
 [include]
+./src
 
 [libs]
 

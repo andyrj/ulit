@@ -23,8 +23,12 @@
     "addEventListener": true,
     "Element": true,
     "HTMLElement": true,
+    "HTMLTemplateElement": true,
     "requestAnimationFrame": true,
-    "DocumentFragment": true
+    "DocumentFragment": true,
+    "Node": true,
+    "Text": true,
+    "Comment": true
   },
   "rules": {
     "prettier/prettier": "error",
@@ -51,7 +55,7 @@
       2, 5
     ],
     "complexity": [
-      2, 10
+      0, 10
     ],
     "max-params": [
       2, 5
