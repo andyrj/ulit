@@ -16,7 +16,6 @@ function invariant<T>(x: ?T): T {
   return x;
 }
 
-//type DOMNode = HTMLElement | Comment | Text;
 type WalkFn = (parent: Node, element: ?Node) => void;
 
 /**
