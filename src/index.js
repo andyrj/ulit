@@ -21,11 +21,11 @@ type WalkFn = (parent: Node, element: ?Node) => void;
 /**
  * This function walks a html document and executes the supplied function
  * on each node.
- * @param {DOMNode} parent
- * @param {?DOMNode} element
+ * @param {HTMLElement} parent
+ * @param {?Node} element
  * @param {WalkFn} fn
  */
-function walkDOM(parent: Node, element: ?Node, fn: WalkFn) {
+function walkDOM(parent: HTMLElement, element: ?Node, fn: WalkFn) {
   element && fn(parent, element);
   element || (element = parent);
   if (element && element.childNodes.length > 0) {
@@ -34,7 +34,7 @@ function walkDOM(parent: Node, element: ?Node, fn: WalkFn) {
     }
     [].forEach.call(element.childNodes, (child, index) => {
       walkPath.push(index);
-      walkDOM(element, child, fn);
+      walkDOM(((element: any): HTMLElement), child, fn);
       walkPath.pop();
     });
   }
@@ -97,10 +97,11 @@ function isPart(x: any): boolean {
 }
 
 type PartEdge = "start" | "end";
-function findPartEdge(part: Part, edge: PartEdge): HTMLElement {
-  let cur: ?Node | Part = part && part[edge];
+function findPartEdge(part: Part, edge: PartEdge): Node {
+  let cur: ?Node | Part | string = part && part[edge];
   while (cur != null) {
     if (isPart(cur)) {
+      // $FlowFixMe
       cur = cur[edge];
     } else if (isNode(cur)) {
       return cur;
