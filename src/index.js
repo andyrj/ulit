@@ -96,18 +96,28 @@ function isPart(x: any): boolean {
   }
 }
 
-type PartEdge = "start" | "end";
-function findPartEdge(part: Part, edge: PartEdge): Node {
-  let cur: ?Node | Part | string = part && part[edge];
-  while (cur != null) {
-    if (isPart(cur)) {
-      // $FlowFixMe
-      cur = cur[edge];
-    } else if (isNode(cur)) {
-      return cur;
-    }
+type EdgeTypes = "start" | "end";
+function getEdge(part: Part, edge: EdgeTypes): PartEdge {
+  if (edge === "start") {
+    return part.start;
+  } else {
+    return part.end;
   }
-  throw new RangeError();
+}
+
+function findPartEdge(part: ?Part, edge: EdgeTypes): PartEdge {
+  if (part != null) {
+    let cur: ?PartEdge = getEdge(part, edge);
+    while (cur != null) {
+      if (isPart(cur)) {
+        cur = getEdge(cur, edge);
+      } else if (isNode(cur)) {
+        return cur;
+      }
+    }
+  } else {
+    return null;
+  }
 }
 
 function removeAttribute(part, element, name) {
@@ -190,11 +200,12 @@ type PartDispose = (part: Part) => void;
 type PartUpdate = (value: ?PartValue) => void;
 type PartDisposeHandler = (handler: PartDispose) => void;
 
+type PartEdge = Node | Part | string;
 type Part = {
   id: any,
   path: Array<string | number>,
-  start: ?Node | Part,
-  end: ?Node | Part | string,
+  start: ?PartEdge,
+  end: ?PartEdge,
   isSVG: ?boolean,
   update: PartUpdate,
   addDisposer: PartDisposeHandler,
@@ -282,7 +293,7 @@ type PartValue =
   | TemplateResult;
 
 export function repeat(
-  items: Array<any>,
+  items: Array<{}>,
   keyFn: typeof defaultKeyFn = defaultKeyFn,
   templateFn: typeof defaultTemplateFn = defaultTemplateFn
 ): Directive {
@@ -483,15 +494,28 @@ function getChildTemplate(target: ?HTMLElement): ?TemplateResult {
   }
 }
 
+function isTagged(node: any): boolean {
+  if ((node: any).__template != null) {
+    return true;
+  }
+  return false;
+}
+
+type Target = HTMLElement | Part;
 export function render(
   template: TemplateResult,
-  target?: ?HTMLElement | Part = document.body
+  target?: ?Target = document.body
 ): void {
   const part = target.nodeType == null ? target : null;
+  const instance =
+    isTagged(target) ||
+    isTagged(part && part.start)
+  /*
   const instance: TemplateResult =
     target.__template ||
     (part && part.start && part.start.__template) ||
     getChildTemplate(target);
+  */
   if (instance) {
     if (instance.key === template.key) {
       instance.update(template.values);
@@ -501,8 +525,9 @@ export function render(
       const comment = document.createComment("{{}}");
       fragment.appendChild(comment);
       render(template, comment);
-      template.start = fragment.content.firstChild;
-      template.end = fragment.content.lastChild;
+      const first = fragment.firstChild;
+      template.start = first != null ? first : null;
+      template.end = fragment.lastChild;
       template.start.__template = template;
       findParentNode(instance.start).replaceChild(fragment, instance.start);
     }
@@ -665,7 +690,7 @@ function isFirstChildSerializedParts(parent: DocumentFragment): boolean {
 }
 
 type DeserializedTemplate = {
-  template: HTMLElement,
+  template: Node,
   parts: Array<Part>
 };
 
@@ -678,12 +703,21 @@ function checkForSerialized(id: string): ?DeserializedTemplate {
   if (frag == null) return;
   const first = frag.firstChild;
   if (first == null) return;
-  const parts = isFirstChildSerializedParts(frag)
-    ? parseSerializedParts(frag.removeChild(first).nodeValue)
-    : [];
+  const isFirstChildSerial = isFirstChildSerializedParts(frag);
+  let deserialized: ?DeserializedTemplate;
+  if (isFirstChildSerial) {
+    deserialized = parseSerializedParts(frag.removeChild(first).nodeValue)
+  }
+  if (deserialized) {
+    return deserialized;
+  } else {
+    
+  }
+  /*
   const result: DeserializedTemplate = { template, parts };
   template && !templateCache.has(id) && templateCache.set(id, result);
   return result;
+  */
 }
 
 function generateId(str: string): string {
@@ -709,7 +743,7 @@ export function html(
   if (template == null) {
     template = document.createElement("template");
     template.innerHTML = strs.join("{{}}");
-    walkDOM(template.content, null, templateSetup(parts));
+    walkDOM(((template.content: any): HTMLTemplateElement), null, templateSetup(parts));
     templateCache.set(id, { template, parts });
   }
   return createTemplateResult(strs.toString(), template, parts, exprs);
