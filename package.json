@@ -21,7 +21,7 @@
     "minify": "echo 'ADD: minify'",
     "prepare": "npm run build && npm run test",
     "prepublish": "npm run minify",
-    "docs": "echo 'FIX: docs'",
+    "docs": "typedoc --out ./docs/ --mode file ./src/index.ts",
     "lint": "tslint -c tslint.json 'src/**/*.ts'",
     "lint:fix": "eslint --fix --ext .js src/",
     "format": "prettier --write 'src/**/*.ts'",
