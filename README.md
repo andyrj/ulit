@@ -5,6 +5,7 @@
 [![Build Status](https://travis-ci.org/andyrj/ulit.svg?branch=master)](https://travis-ci.org/andyrj/ulit)
 
 *WIP* Tagged Template Literal html template library.  Inspired by lit-html/hyperHTML.
+ - This branch is a rewrite to typescript...
 
 TODO:
 1. get test coverage up to 100/100
