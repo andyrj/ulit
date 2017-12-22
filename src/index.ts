@@ -55,8 +55,8 @@ function isDirective(part: Part, expression: any) {
   }
 }
 
-function isPartComment(node: any | null | undefined): boolean {
-  if (node && node.nodeType === COMMENT_NODE && node.nodeValue === "{{}}") {
+function isPartComment(x: any | null | undefined): boolean {
+  if (x instanceof Comment && x.nodeValue === "{{}}") {
     return true;
   } else {
     return false;
@@ -64,18 +64,7 @@ function isPartComment(node: any | null | undefined): boolean {
 }
 
 function isNode(x: any): boolean {
-  if (
-    x &&
-    x.nodeType &&
-    x.removeAttribute &&
-    x.removeAttributeNS &&
-    x.setAttribute &&
-    x.setAttributeNS
-  ) {
-    return true;
-  } else {
-    return false;
-  }
+  return x instanceof Node;
 }
 
 function isPart(x: any): boolean {
@@ -270,23 +259,23 @@ export function flushPart(target: DomTarget): Node {
     let current = end;
     while (current !== start && current != null) {
       const nextNode = (<Node>current).previousSibling;
-      parent && parent.removeChild(current);
+      parent && parent.removeChild(<Node>current);
       current = nextNode;
     }
   }
   if (start == null || isPart(start)) {
     throw new RangeError();
   }
-  return start;
+  return <Node>start;
 }
 
 function updateAttribute(part: Part, value: any) {
-  const element: HTMLElement | null | undefined = findEdge(part, "start");
-  const name = typeof part.end === "string" ? part.end : "";
+  const element: HTMLElement | null | undefined = <HTMLElement>findEdge(part.target, "start");
+  const name = typeof part.target.end === "string" ? part.target.end : "";
   try {
     (element as any)[name] = value == null ? "" : value;
   } catch (_) {} // eslint-disable-line
-  if (typeof value !== "function" && isNode(element)) {
+  if (element != null && typeof value !== "function" && isNode(element)) {
     if (value == null) {
       removeAttribute(part, <HTMLElement>element, name);
     } else {
@@ -296,33 +285,33 @@ function updateAttribute(part: Part, value: any) {
 }
 
 function updateNode(part: Part, value: any) {
-  const element: HTMLElement | null | undefined = findEdge(part, "start");
+  const element: HTMLElement | null | undefined = <HTMLElement>findEdge(part.target, "start");
   const parent = element && element.parentNode;
   if (!parent) throw new RangeError("6");
   if (element !== value) {
     const isFrag = value.nodeType === DOCUMENT_FRAGMENT;
     const newStart = isFrag ? value.firstChild : value;
     const newEnd = isFrag ? value.lastChild : value;
-    parent.replaceChild(value, flushPart(part));
-    part.start = newStart;
-    part.end = newEnd;
+    parent.replaceChild(value, flushPart(part.target));
+    part.target.start = newStart;
+    part.target.end = newEnd;
   }
 }
 
 function updateTextNode(part: Part, value: any) {
-  const element = findEdge(part, "start");
+  const element = <HTMLElement>findEdge(part.target, "start");
   const parent = element && element.parentNode;
-  if (part.start !== part.end) {
-    flushPart(part);
+  if (part.target.start !== part.target.end) {
+    flushPart(part.target);
   }
   if (element == null) throw new RangeError();
   if (element.nodeType === TEXT_NODE && element.nodeValue !== value) {
     element.nodeValue = value;
   } else {
     const newNode = document.createTextNode(value);
-    if (!parent) throw new RangeError(7);
+    if (!parent) throw new RangeError("7");
     parent.replaceChild(newNode, element);
-    part.start = part.end = newNode;
+    part.target.start = part.target.end = newNode;
   }
 }
 
@@ -331,7 +320,7 @@ function updateArray(part: Part, value: Array<PartValue>) {
 }
 
 function set(part: Part, value: ValidPartValue) {
-  if (typeof part.end === "string") {
+  if (typeof part.target.end === "string") {
     updateAttribute(part, value);
   } else {
     // TODO: figure out how to properly convert form interable to array
@@ -358,31 +347,31 @@ function set(part: Part, value: ValidPartValue) {
   }
 }
 
-type ValidPartValue = PartValue | PartPromise | PartArray;
-type Directive = (part: Part) => void;
-type PartValue = string | number | Node | DocumentFragment | Directive | TemplateResult;
-type PartPromise = Promise<PartValue>;
-type PartArray = Array<PartValue>;
-type EdgeTypes = "start" | "end";
-type Edge = StartEdge | EndEdge;
-type StartEdge = Node | Part | null;
-type EndEdge = StartEdge | string | null;
-type PartDispose = (part: Part) => void;
-type PulledPart = {
+export type ValidPartValue = PartValue | PartPromise | PartArray;
+export type Directive = (part: Part) => void;
+export type PartValue = string | number | Node | DocumentFragment | Directive | TemplateResult;
+export type PartPromise = Promise<PartValue>;
+export type PartArray = Array<PartValue>;
+export type EdgeTypes = "start" | "end";
+export type Edge = StartEdge | EndEdge;
+export type StartEdge = Node | Part | null | undefined;
+export type EndEdge = StartEdge | string;
+export type PartDispose = (part: Part) => void;
+export type PulledPart = {
   part: Part,
   fragment: DocumentFragment
 };
 
 function findParentNode(part: Node | Edge | Part | null | undefined): Node | null | undefined {
   if (part != null && isPart(part)) {
-    const start = <Node>findEdge((<Part>part).target, "start"); // weird that I had to cast <Part> here...
+    const start = <Node>findEdge((<Part>part).target, "start");
     return start && start.parentNode;
   } else if (isNode(part)) {
-    const parent = part && part.parentNode;
+    const parent = part && (<Node>part).parentNode;
     if ((part && !isNode(part)) || (parent && !isNode(parent))) {
-      throw new RangeError(8);
+      throw new RangeError("8");
     }
-    return parent;
+    return <Node>parent;
   }
 }
 
@@ -390,25 +379,25 @@ function findParentNode(part: Node | Edge | Part | null | undefined): Node | nul
 export function pullPart(part: Part): PulledPart {
   const fragment = document.createDocumentFragment();
   const stack = [];
-  let cur = findPartEdge(part, "end");
-  const parent = cur && cur.parentNode;
-  if (parent == null) throw new RangeError(9);
-  while (cur !== part.start && cur != null) {
-    const next = cur.previousSibling;
-    stack.push(parent.removeChild(cur));
-    cur = next;
+  let cursor = findEdge(part.target, "end");
+  const parent = cursor && (<Node>cursor).parentNode;
+  if (parent == null) throw new RangeError("9");
+  while (cursor !== part.target.start && cursor != null) {
+    const next = (<Node>cursor).previousSibling;
+    stack.push((<Node>parent).removeChild(<Node>cursor));
+    cursor = next;
   }
   while (stack.length > 0) {
-    fragment.appendChild(stack.pop());
+    fragment.appendChild(<Node>stack.pop());
   }
   return { part, fragment };
 }
 
-class DomTarget {
+export class DomTarget {
   constructor (public start: StartEdge, public end: EndEdge) {}
 }
 
-class Part {
+export class Part {
   target: DomTarget;
   disposers: Array<PartDispose>;
   constructor(
@@ -444,7 +433,7 @@ class Part {
   }
 }
 
-class TemplateResult {
+export class TemplateResult {
   fragment: DocumentFragment;
   target: DomTarget;
   constructor(public key: string, public template: HTMLTemplateElement, public parts: Array<Part>, public values: Array<ValidPartValue>) {}
@@ -536,7 +525,7 @@ function followDOMPath(
   }
 }
 
-function walkDOM(parent: HTMLElement, element: Node | null | undefined, fn: WalkFn) {
+function walkDOM(parent: HTMLElement | DocumentFragment, element: Node | null | undefined, fn: WalkFn) {
   if (element) {
     fn(parent, element);
   }
@@ -562,14 +551,17 @@ export function html(
   const staticMarkUp = strs.toString();
   const id = idCache.get(staticMarkUp) || generateId(staticMarkUp);
   const cacheEntry = templateCache.get(id);
-  let { template, parts } = cacheEntry || checkForSerialized(id.toString()) || { template: null, parts: []};
+  // TODO: change logic below...  cacheEntry does not need to keep track of parts... the template in cache has already
+  //   handled that, we only need to store template in templateCache...
+  let { template, parts } = cacheEntry || checkForSerialized(id.toString(), staticMarkUp) || { template: null, parts: []};
   if (template == null) {
-    template = <HTMLTemplateElement>document.createElement("template");
-    template.innerHTML = strs.join("{{}}");
-    walkDOM(template.content, null, templateSetup(parts));
+    const el: HTMLTemplateElement = document.createElement("template");
+    el.innerHTML = strs.join("{{}}");
+    walkDOM(el.content, null, templateSetup(parts));
+    template = new TemplateResult(strs.toString(), el, parts, exprs);
     templateCache.set(id, { template, parts });
   }
-  return new TemplateResult(strs.toString(), template, parts, exprs);
+  return <TemplateResult>template;
 }
 
 function parseSerializedParts(value: string | null | undefined): Array<Part | null | undefined> {
@@ -582,10 +574,11 @@ function parseSerializedParts(value: string | null | undefined): Array<Part | nu
 
 function isFirstChildSerializedParts(parent: DocumentFragment): boolean {
   const child = parent.firstChild;
-  return child &&
+  return (child &&
     child.nodeType === COMMENT_NODE &&
+    child.nodeValue &&
     child.nodeValue.startsWith("{{parts:") &&
-    child.nodeValue.endsWith("}}")
+    child.nodeValue.endsWith("}}"))
     ? true
     : false;
 }
@@ -595,12 +588,12 @@ type DeserializedTemplate = {
   parts: Array<Part>
 };
 
-function checkForSerialized(id: string): DeserializedTemplate | null | undefined {
-  const template: HTMLTemplateElement | null | undefined = <HTMLTemplateElement>document.getElementById(
+function checkForSerialized(id: string, markup: string): DeserializedTemplate | null | undefined {
+  const el: HTMLTemplateElement | null | undefined = <HTMLTemplateElement>document.getElementById(
     `template-${id}`
   );
-  if (template == null) return;
-  const frag = template.content;
+  if (el == null) return;
+  const frag = el.content;
   if (frag == null) return;
   const first = frag.firstChild;
   if (first == null) return;
@@ -608,18 +601,12 @@ function checkForSerialized(id: string): DeserializedTemplate | null | undefined
   let deserialized: DeserializedTemplate | null | undefined;
   if (isFirstChildSerial) {
     const fc = frag.removeChild(first);
-    deserialized = parseSerializedParts(fc.nodeValue)
+    let parts = <Part[]>parseSerializedParts(fc.nodeValue);
+    let template = new TemplateResult(markup, el, );
   }
   if (deserialized) {
     return deserialized;
-  } else {
-    
   }
-  /*
-  const result: DeserializedTemplate = { template, parts };
-  template && !templateCache.has(id) && templateCache.set(id, result);
-  return result;
-  */
 }
 
 function defaultKeyFn(item: any, index: number): string | number {
