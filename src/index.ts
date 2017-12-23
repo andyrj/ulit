@@ -60,6 +60,14 @@ function isPart(x: any): boolean {
   return x instanceof Part;
 }
 
+function isFirstChildSerializedParts(parent: DocumentFragment): boolean {
+  const child = parent.firstChild;
+  return ((child &&
+    child.nodeType === COMMENT_NODE &&
+    child.nodeValue &&
+    child.nodeValue.startsWith("{{parts:")) as boolean);
+}
+
 export function render(
   template: TemplateResult,
   target: Node | Part = document.body
@@ -326,14 +334,13 @@ function set(part: Part, value: ValidPartValue) {
   if (typeof part.target.end === "string") {
     updateAttribute(part, value);
   } else {
-    // TODO: figure out how to properly convert form interable to array
-    // if (
-    //   typeof value !== "string" &&
-    //   !Array.isArray(value) &&
-    //   typeof value[Symbol.iterator] === "function"
-    // ) {
-    //   value = Array.from(value);
-    // }
+    if (
+      typeof value !== "string" &&
+      !Array.isArray(value) &&
+      typeof (value as any)[Symbol.iterator] === "function"
+    ) {
+      value = Array.from(<any>value);
+    }
     if (isPromise(value)) {
       (value as Promise<ValidPartValue>).then(promised => {
         set(part, promised);
@@ -391,12 +398,12 @@ export class DomTarget {
 }
 
 export class Part {
+  id: symbol;
   target: DomTarget;
   disposers: Array<PartDispose>;
   constructor(
     public path: Array<number | string>,
     public isSVG?: boolean,
-    public id?: Symbol,
     start?: StartEdge,
     end?: EndEdge
   ) {
@@ -600,17 +607,6 @@ function parseSerializedParts(
   } else {
     return JSON.parse(value.split("{{parts:")[1].slice(0, -2));
   }
-}
-
-function isFirstChildSerializedParts(parent: DocumentFragment): boolean {
-  const child = parent.firstChild;
-  return child &&
-    child.nodeType === COMMENT_NODE &&
-    child.nodeValue &&
-    child.nodeValue.startsWith("{{parts:") &&
-    child.nodeValue.endsWith("}}")
-    ? true
-    : false;
 }
 
 type DeserializedTemplate = {
