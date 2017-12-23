@@ -12,7 +12,7 @@ type WalkFn = (parent: Node, element: Node | null | undefined) => void;
 
 type Key = string | number;
 interface TemplateCacheEntry {
-  template: TemplateResult;
+  template: HTMLTemplateElement;
   parts: Array<Part>;
 }
 
@@ -171,7 +171,7 @@ function findEdge(target: DomTarget | null | undefined, edge: EdgeTypes): Edge |
     let cursor: Edge | null | undefined = followEdge(target, edge);
     while (cursor != null) {
       if (isPart(cursor)) {
-        cursor = followEdge(<Edge>cursor, edge);
+        cursor = followEdge((<Part>cursor).target, edge);
       } else if (isNode(cursor)) {
         return cursor;
       }
@@ -436,7 +436,11 @@ export class Part {
 export class TemplateResult {
   fragment: DocumentFragment;
   target: DomTarget;
-  constructor(public key: string, public template: HTMLTemplateElement, public parts: Array<Part>, public values: Array<ValidPartValue>) {}
+  constructor(public key: string, public template: HTMLTemplateElement, public parts: Array<Part>, public values: Array<ValidPartValue>) {
+    // TODO: change this class...  I want to make a Template and TemplateResult class...  
+    //  the Template class will have the shape: { template: HTMLTemplateElement, paths: PartPats }
+    //  TemplateResult will have the output from cloning Template, and following PartPaths on the HTMLTemplateElement clone...
+  }
 
   dispose() {
     this.parts.forEach(part =>
@@ -544,24 +548,18 @@ function walkDOM(parent: HTMLElement | DocumentFragment, element: Node | null | 
   }
 }
 
-export function html(
-  strs: TemplateStringsArray,
-  ...exprs: Array<ValidPartValue>
-): TemplateResult {
+export function html(strs: TemplateStringsArray, ...exprs: Array<ValidPartValue>) {
   const staticMarkUp = strs.toString();
   const id = idCache.get(staticMarkUp) || generateId(staticMarkUp);
   const cacheEntry = templateCache.get(id);
-  // TODO: change logic below...  cacheEntry does not need to keep track of parts... the template in cache has already
-  //   handled that, we only need to store template in templateCache...
-  let { template, parts } = cacheEntry || checkForSerialized(id.toString(), staticMarkUp) || { template: null, parts: []};
+  let { template, parts } = (<DeserializedTemplate>(cacheEntry != null ? cacheEntry : checkForSerialized(id)));
   if (template == null) {
-    const el: HTMLTemplateElement = document.createElement("template");
-    el.innerHTML = strs.join("{{}}");
-    walkDOM(el.content, null, templateSetup(parts));
-    template = new TemplateResult(strs.toString(), el, parts, exprs);
+    template = document.createElement("template");
+    template.innerHTML = strs.join("{{}}");
+    walkDOM(template.content, null, templateSetup(parts));
     templateCache.set(id, { template, parts });
   }
-  return <TemplateResult>template;
+  return new TemplateResult(staticMarkUp, template, parts, exprs);
 }
 
 function parseSerializedParts(value: string | null | undefined): Array<Part | null | undefined> {
@@ -584,16 +582,34 @@ function isFirstChildSerializedParts(parent: DocumentFragment): boolean {
 }
 
 type DeserializedTemplate = {
-  template: Node,
+  template: HTMLTemplateElement,
   parts: Array<Part>
 };
 
-function checkForSerialized(id: string, markup: string): DeserializedTemplate | null | undefined {
-  const el: HTMLTemplateElement | null | undefined = <HTMLTemplateElement>document.getElementById(
-    `template-${id}`
-  );
+/* old plain js version...
+function checkForSerialized(hash) {
+  const template = document.getElementById(`template-${hash}`);
+  // <!--{{parts:[{ path: [0,1,1], isSVG: true }, ...]}}-->
+  const parts =
+    template != null && isFirstChildSerializedParts(template.content)
+      ? parseSerializedParts(
+          template.content.removeChild(template.content.firstChild).nodeValue
+        )
+      : [];
+  const result = { template, parts };
+  template && !templateCache.has(hash) && templateCache.set(hash, result);
+  return result;
+}
+*/
+function checkForSerialized(
+  id: number
+): DeserializedTemplate | null | undefined {
+  const el: HTMLTemplateElement | null | undefined =
+    <HTMLTemplateElement>document.getElementById(
+      `template-${id}`
+    );
   if (el == null) return;
-  const frag = el.content;
+  const frag = (<HTMLTemplateElement>el.cloneNode(true)).content;
   if (frag == null) return;
   const first = frag.firstChild;
   if (first == null) return;
@@ -602,18 +618,21 @@ function checkForSerialized(id: string, markup: string): DeserializedTemplate | 
   if (isFirstChildSerial) {
     const fc = frag.removeChild(first);
     let parts = <Part[]>parseSerializedParts(fc.nodeValue);
-    let template = new TemplateResult(markup, el, );
+    let template = <HTMLTemplateElement>el;
+    if (parts && template) {
+      deserialized = { template, parts };
+    }
   }
   if (deserialized) {
     return deserialized;
   }
 }
 
-function defaultKeyFn(item: any, index: number): string | number {
+export function defaultKeyFn(item: any, index: number): string | number {
   return index;
 }
 
-function defaultTemplateFn(item: any): TemplateResult {
+export function defaultTemplateFn(item: any): TemplateResult {
   return html`${item}`;
 }
 
@@ -623,7 +642,7 @@ export function repeat(
   templateFn: typeof defaultTemplateFn = defaultTemplateFn
 ): Directive {
   return (part: Part) => {
-    const target = findPartEdge(part, "start");
+    const target = findEdge(part.target, "start");
     const parent = findParentNode(part);
     const id = part.id;
     const isSVG = part.isSVG;
@@ -634,7 +653,8 @@ export function repeat(
       return templateFn(item);
     });
     const keys = items.map((item, index) => keyFn(item, index));
-    const cacheEntry = keyMapCache.get(id);
+    /*
+    const cacheEntry = repeatCache.get(id);
     let map: { [any]: Part } = {};
     let list: Array<number | string> = [];
     if (cacheEntry && cacheEntry.map && cacheEntry.list) {
@@ -709,34 +729,16 @@ export function repeat(
       }
       parent.removeChild(list[i])
     }
+    */
   };
 }
 
-
-
-// function invariant<T>(x: ?T): T {
-//   if (!x) {
-//     throw new RangeError(1);
-//   }
-//   return x;
-// }
-//
-
-
-
-
-
-
-
-
-
-
-// export function until(
-//   promise: Promise<PartValue>,
-//   defaultContent: PartValue
-// ): Directive {
-//   return function(part: Part) {
-//     part.update(defaultContent);
-//     promise.then(value => part.update(value));
-//   };
-// }
+export function until(
+  promise: Promise<ValidPartValue>,
+  defaultContent: ValidPartValue
+): Directive {
+  return function(part: Part) {
+    part.update(defaultContent);
+    promise.then(value => part.update(value));
+  };
+}
