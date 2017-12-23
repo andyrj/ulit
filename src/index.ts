@@ -82,10 +82,12 @@ export function render(
   if (target == null) {
     throw new RangeError("invalid render target");
   }
-  const part: Node | Part | null = (<Node>target).nodeType == null ? target : null;
+  const part: Node | Part | null =
+    (<Node>target).nodeType == null ? target : null;
   const instance: TemplateResult =
     (<any>target).__template ||
-    ((<Part>part).target.start && (<any>(<Part>part).target.start).__template) ||
+    ((<Part>part).target.start &&
+      (<any>(<Part>part).target.start).__template) ||
     getChildTemplate(<HTMLElement>target);
   if (instance) {
     if (instance.key === template.key) {
@@ -107,7 +109,7 @@ export function render(
   }
   template.update();
   if (part == null && target != null) {
-    const node = <Node> target;
+    const node = <Node>target;
     if (node.childNodes.length > 0) {
       while (node.hasChildNodes) {
         node.removeChild(<Node>node.lastChild);
@@ -147,7 +149,12 @@ function removeAttribute(part: Part, element: HTMLElement, name: string) {
   }
 }
 
-function setAttribute(part: Part, element: HTMLElement, name: string, value: any) {
+function setAttribute(
+  part: Part,
+  element: HTMLElement,
+  name: string,
+  value: any
+) {
   if (element == null) throw new RangeError();
   if (part.isSVG) {
     element.setAttributeNS(SVG_NS, name, value);
@@ -166,7 +173,10 @@ function followEdge(edge: DomTarget, type: EdgeTypes): Edge | null | undefined {
   }
 }
 
-function findEdge(target: DomTarget | null | undefined, edge: EdgeTypes): Edge | null | undefined {
+function findEdge(
+  target: DomTarget | null | undefined,
+  edge: EdgeTypes
+): Edge | null | undefined {
   if (target != null) {
     let cursor: Edge | null | undefined = followEdge(target, edge);
     while (cursor != null) {
@@ -204,7 +214,7 @@ function templateSetup(parts: Array<Part>): WalkFn {
       const isSVG = isSVGChild(element);
       const text = element && element.nodeValue;
       const split = text && text.split("{{}}");
-      const end = split != null ? split.length - 1 : null; 
+      const end = split != null ? split.length - 1 : null;
       const nodes: Array<Node> = [];
       let cursor = 0;
       if (split && split.length > 0 && end) {
@@ -225,7 +235,7 @@ function templateSetup(parts: Array<Part>): WalkFn {
         nodes.forEach(node => {
           parent.insertBefore(node, <Node>element);
         });
-        if (parent != null && [].indexOf.call(parent.childNodes, element) > -1) 
+        if (parent != null && [].indexOf.call(parent.childNodes, element) > -1)
           throw new RangeError();
         parent.removeChild(element);
       }
@@ -240,7 +250,9 @@ function templateSetup(parts: Array<Part>): WalkFn {
   };
 }
 
-function getChildTemplate(target: HTMLElement | null | undefined): TemplateResult | undefined {
+function getChildTemplate(
+  target: HTMLElement | null | undefined
+): TemplateResult | undefined {
   if (target == null) return;
   if (
     target.childNodes &&
@@ -270,7 +282,10 @@ export function flushPart(target: DomTarget): Node {
 }
 
 function updateAttribute(part: Part, value: any) {
-  const element: HTMLElement | null | undefined = <HTMLElement>findEdge(part.target, "start");
+  const element: HTMLElement | null | undefined = <HTMLElement>findEdge(
+    part.target,
+    "start"
+  );
   const name = typeof part.target.end === "string" ? part.target.end : "";
   try {
     (element as any)[name] = value == null ? "" : value;
@@ -285,7 +300,10 @@ function updateAttribute(part: Part, value: any) {
 }
 
 function updateNode(part: Part, value: any) {
-  const element: HTMLElement | null | undefined = <HTMLElement>findEdge(part.target, "start");
+  const element: HTMLElement | null | undefined = <HTMLElement>findEdge(
+    part.target,
+    "start"
+  );
   const parent = element && element.parentNode;
   if (!parent) throw new RangeError("6");
   if (element !== value) {
@@ -349,7 +367,13 @@ function set(part: Part, value: ValidPartValue) {
 
 export type ValidPartValue = PartValue | PartPromise | PartArray;
 export type Directive = (part: Part) => void;
-export type PartValue = string | number | Node | DocumentFragment | Directive | TemplateResult;
+export type PartValue =
+  | string
+  | number
+  | Node
+  | DocumentFragment
+  | Directive
+  | TemplateResult;
 export type PartPromise = Promise<PartValue>;
 export type PartArray = Array<PartValue>;
 export type EdgeTypes = "start" | "end";
@@ -358,11 +382,13 @@ export type StartEdge = Node | Part | null | undefined;
 export type EndEdge = StartEdge | string;
 export type PartDispose = (part: Part) => void;
 export type PulledPart = {
-  part: Part,
-  fragment: DocumentFragment
+  part: Part;
+  fragment: DocumentFragment;
 };
 
-function findParentNode(part: Node | Edge | Part | null | undefined): Node | null | undefined {
+function findParentNode(
+  part: Node | Edge | Part | null | undefined
+): Node | null | undefined {
   if (part != null && isPart(part)) {
     const start = <Node>findEdge((<Part>part).target, "start");
     return start && start.parentNode;
@@ -375,26 +401,8 @@ function findParentNode(part: Node | Edge | Part | null | undefined): Node | nul
   }
 }
 
-
-export function pullPart(part: Part): PulledPart {
-  const fragment = document.createDocumentFragment();
-  const stack = [];
-  let cursor = findEdge(part.target, "end");
-  const parent = cursor && (<Node>cursor).parentNode;
-  if (parent == null) throw new RangeError("9");
-  while (cursor !== part.target.start && cursor != null) {
-    const next = (<Node>cursor).previousSibling;
-    stack.push((<Node>parent).removeChild(<Node>cursor));
-    cursor = next;
-  }
-  while (stack.length > 0) {
-    fragment.appendChild(<Node>stack.pop());
-  }
-  return { part, fragment };
-}
-
 export class DomTarget {
-  constructor (public start: StartEdge, public end: EndEdge) {}
+  constructor(public start: StartEdge, public end: EndEdge) {}
 }
 
 export class Part {
@@ -420,7 +428,10 @@ export class Part {
   }
 
   addDisposer(handler: PartDispose) {
-    if (typeof handler === "function" && this.disposers.indexOf(handler) === -1) {
+    if (
+      typeof handler === "function" &&
+      this.disposers.indexOf(handler) === -1
+    ) {
       this.disposers.push(handler);
     }
   }
@@ -431,13 +442,35 @@ export class Part {
       this.disposers.splice(index, 1);
     }
   }
+
+  pull(): PulledPart {
+    const fragment = document.createDocumentFragment();
+    const stack = [];
+    let cursor = findEdge(this.target, "end");
+    const parent = cursor && (<Node>cursor).parentNode;
+    if (parent == null) throw new RangeError("9");
+    while (cursor !== this.target.start && cursor != null) {
+      const next = (<Node>cursor).previousSibling;
+      stack.push((<Node>parent).removeChild(<Node>cursor));
+      cursor = next;
+    }
+    while (stack.length > 0) {
+      fragment.appendChild(<Node>stack.pop());
+    }
+    return { part: this, fragment };
+  }
 }
 
 export class TemplateResult {
   fragment: DocumentFragment;
   target: DomTarget;
-  constructor(public key: string, public template: HTMLTemplateElement, public parts: Array<Part>, public values: Array<ValidPartValue>) {
-    // TODO: change this class...  I want to make a Template and TemplateResult class...  
+  constructor(
+    public key: string,
+    public template: HTMLTemplateElement,
+    public parts: Array<Part>,
+    public values: Array<ValidPartValue>
+  ) {
+    // TODO: change this class...  I want to make a Template and TemplateResult class...
     //  the Template class will have the shape: { template: HTMLTemplateElement, paths: PartPats }
     //  TemplateResult will have the output from cloning Template, and following PartPaths on the HTMLTemplateElement clone...
   }
@@ -456,11 +489,11 @@ export class TemplateResult {
       this.values = values;
     }
     if (!this.fragment) {
-      const t: HTMLTemplateElement = 
-        document.importNode(this.template, true);
+      const t: HTMLTemplateElement = document.importNode(this.template, true);
       const frag = t.content;
       this.fragment = frag;
-      const templateStart: StartEdge | null | undefined = this.fragment.firstChild;
+      const templateStart: StartEdge | null | undefined = this.fragment
+        .firstChild;
       const templateEnd: EndEdge | null | undefined = this.fragment.lastChild;
       this.target.start = isPartComment(templateStart)
         ? this.parts[0]
@@ -488,7 +521,7 @@ export class TemplateResult {
       }
     });
   }
-};
+}
 
 function generateId(str: string): number {
   let id = 0;
@@ -520,20 +553,27 @@ function followDOMPath(
   if (typeof current === "string") {
     return [node, current];
   } else if (num != null && !isNaN(<number>num)) {
-    const el = node && node.childNodes && node.childNodes.length < num && node.childNodes[num]
-      ? node.childNodes[<number>num]
-      : null;
+    const el =
+      node &&
+      node.childNodes &&
+      node.childNodes.length < num &&
+      node.childNodes[num]
+        ? node.childNodes[<number>num]
+        : null;
     return followDOMPath(el, cPath);
   } else {
     throw new RangeError("part path not found");
   }
 }
 
-function walkDOM(parent: HTMLElement | DocumentFragment, element: Node | null | undefined, fn: WalkFn) {
+function walkDOM(
+  parent: HTMLElement | DocumentFragment,
+  element: Node | null | undefined,
+  fn: WalkFn
+) {
   if (element) {
     fn(parent, element);
-  }
-  else {
+  } else {
     element = parent;
   }
   if (element && element.childNodes.length > 0) {
@@ -548,11 +588,16 @@ function walkDOM(parent: HTMLElement | DocumentFragment, element: Node | null | 
   }
 }
 
-export function html(strs: TemplateStringsArray, ...exprs: Array<ValidPartValue>) {
+export function html(
+  strs: TemplateStringsArray,
+  ...exprs: Array<ValidPartValue>
+) {
   const staticMarkUp = strs.toString();
   const id = idCache.get(staticMarkUp) || generateId(staticMarkUp);
   const cacheEntry = templateCache.get(id);
-  let { template, parts } = (<DeserializedTemplate>(cacheEntry != null ? cacheEntry : checkForSerialized(id)));
+  let { template, parts } = <DeserializedTemplate>(cacheEntry != null
+    ? cacheEntry
+    : checkForSerialized(id));
   if (template == null) {
     template = document.createElement("template");
     template.innerHTML = strs.join("{{}}");
@@ -562,9 +607,11 @@ export function html(strs: TemplateStringsArray, ...exprs: Array<ValidPartValue>
   return new TemplateResult(staticMarkUp, template, parts, exprs);
 }
 
-function parseSerializedParts(value: string | null | undefined): Array<Part | null | undefined> {
+function parseSerializedParts(
+  value: string | null | undefined
+): Array<Part | null | undefined> {
   if (value == null) {
-    return []; 
+    return [];
   } else {
     return JSON.parse(value.split("{{parts:")[1].slice(0, -2));
   }
@@ -572,42 +619,29 @@ function parseSerializedParts(value: string | null | undefined): Array<Part | nu
 
 function isFirstChildSerializedParts(parent: DocumentFragment): boolean {
   const child = parent.firstChild;
-  return (child &&
+  return child &&
     child.nodeType === COMMENT_NODE &&
     child.nodeValue &&
     child.nodeValue.startsWith("{{parts:") &&
-    child.nodeValue.endsWith("}}"))
+    child.nodeValue.endsWith("}}")
     ? true
     : false;
 }
 
 type DeserializedTemplate = {
-  template: HTMLTemplateElement,
-  parts: Array<Part>
+  template: HTMLTemplateElement;
+  parts: Array<Part>;
 };
 
-/* old plain js version...
-function checkForSerialized(hash) {
-  const template = document.getElementById(`template-${hash}`);
-  // <!--{{parts:[{ path: [0,1,1], isSVG: true }, ...]}}-->
-  const parts =
-    template != null && isFirstChildSerializedParts(template.content)
-      ? parseSerializedParts(
-          template.content.removeChild(template.content.firstChild).nodeValue
-        )
-      : [];
-  const result = { template, parts };
-  template && !templateCache.has(hash) && templateCache.set(hash, result);
-  return result;
-}
-*/
 function checkForSerialized(
   id: number
 ): DeserializedTemplate | null | undefined {
-  const el: HTMLTemplateElement | null | undefined =
-    <HTMLTemplateElement>document.getElementById(
-      `template-${id}`
-    );
+  const el:
+    | HTMLTemplateElement
+    | null
+    | undefined = <HTMLTemplateElement>document.getElementById(
+    `template-${id}`
+  );
   if (el == null) return;
   const frag = (<HTMLTemplateElement>el.cloneNode(true)).content;
   if (frag == null) return;
