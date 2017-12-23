@@ -110,6 +110,11 @@ function Part(path, isSVG = false, id = Symbol(), start = null, end = null) {
     update(newValue) {
       set(part, newValue);
     },
+    dispose () {
+      for (const disposer of disposers) {
+        typeof disposer === 'function' && disposer();
+      }
+    },
     addDisposer(handler) {
       if (typeof handler === "function" && disposers.indexOf(handler) === -1) {
         disposers.push(handler);
@@ -406,11 +411,9 @@ function TemplateResult(key, template, parts, exprs) {
     values: exprs,
     parts,
     dispose() {
-      parts.forEach(part =>
-        part.disposers.forEach(
-          dispose => typeof dispose === "function" && dispose()
-        )
-      );
+      for (const part of parts) {
+        part.dispose();
+      }
       result.start = result.end = flushPart(result);
     },
     update(values) {
