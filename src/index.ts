@@ -22,11 +22,7 @@ interface RepeatCacheEntry {
 }
 
 function isPromise(x: any): boolean {
-  if (x && typeof x.then === "function") {
-    return true;
-  } else {
-    return false;
-  }
+  return x && typeof x.then === "function";
 }
 
 function isTemplate(x: any): boolean {
@@ -34,10 +30,7 @@ function isTemplate(x: any): boolean {
 }
 
 function isTagged(node: any): boolean {
-  if (node.__template != null) {
-    return true;
-  }
-  return false;
+  return node && node.__template != null;
 }
 
 function isDirective(part: Part, expression: any) {
@@ -56,11 +49,7 @@ function isDirective(part: Part, expression: any) {
 }
 
 function isPartComment(x: any | null | undefined): boolean {
-  if (x instanceof Comment && x.nodeValue === "{{}}") {
-    return true;
-  } else {
-    return false;
-  }
+  return x instanceof Comment && x.nodeValue === "{{}}";
 }
 
 function isNode(x: any): boolean {
@@ -68,11 +57,7 @@ function isNode(x: any): boolean {
 }
 
 function isPart(x: any): boolean {
-  if (x.id != null && Array.isArray(x.path) && !x.nodeType) {
-    return true;
-  } else {
-    return false;
-  }
+  return x instanceof Part;
 }
 
 export function render(
