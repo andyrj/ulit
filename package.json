@@ -3,8 +3,8 @@
   "version": "0.0.2",
   "description": "minimalist tagged template literal library",
   "main": "dist/ulit.js",
-  "jsnext:main": "src/index.js",
-  "module": "src/index.js",
+  "jsnext:main": "dist/ulit.js",
+  "module": "dist/ulit.js",
   "directories": {
     "src": "src",
     "test": "test"
@@ -17,8 +17,9 @@
     "test": "nyc ava",
     "test:html": "nyc report --reporter=html",
     "codacy": "nyc report --reporter=lcov && cat ./coverage/lcov.info | codacy-coverage",
-    "build": "tsc src/index.ts",
-    "minify": "echo 'ADD: minify'",
+    "build": "tsc && npm run minify",
+    "minify": "uglifyjs dist/ulit.js -mc --toplevel -o dist/ulit.min.js",
+    "zip": "gzip -9 ./dist/ulit.min.js",
     "prepare": "npm run build && npm run test",
     "prepublish": "npm run minify",
     "docs": "typedoc --out ./docs/ --mode file ./src/index.ts",
@@ -48,7 +49,9 @@
     "prettier": "^1.9.2",
     "tslint": "^5.8.0",
     "tslint-config-prettier": "^1.6.0",
-    "typedoc": "^0.9.0"
+    "typedoc": "^0.9.0",
+    "typescript": "^2.6.2",
+    "uglify-es": "^3.2.2"
   },
   "peerDependencies": {}
 }

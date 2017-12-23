@@ -186,12 +186,12 @@ function findEdge(
 
 function isSVGChild(node: Node | null | undefined): boolean {
   let result = false;
-  let cur = node;
-  while (cur != null) {
-    if (cur.nodeName === "SVG") {
+  let current = node;
+  while (current != null) {
+    if (current.nodeName === "SVG") {
       return true;
     } else {
-      cur = cur.parentNode;
+      current = current.parentNode;
     }
   }
   return result;

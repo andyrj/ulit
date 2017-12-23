@@ -2,19 +2,22 @@
   "compilerOptions": {
     "target": "es2017",
     "module": "es2015",
+    "lib": ["es2017", "dom.iterable", "dom"],
     "declaration": true,
     "sourceMap": true,
-    "removeComments": true,
-    "downlevelIteration": true,
+    "inlineSources": true,
+    "outDir": "./dist/",
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
     "strictFunctionTypes": true,
     "noImplicitThis": true,
     "alwaysStrict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "mapRoot": "./src",
+    "noFallthroughCasesInSwitch": true,
     "inlineSources": true
-  }
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": []
 }
