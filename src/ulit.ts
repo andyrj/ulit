@@ -255,24 +255,6 @@ function getChildTemplate(
   return;
 }
 
-export function flushPart(target: DomTarget): Node {
-  const start = findEdge(target, "start");
-  const parent = findParentNode(start);
-  const end = findEdge(target, "end");
-  if (start !== end) {
-    let current = end;
-    while (current !== start && current != null) {
-      const nextNode = (<Node>current).previousSibling;
-      parent && parent.removeChild(<Node>current);
-      current = nextNode;
-    }
-  }
-  if (start == null || isPart(start)) {
-    throw new RangeError();
-  }
-  return <Node>start;
-}
-
 function updateAttribute(part: Part, value: any) {
   const element: HTMLElement | null | undefined = <HTMLElement>findEdge(
     part.target,
@@ -302,7 +284,7 @@ function updateNode(part: Part, value: any) {
     const isFrag = value.nodeType === DOCUMENT_FRAGMENT;
     const newStart = isFrag ? value.firstChild : value;
     const newEnd = isFrag ? value.lastChild : value;
-    parent.replaceChild(value, flushPart(part.target));
+    parent.replaceChild(value, part.target.flush());
     part.target.start = newStart;
     part.target.end = newEnd;
   }
@@ -312,7 +294,7 @@ function updateTextNode(part: Part, value: any) {
   const element = <HTMLElement>findEdge(part.target, "start");
   const parent = element && element.parentNode;
   if (part.target.start !== part.target.end) {
-    flushPart(part.target);
+    part.target.flush();
   }
   if (element == null) throw new RangeError();
   if (element.nodeType === TEXT_NODE && element.nodeValue !== value) {
@@ -395,6 +377,25 @@ function findParentNode(
 
 export class DomTarget {
   constructor(public start: StartEdge, public end: EndEdge) {}
+
+  flush(): Node {
+    const start = findEdge(this, "start");
+    const parent = findParentNode(start);
+    const end = findEdge(this, "end");
+    if (start !== end) {
+      let current = end;
+      while (current !== start && current != null) {
+        const nextNode = (<Node>current).previousSibling;
+        parent && parent.removeChild(<Node>current);
+        current = nextNode;
+      }
+    }
+    if (start == null || isPart(start)) {
+      throw new RangeError();
+    }
+    this.end = this.start = <Node>start;
+    return <Node>start;
+  }
 }
 
 export class Part {
@@ -469,7 +470,7 @@ export class TemplateResult {
         dispose => typeof dispose === "function" && dispose(part)
       )
     );
-    this.target.start = this.target.end = flushPart(this.target);
+    this.target.flush();
   }
 
   update(values?: Array<ValidPartValue>) {
