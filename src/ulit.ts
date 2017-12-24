@@ -662,7 +662,7 @@ export function repeat(
     const id = part.id;
     const isSVG = part.isSVG;
 
-    const normalized = items.map(item => {
+    const normalized = <Array<TemplateResult>>items.map(item => {
       if (isTemplate(item)) {
         return item;
       }
@@ -717,34 +717,39 @@ export function repeat(
       }
     });
     for (i = 0; i < maxLen; i++) {
-      /*
-      const newKey = keys[i];
       const newTemplate = normalized[i];
-      const oldKey = list[i];
-      const oldPart = map[oldKey];
-      const newKeyIndexOldList = list.indexOf(newKey);
-      if (oldKey === newKey) {
+      const newKey = keys[i];
+      const oldIndex = map.get(newKey) || -1;
+      const oldPart = oldIndex ? list[oldIndex] : null;
+      if (oldPart && oldIndex === i) {
+        // update existing in place
         oldPart.update(newTemplate);
-      } else if (newKeyIndexOldList > -1 && parent != null) {
-        const p = map[newKey];
+      } else if (oldIndex > -1 && parent != null) {
+        // add new
+        const p = list[oldIndex];
         const move = p.pull();
         p.update(newTemplate);
-        const el = findEdge(map[list[i]], "start");
-        parent.insertBefore(move.fragment, el);
-        list.splice(newKeyIndexOldList, 1);
-        list.splice(i, 0, move.part);
+        const el = findEdge(list[i].target, "start");
+        if (el) {
+          parent.insertBefore(move.fragment, <Node>el);
+          list.splice(oldIndex, 1);
+          list.splice(i, 0, move.part);
+        }
       } else {
+        // move and update...
         const fragment = document.createDocumentFragment();
         const node = document.createComment("{{}}");
         fragment.appendChild(node);
-        const newPart = new Part([0], false, node, node);
+        const newPart = new Part([0, 0], false, node, node);
         render(newTemplate, newPart);
-        // TODO: finish logic here to correctly update array/iterable/repeat...
-        parent && parent.insertBefore(fragment, findEdge(map[list[i]], "start"));
-        list.splice(i, 0, newPart);
+        const elEdge = findEdge(list[i].target, "start");
+        if (elEdge) {
+          parent && parent.insertBefore(fragment, <Node>elEdge);
+          list.splice(i, 0, newPart);
+        }
       }
-      parent && parent.removeChild(map[list[i]])
-      */
+      // TODO: why did you have this?
+      // parent && parent.removeChild(map[list[i]])
     }
   };
 }
