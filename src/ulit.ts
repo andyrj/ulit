@@ -15,7 +15,7 @@ interface TemplateCacheEntry {
   parts: Array<Part>;
 }
 
-type Key = symbol | number | string;
+export type Key = symbol | number | string;
 interface RepeatCacheEntry {
   map: Map<Key, number>;
   list: Array<Part>;
@@ -27,10 +27,6 @@ function isPromise(x: any): boolean {
 
 function isTemplate(x: any): boolean {
   return x && x.values && x.parts && x.update;
-}
-
-function isTagged(node: any): boolean {
-  return node && node.__template != null;
 }
 
 function isDirective(part: Part, expression: any) {
@@ -82,7 +78,7 @@ export function render(
     ((<Part>part).target.start &&
       (<any>(<Part>part).target.start).__template) ||
     getChildTemplate(<HTMLElement>target);
-  if (instance) {
+    if (instance) {
     if (instance.key === template.key) {
       instance.update(template.values);
     } else {
@@ -183,6 +179,7 @@ function findEdge(
   } else {
     return null;
   }
+  return;
 }
 
 function isSVGChild(node: Node | null | undefined): boolean {
@@ -647,7 +644,9 @@ function checkForSerialized(
   return;
 }
 
-export function defaultKeyFn(item: any, index: number): string | number {
+export function defaultKeyFn(item: any, index: number): Key;
+export function defaultKeyFn(item: any): Key;
+export function defaultKeyFn(index: number): Key {
   return index;
 }
 
@@ -665,13 +664,14 @@ export function repeat(
     const parent = findParentNode(part);
     const id = part.id;
     const isSVG = part.isSVG;
+
     const normalized = items.map(item => {
       if (isTemplate(item)) {
         return item;
       }
       return templateFn(item);
     });
-    const keys = items.map((item, index) => keyFn(item, index));
+    const keys = items.map((_, index) => keyFn(index));
     const cacheEntry = repeatCache.get(id);
     let map: Map<Key, number> = new Map<Key, number>();
     let list: Array<Part> = [];
