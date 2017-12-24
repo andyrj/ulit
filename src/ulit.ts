@@ -164,6 +164,7 @@ function followEdge(edge: DomTarget, type: EdgeTypes): Edge | null | undefined {
       return edge.end;
     }
   }
+  return;
 }
 
 function findEdge(
@@ -254,6 +255,7 @@ function getChildTemplate(
   ) {
     return (target.childNodes[0] as any).__template;
   }
+  return;
 }
 
 export function flushPart(target: DomTarget): Node {
@@ -391,6 +393,7 @@ function findParentNode(
     }
     return <Node>parent;
   }
+  return;
 }
 
 export class DomTarget {
@@ -641,6 +644,7 @@ function checkForSerialized(
   if (deserialized) {
     return deserialized;
   }
+  return;
 }
 
 export function defaultKeyFn(item: any, index: number): string | number {
@@ -699,7 +703,6 @@ export function repeat(
         render(<TemplateResult>normalized[i], newPart);
       }
       repeatCache.set(id, { map, list });
-      // TODO: figure out why parent is nullish here...
       parent && parent.replaceChild(fragment, <Node>target);
       return;
     }
@@ -717,6 +720,7 @@ export function repeat(
       }
     });
     for (i = 0; i < maxLen; i++) {
+      /*
       const newKey = keys[i];
       const newTemplate = normalized[i];
       const oldKey = list[i];
@@ -743,6 +747,7 @@ export function repeat(
         list.splice(i, 0, newPart);
       }
       parent && parent.removeChild(map[list[i]])
+      */
     }
   };
 }
