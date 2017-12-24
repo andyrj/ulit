@@ -8,11 +8,11 @@
  - This branch is a rewrite to typescript...
 
 TODO:
-1. get test coverage up to 100/100
-2. Add SSR (already prepared for this with part serialization in first comment nodeValue, and part paths...)
-3. Add proper flow and typescript type definitions, implement flow on code in src/ and remove src from package.json folders to only package up after flow types have been stripped and code has been minified in dist/
+1. fix AVA typescript setup...
+2. get test coverage up to 100/100
+3. Add SSR (already prepared for this with part serialization in first comment nodeValue, and part paths...)
 
-## Why another framework?
+## Why another tagged template literal library?
 "I cannot understand what I cannot build." - Feynman
 
 Started this from a desire to see how hard it would be to improve upon the implementations of lit-html and hyperHTML, focusing on feature density and utilizing the platform, but abandoning support for legacy browsers to use the latest features without transpiling to es5 (instead targeting Chrome, Firefox, Safari, Edge latest versions).
