@@ -5,17 +5,17 @@ const COMMENT_NODE = 8;
 const DOCUMENT_FRAGMENT = 11;
 const templateCache = new Map<number, TemplateCacheEntry>();
 const idCache = new Map<string, number>();
-const repeatCache = new Map<number, RepeatCacheEntry>();
+const repeatCache = new Map<symbol, RepeatCacheEntry>();
 const walkPath: Array<number | string> = [];
 
 type WalkFn = (parent: Node, element: Node | null | undefined) => void;
 
-type Key = string | number;
 interface TemplateCacheEntry {
   template: HTMLTemplateElement;
   parts: Array<Part>;
 }
 
+type Key = symbol | number | string;
 interface RepeatCacheEntry {
   map: Map<Key, number>;
   list: Array<Part>;
@@ -668,41 +668,39 @@ export function repeat(
       return templateFn(item);
     });
     const keys = items.map((item, index) => keyFn(item, index));
-    /*
     const cacheEntry = repeatCache.get(id);
-    let map: { [any]: Part } = {};
-    let list: Array<number | string> = [];
+    let map: Map<Key, number> = new Map<Key, number>();
+    let list: Array<Part> = [];
     if (cacheEntry && cacheEntry.map && cacheEntry.list) {
       map = cacheEntry.map;
       list = cacheEntry.list;
     }
     let i = 0;
-    if (!map && target && target.nodeType === COMMENT_NODE) {
+    if (map != null && target && (<Node>target).nodeType === COMMENT_NODE) {
       const fragment = document.createDocumentFragment();
       let len = keys.length;
       for (; i < len; i++) {
         const key = keys[i];
         const node = document.createComment("{{}}");
-        let newPart: Part = createPart(
+        let newPart: Part = new Part(
           [0, 0],
           isSVG || false,
-          Symbol(),
           node,
           node
         );
         if (i === 0) {
-          part.start = newPart;
+          part.target.start = newPart;
         } else if (i === len) {
-          part.end = newPart;
+          part.target.end = newPart;
         }
-        list.push(key);
-        map[key] = newPart;
+        list.push(newPart);
+        map.set(key, i);
         fragment.appendChild(node);
-        render(normalized[i], newPart);
+        render(<TemplateResult>normalized[i], newPart);
       }
-      keyMapCache.set(id, { map, list });
+      repeatCache.set(id, { map, list });
       // TODO: figure out why parent is nullish here...
-      parent && parent.replaceChild(fragment, target);
+      parent && parent.replaceChild(fragment, <Node>target);
       return;
     }
     const normLen = normalized.length;
@@ -710,10 +708,12 @@ export function repeat(
     const maxLen = Math.max(normLen, oldLen || 0);
     Object.keys(map).forEach(key => {
       if (keys.indexOf(key) === -1) {
-        const partToRemove = map[key];
-        pullPart(partToRemove);
-        list.splice(list.indexOf(partToRemove), 1);
-        delete map[key];
+        const oldIndex = map.get(key);
+        if (oldIndex) {
+          list[oldIndex].pull();
+          list.splice(oldIndex, 1);
+        }
+        map.delete(key);
       }
     });
     for (i = 0; i < maxLen; i++) {
@@ -726,9 +726,9 @@ export function repeat(
         oldPart.update(newTemplate);
       } else if (newKeyIndexOldList > -1 && parent != null) {
         const p = map[newKey];
-        const move = pullPart(p);
+        const move = p.pull();
         p.update(newTemplate);
-        const el = findPartEdge(map[list[i]], "start");
+        const el = findEdge(map[list[i]], "start");
         parent.insertBefore(move.fragment, el);
         list.splice(newKeyIndexOldList, 1);
         list.splice(i, 0, move.part);
@@ -736,15 +736,14 @@ export function repeat(
         const fragment = document.createDocumentFragment();
         const node = document.createComment("{{}}");
         fragment.appendChild(node);
-        const newPart = createPart([0], false, Symbol(), node, node);
+        const newPart = new Part([0], false, node, node);
         render(newTemplate, newPart);
         // TODO: finish logic here to correctly update array/iterable/repeat...
-        parent && parent.insertBefore(fragment, findPartEdge(map[list[i]], "start"));
+        parent && parent.insertBefore(fragment, findEdge(map[list[i]], "start"));
         list.splice(i, 0, newPart);
       }
-      parent.removeChild(list[i])
+      parent && parent.removeChild(map[list[i]])
     }
-    */
   };
 }
 
