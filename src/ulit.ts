@@ -461,11 +461,7 @@ export class TemplateResult {
     public template: HTMLTemplateElement,
     public parts: Array<Part>,
     public values: Array<ValidPartValue>
-  ) {
-    // TODO: change this class...  I want to make a Template and TemplateResult class...
-    //  the Template class will have the shape: { template: HTMLTemplateElement, paths: PartPats }
-    //  TemplateResult will have the output from cloning Template, and following PartPaths on the HTMLTemplateElement clone...
-  }
+  ) {}
 
   dispose() {
     this.parts.forEach(part =>
