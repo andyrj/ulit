@@ -45,11 +45,13 @@ function isDirective(part: Part, expression: any) {
 }
 
 function isPartComment(x: any | null | undefined): boolean {
-  return x instanceof Comment && x.nodeValue === "{{}}";
+  return (
+    isNode(x) && (<Node>x).nodeType === COMMENT_NODE && x.nodeValue === "{{}}"
+  );
 }
 
 function isNode(x: any): boolean {
-  return x instanceof Node;
+  return <Node>x && (<Node>x).nodeType > 0;
 }
 
 function isPart(x: any): boolean {
@@ -58,14 +60,14 @@ function isPart(x: any): boolean {
 
 function isFirstChildSerializedParts(parent: DocumentFragment): boolean {
   const child = parent.firstChild;
-  return ((child &&
+  return (child &&
     child.nodeType === COMMENT_NODE &&
     child.nodeValue &&
-    child.nodeValue.startsWith("{{parts:")) as boolean);
+    child.nodeValue.startsWith("{{parts:")) as boolean;
 }
 
 export function render(
-  template: TemplateResult,
+  template: Template,
   target: Node | Part = document.body
 ): void {
   if (target == null) {
@@ -73,12 +75,14 @@ export function render(
   }
   const part: Node | Part | null =
     (<Node>target).nodeType == null ? target : null;
-  const instance: TemplateResult =
+  const instance: Template =
     (<any>target).__template ||
-    ((<Part>part).target.start &&
+    (<Part>part &&
+      (<Part>part).target &&
+      (<Part>part).target.start &&
       (<any>(<Part>part).target.start).__template) ||
     getChildTemplate(<HTMLElement>target);
-    if (instance) {
+  if (instance) {
     if (instance.key === template.key) {
       instance.update(template.values);
     } else {
@@ -226,8 +230,9 @@ function templateSetup(parts: Array<Part>): WalkFn {
         nodes.forEach(node => {
           parent.insertBefore(node, <Node>element);
         });
-        if (parent != null && [].indexOf.call(parent.childNodes, element) > -1)
-          throw new RangeError();
+        /*if (parent != null && [].indexOf.call(parent.childNodes, element) > -1) {
+          throw new RangeError(`${parent}, ${parent.childNodes}, ${element}`);
+        }*/
         parent.removeChild(element);
       }
     } else if (nodeType === ELEMENT_NODE) {
@@ -243,7 +248,7 @@ function templateSetup(parts: Array<Part>): WalkFn {
 
 function getChildTemplate(
   target: HTMLElement | null | undefined
-): TemplateResult | undefined {
+): Template | undefined {
   if (target == null) return;
   if (
     target.childNodes &&
@@ -327,7 +332,7 @@ function set(part: Part, value: ValidPartValue) {
         set(part, promised);
       });
     } else if (isTemplate(value)) {
-      render(<TemplateResult>value, part);
+      render(<Template>value, part);
     } else if ((<Node>value).nodeType) {
       updateNode(part, value);
     } else if (Array.isArray(value)) {
@@ -346,7 +351,7 @@ export type PartValue =
   | Node
   | DocumentFragment
   | Directive
-  | TemplateResult;
+  | Template;
 export type PartPromise = Promise<PartValue>;
 export type PartArray = Array<PartValue>;
 export type EdgeTypes = "start" | "end";
@@ -454,15 +459,19 @@ export class Part {
   }
 }
 
-export class TemplateResult {
+export class Template {
   fragment: DocumentFragment;
   target: DomTarget;
   constructor(
     public key: string,
     public template: HTMLTemplateElement,
     public parts: Array<Part>,
-    public values: Array<ValidPartValue>
-  ) {}
+    public values: Array<ValidPartValue>,
+    private start: HTMLElement = document.body,
+    private end: HTMLElement = document.body
+  ) {
+    this.target = new DomTarget(start, end);
+  }
 
   dispose() {
     this.parts.forEach(part =>
@@ -584,16 +593,18 @@ export function html(
   const staticMarkUp = strs.toString();
   const id = idCache.get(staticMarkUp) || generateId(staticMarkUp);
   const cacheEntry = templateCache.get(id);
-  let { template, parts } = <DeserializedTemplate>(cacheEntry != null
+  const des = <DeserializedTemplate>(cacheEntry != null
     ? cacheEntry
     : checkForSerialized(id));
+  let template = des && des.template;
+  let parts = (des && des.parts) || [];
   if (template == null) {
     template = document.createElement("template");
     template.innerHTML = strs.join("{{}}");
     walkDOM(template.content, null, templateSetup(parts));
     templateCache.set(id, { template, parts });
   }
-  return new TemplateResult(staticMarkUp, template, parts, exprs);
+  return new Template(staticMarkUp, template, parts, exprs);
 }
 
 function parseSerializedParts(
@@ -647,7 +658,7 @@ export function defaultKeyFn(index: number): Key {
   return index;
 }
 
-export function defaultTemplateFn(item: any): TemplateResult {
+export function defaultTemplateFn(item: any): Template {
   return html`${item}`;
 }
 
@@ -662,7 +673,7 @@ export function repeat(
     const id = part.id;
     const isSVG = part.isSVG;
 
-    const normalized = <Array<TemplateResult>>items.map(item => {
+    const normalized = <Array<Template>>items.map(item => {
       if (isTemplate(item)) {
         return item;
       }
@@ -683,12 +694,7 @@ export function repeat(
       for (; i < len; i++) {
         const key = keys[i];
         const node = document.createComment("{{}}");
-        let newPart: Part = new Part(
-          [0, 0],
-          isSVG || false,
-          node,
-          node
-        );
+        let newPart: Part = new Part([0, 0], isSVG || false, node, node);
         if (i === 0) {
           part.target.start = newPart;
         } else if (i === len) {
@@ -697,7 +703,7 @@ export function repeat(
         list.push(newPart);
         map.set(key, i);
         fragment.appendChild(node);
-        render(<TemplateResult>normalized[i], newPart);
+        render(<Template>normalized[i], newPart);
       }
       repeatCache.set(id, { map, list });
       parent && parent.replaceChild(fragment, <Node>target);

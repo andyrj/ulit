@@ -14,7 +14,7 @@
     "dist"
   ],
   "scripts": {
-    "test": "nyc ava",
+    "test": "tsc -p ava.tsconfig.json; ava; rm test/ulit.js*; rm src/index.js*; rm src/ulit.js*;",
     "test:html": "nyc report --reporter=html",
     "codacy": "nyc report --reporter=lcov && cat ./coverage/lcov.info | codacy-coverage",
     "build": "tsc && npm run minify",

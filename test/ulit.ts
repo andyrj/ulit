@@ -2,7 +2,7 @@ import test from "ava";
 import { JSDOM } from "jsdom";
 import atob from "atob";
 import btoa from "btoa";
-import { html, render, flushPart, pullPart } from "../src";
+import { html, render } from "../src";
 
 test.beforeEach(t => {
   const dom = new JSDOM("<!DOCTYPE html><head></head><body></body></html>");
