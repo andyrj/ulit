@@ -17,8 +17,8 @@ test.beforeEach(t => {
 test("static templates", t => {
   const template = html`<div id="test">test</div>`;
   template.update();
-  t.is(template.fragment.content.firstChild.id, "test");
-  t.is(template.fragment.content.firstChild.firstChild.nodeValue, "test");
+  t.is(template.fragment.firstChild.id, "test");
+  t.is(template.fragment.firstChild.firstChild.nodeValue, "test");
 });
 
 test("dynamic template with string child", t => {

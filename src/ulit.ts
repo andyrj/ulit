@@ -230,7 +230,8 @@ function templateSetup(parts: Array<Part>): WalkFn {
         nodes.forEach(node => {
           parent.insertBefore(node, <Node>element);
         });
-        /*if (parent != null && [].indexOf.call(parent.childNodes, element) > -1) {
+        /* // really not sure why I had this here...
+        if (parent != null && [].indexOf.call(parent.childNodes, element) > -1) {
           throw new RangeError(`${parent}, ${parent.childNodes}, ${element}`);
         }*/
         parent.removeChild(element);
