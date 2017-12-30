@@ -316,7 +316,7 @@ function updateArray(part: Part, value: Array<PartValue>) {
   repeat(value)(part);
 }
 
-function set(part: Part, value: ValidPartValue) {
+function set(part: Part, value: PartValue) {
   if (typeof part.target.end === "string") {
     updateAttribute(part, value);
   } else {
@@ -328,7 +328,7 @@ function set(part: Part, value: ValidPartValue) {
       value = Array.from(<any>value);
     }
     if (isPromise(value)) {
-      (value as Promise<ValidPartValue>).then(promised => {
+      (value as Promise<PartValue>).then(promised => {
         set(part, promised);
       });
     } else if (isTemplate(value)) {
@@ -343,7 +343,6 @@ function set(part: Part, value: ValidPartValue) {
   }
 }
 
-export type ValidPartValue = PartValue | PartPromise | PartArray;
 export type Directive = (part: Part) => void;
 export type PartValue =
   | string
@@ -351,9 +350,11 @@ export type PartValue =
   | Node
   | DocumentFragment
   | Directive
-  | Template;
-export type PartPromise = Promise<PartValue>;
-export type PartArray = Array<PartValue>;
+  | Template
+  | PartPromise
+  | PartArray;
+export interface PartPromise extends Promise<PartValue> {};
+export interface PartArray extends Array<PartValue> {};
 export type EdgeTypes = "start" | "end";
 export type Edge = StartEdge | EndEdge;
 export type StartEdge = Node | Part | null | undefined;
@@ -418,7 +419,7 @@ export class Part {
     this.target = new DomTarget(start, end);
   }
 
-  update(value?: ValidPartValue) {
+  update(value?: PartValue) {
     if (value == null) {
       return;
     }
@@ -460,15 +461,15 @@ export class Part {
 }
 
 export class Template {
-  fragment: DocumentFragment;
-  target: DomTarget;
+  public fragment: DocumentFragment;
+  public target: DomTarget;
   constructor(
     public key: string,
     public template: HTMLTemplateElement,
     public parts: Array<Part>,
-    public values: Array<ValidPartValue>,
-    private start: HTMLElement = document.body,
-    private end: HTMLElement = document.body
+    public values: Array<PartValue>,
+    start: HTMLElement = document.body,
+    end: HTMLElement = document.body
   ) {
     this.target = new DomTarget(start, end);
   }
@@ -482,7 +483,7 @@ export class Template {
     this.target.flush();
   }
 
-  update(values?: Array<ValidPartValue>) {
+  update(values?: Array<PartValue>) {
     if (values != null && Array.isArray(values)) {
       this.values = values;
     }
@@ -511,7 +512,7 @@ export class Template {
       });
     }
     this.parts.forEach((part, i) => {
-      const newVal: ValidPartValue = this.values[i];
+      const newVal: PartValue = this.values[i];
       if (isDirective(part, newVal)) {
         (<Directive>newVal)(part);
       } else {
@@ -588,7 +589,7 @@ function walkDOM(
 
 export function html(
   strs: TemplateStringsArray,
-  ...exprs: Array<ValidPartValue>
+  ...exprs: Array<PartValue>
 ) {
   const staticMarkUp = strs.toString();
   const id = idCache.get(staticMarkUp) || generateId(staticMarkUp);
@@ -761,8 +762,8 @@ export function repeat(
 }
 
 export function until(
-  promise: Promise<ValidPartValue>,
-  defaultContent: ValidPartValue
+  promise: Promise<PartValue>,
+  defaultContent: PartValue
 ): Directive {
   return function(part: Part) {
     part.update(defaultContent);
