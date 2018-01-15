@@ -2,27 +2,28 @@
   "name": "ulit",
   "version": "0.0.2",
   "description": "minimalist tagged template literal library",
-  "main": "dist/ulit.js",
-  "jsnext:main": "dist/ulit.js",
-  "module": "dist/ulit.js",
+  "main": "dist/ulit.min.js",
+  "jsnext:main": "dist/ulit.min.js",
+  "module": "dist/ulit.min.js",
   "directories": {
     "src": "src",
     "test": "test"
   },
   "files": [
     "src",
-    "dist"
+    "dist",
+    "test"
   ],
   "scripts": {
-    "test": "tsc -p ava.tsconfig.json; ava; rm test/ulit.js*; rm src/index.js*; rm src/ulit.js*;",
+    "test": "tsc -p ava.tsconfig.json; ava; rm test/ulit.js*; rm src/ulit.js*;",
     "test:html": "nyc report --reporter=html",
     "codacy": "nyc report --reporter=lcov && cat ./coverage/lcov.info | codacy-coverage",
-    "build": "tsc && npm run minify",
-    "minify": "uglifyjs dist/ulit.js -mc --toplevel -o dist/ulit.min.js",
+    "build": "rm -rf dist/* && tsc && npm run minify",
+    "minify": "uglifyjs dist/ulit.js -mc --source-map --toplevel -o dist/ulit.min.js",
     "zip": "gzip -9 ./dist/ulit.min.js",
     "prepare": "npm run build && npm run test",
     "prepublish": "npm run minify",
-    "docs": "typedoc --out ./docs/ --mode file ./src/index.ts",
+    "docs": "typedoc --out ./docs/ --mode file ./src/ulit.ts",
     "lint": "tslint -c tslint.json 'src/**/*.ts'",
     "lint:fix": "eslint --fix --ext .js src/",
     "format": "prettier --write 'src/**/*.ts'",
