@@ -20,15 +20,17 @@ interface IRepeatCacheEntry {
   list: IPart[];
 }
 export type Directive = (part: IPart) => void;
-export type PartValue =
+export type PrimitivePart = 
   | string
   | number
   | Node
   | DocumentFragment
-  | Directive
-  | ITemplate
+export type PartValue =
+  | PrimitivePart
   | IPartPromise
-  | IPartArray;
+  | Directive
+  | IPartArray
+  | ITemplate;
 export interface IPartPromise extends Promise<PartValue> {};
 export interface IPartArray extends Array<PartValue> {};
 export type EdgeTypes = "start" | "end";
@@ -37,132 +39,263 @@ export type StartEdge = Node | IPart | null | undefined;
 export type EndEdge = StartEdge | string;
 export type PartDispose = (part: IPart) => void;
 
-//   private updateTextNode(part: Part, value: any) {
-//     const element = findEdge(part, "start") as HTMLElement;
-//     const parent = element && element.parentNode;
-//     if (part.start !== part.end) {
-//       // TODO: refactor this logic to use pull()...
-//       // part.target.flush();
-//     }
-//     if (element == null) {
-//       // console.log(part, value);
-//       throw new RangeError();
-//     }
-//     if (element.nodeType === TEXT_NODE && element.nodeValue !== value) {
-//       element.nodeValue = value;
-//     } else {
-//       const newNode = document.createTextNode(value);
-//       if (!parent) {
-//         throw new RangeError("7");
-//       }
-//       parent.replaceChild(newNode, element);
-//       part.start = part.end = newNode;
-//     }
-//   }
-
-//   private updateArray(part: Part, value: PartValue[]) {
-//     repeat(value)(part);
-//   }
-
-//   private updateNode(part: Part, value: any) {
-//     const element = findEdge(
-//       part,
-//       "start"
-//     ) as HTMLElement;
-//     const parent = element && element.parentNode;
-//     if (!parent) {
-//       throw new RangeError("6");
-//     }
-//     if (element !== value) {
-//       const isFrag = value.nodeType === DOCUMENT_FRAGMENT;
-//       const newStart = isFrag ? value.firstChild : value;
-//       const newEnd = isFrag ? value.lastChild : value;
-//       // TODO: change to use pull()
-//       parent.replaceChild(value, part.target.flush());
-//       part.start = newStart;
-//       part.end = newEnd;
-//     }
-//   }
-
-//   private updateAttribute(part: Part, value: any) {
-//     const element = findEdge(
-//       part,
-//       "start"
-//     ) as HTMLElement;
-//     const name = typeof part.end === "string" ? part.end : "";
-//     try {
-//       (element as any)[name] = value == null ? "" : value;
-//     } catch (_) {}
-//     if (element != null && typeof value !== "function" && isNode(element)) {
-//       if (value == null) {
-//         removeAttribute(part, element as HTMLElement, name);
-//       } else {
-//         setAttribute(part, element as HTMLElement, name, value);
-//       }
-//     }
-//   }
-
-//   private set(value: PartValue) {
-//     if (typeof this.end === "string") {
-//       this.updateAttribute(this, value);
-//     } else {
-//       if (
-//         typeof value !== "string" &&
-//         !Array.isArray(value) &&
-//         typeof (value as any)[Symbol.iterator] === "function"
-//       ) {
-//         value = Array.from(value as any);
-//       }
-//       if (isPromise(value)) {
-//         (value as Promise<PartValue>).then(promised => {
-//           this.set(promised);
-//         });
-//       } else if (isTemplate(value)) {
-//         render(value as Template, this);
-//       } else if ((value as Node).nodeType) {
-//         this.updateNode(this, value);
-//       } else if (Array.isArray(value)) {
-//         this.updateArray(this, value);
-//       } else {
-//         this.updateTextNode(this, value);
-//       }
-//     }
-//   }
-// }
-
 export interface IDomTarget {
   getStart: () => Node;
   getEnd: () => Node | string;
-  pull: (target: IPart | ITemplate) => DocumentFragment;
+  pull: () => DocumentFragment;
+}
+
+function isPart(x: any): boolean {
+  return x && x.type && x.type === "part";
 }
 
 export interface IPart extends IDomTarget {
   readonly id: symbol;
   readonly path: Array<number | string>;
   readonly isSVG: boolean;
-  readonly last: PartValue | null;
+  getLast: () => PartValue | null;
   addDisposer: (disposer: PartDispose) => void;
   removeDisposer: (disposer: PartDispose) => void;
+  readonly type: string;
   update: (value: PartValue) => void;
 };
-function PullTarget(target: IPart | ITemplate): DocumentFragment {
-  // TODO: finish writing logic to pull part/templates...
-  return document.createDocumentFragment();
+function PullTarget(target: IPart | ITemplate): () => DocumentFragment {
+  const start = target.getStart();
+  const end = target.getEnd();
+  const fragment = document.createDocumentFragment();
+  if (typeof end === "string") {
+    // should we remove attribute if pulled?
+    removeAttribute(target as IPart, end);
+  } else {
+    const parent = start.parentNode;
+    let cursor: Node | null = start;
+    while (cursor != null) {
+      const next = cursor.nextSibling;
+      fragment.appendChild(cursor);
+      if (cursor === end) {
+        cursor = null;
+      }
+    }
+  }
+  return () => fragment;
 }
-const PartDisposers = new Map<symbol, PartDispose[]>();
-export function Part(path: Array<number | string>, isSVG?: boolean, start?: StartEdge, end?: EndEdge): IPart {
+
+export function defaultKeyFn(item: any, index?: number): Key;
+export function defaultKeyFn(index: number): Key {
+  return index;
+}
+
+export function defaultTemplateFn(item: any): ITemplate {
+  return html`${item}`;
+}
+
+export function repeat(
+  items: Array<{}>,
+  keyFn: typeof defaultKeyFn = defaultKeyFn,
+  templateFn: typeof defaultTemplateFn = defaultTemplateFn
+): Directive {
+  return (part: IPart) => {
+    const target = part.getStart();
+    const parent = target.parentNode;
+    const id = part.id;
+    const isSVG = part.isSVG;
+
+    const normalized = items.map(item => {
+      if (isTemplate(item)) {
+        return item;
+      }
+      return templateFn(item);
+    }) as ITemplate[];
+    const keys = items.map((_, index) => keyFn(index));
+    const cacheEntry = repeatCache.get(id);
+    let map = new Map<Key, number>();
+    let list: IPart[] = [];
+    if (cacheEntry && cacheEntry.map && cacheEntry.list) {
+      map = cacheEntry.map;
+      list = cacheEntry.list;
+    }
+    let i = 0;
+    if (map != null && target && (target as Node).nodeType === COMMENT_NODE) {
+      const fragment = document.createDocumentFragment();
+      const len = keys.length;
+      for (; i < len; i++) {
+        const key = keys[i];
+        const node = document.createComment("{{}}");
+        const newPart: IPart = Part([0, 0], isSVG || false, node, node);
+        if (i === 0) {
+          // TODO: need to reconsider logic here to instead use pull()...
+          start = newPart;
+        } else if (i === len) {
+          end = newPart;
+        }
+        list.push(newPart);
+        map.set(key, i);
+        fragment.appendChild(node);
+        render(normalized[i] as ITemplate, newPart);
+      }
+      repeatCache.set(id, { map, list });
+      if (parent) {
+        parent.replaceChild(fragment, target as Node);
+      }
+      return;
+    }
+    const normLen = normalized.length;
+    const oldLen = list && list.length;
+    const maxLen = Math.max(normLen, oldLen || 0);
+    Object.keys(map).forEach(key => {
+      if (keys.indexOf(key) === -1) {
+        const oldIndex = map.get(key);
+        if (oldIndex) {
+          list[oldIndex].pull();
+          list.splice(oldIndex, 1);
+        }
+        map.delete(key);
+      }
+    });
+    for (i = 0; i < maxLen; i++) {
+      const newTemplate = normalized[i];
+      const newKey = keys[i];
+      const oldIndex = map.get(newKey) || -1;
+      const oldPart = oldIndex ? list[oldIndex] : null;
+      if (oldPart && oldIndex === i) {
+        // update existing in place
+        oldPart.update(newTemplate);
+      } else if (oldIndex > -1 && parent != null) {
+        // add new
+        const p = list[oldIndex];
+        const move = p.pull();
+        p.update(newTemplate);
+        const el = list[i].getStart();
+        if (el) {
+          parent.insertBefore(move, el as Node);
+          list.splice(oldIndex, 1);
+          // TODO: clean up...
+          //list.splice(i, 0, move.part);
+        }
+      } else {
+        // move and update...
+        const fragment = document.createDocumentFragment();
+        const node = document.createComment("{{}}");
+        fragment.appendChild(node);
+        const newPart = Part([0, 0], false, node, node);
+        render(newTemplate, newPart);
+        const elEdge = list[i].getStart();
+        if (elEdge && parent) {
+          parent.insertBefore(fragment, elEdge as Node);
+          list.splice(i, 0, newPart);
+        }
+      }
+      // TODO: why did you have this?
+      // parent && parent.removeChild(map[list[i]])
+    }
+  };
+}
+
+export function until(
+  promise: Promise<PartValue>,
+  defaultContent: PartValue
+): Directive {
+  return (part: IPart) => {
+    part.update(defaultContent);
+    promise.then(value => part.update(value));
+  };
+}
+
+type PartAttacher = (target: Node) => void;
+const partDisposers = new Map<symbol, PartDispose[]>();
+const partAttachers = new Map<symbol, PartAttacher>();
+export function Part(path: Array<number | string>, isSVG?: boolean, initStart?: Node, initEnd?: Node | string): IPart {
   const disposers: PartDispose[] = [];
   let result: IPart;
+  let start: Node | ITemplate | null = initStart || null;
+  let end: Node | ITemplate | string | null = initEnd || null; 
+  let last: PartValue | null = null; 
+  const updateArray = (part: IPart, value: PartValue[]) => {
+    repeat(value)(part);
+  }
+  const updateNode = (part: IPart, value: PrimitivePart) => {
+    const element = part.getStart();
+    const parent = element.parentNode;
+    if (!parent) {
+      throw new RangeError("6");
+    }
+    const newVal = typeof value === "number" ? value.toString() : value.toString();
+    if (typeof value === "string" || typeof value === "number") {
+      if (element.nodeType !== TEXT_NODE) {
+        const newEl = document.createTextNode(newVal);
+        parent.insertBefore(newEl, element);
+        part.pull();
+        start = newEl;
+        end = newEl;
+      }
+      if (element.nodeValue !== value) {
+        (element as Text).nodeValue = newVal;
+      }
+    } else {
+      const isFrag = (value as Node).nodeType === DOCUMENT_FRAGMENT;
+      const newStart = isFrag ? (value as DocumentFragment).firstChild : value;
+      const newEnd = isFrag ? (value as DocumentFragment).lastChild : value;
+      parent.insertBefore(value as Node | DocumentFragment, element);
+      part.pull();
+      start = newStart;
+      end = newEnd;
+    }
+  }
+  const updateAttribute = (part: IPart, value: any) => {
+    const element = part.getStart();
+    const tEnd = part.getEnd();
+    const name = typeof tEnd === "string" ? tEnd : "";
+    try {
+      (element as any)[name] = value == null ? "" : value;
+    } catch (_) {}
+    if (element != null && typeof value !== "function" && isNode(element)) {
+      if (value == null) {
+        removeAttribute(part, name);
+      } else {
+        setAttribute(part, name, value);
+      }
+    }
+  }
+
+  const set = (part: IPart, value: PartValue) => {
+    if (typeof end === "string") {
+      updateAttribute(result, value);
+    } else {
+      if (
+        typeof value !== "string" &&
+        !Array.isArray(value) &&
+        typeof (value as any)[Symbol.iterator] === "function"
+      ) {
+        value = Array.from(value as any);
+      }
+      if (isPromise(value)) {
+        (value as Promise<PartValue>).then(promised => {
+          set(result, promised);
+        });
+      } else if (isTemplate(value)) {
+        // TODO: change this, instead here we should get part.getStart().__template.update(value.getValues()) or render template to a new
+        //   DocumentFragment that should be replacing whatever is currently in dom, (insertBefore + pull)...
+        render(value as ITemplate, result);
+      } else if (Array.isArray(value)) {
+        updateArray(result, value);
+      } else {
+        updateNode(result, value as Node | DocumentFragment);
+      }
+    }
+  }
+  
   result = {
-    getStart() {
-      return document.createElement("remove-this");
+    getLast() {
+      return last;
     },
     getEnd() {
       return "remove-this";
     },
+    getStart() {
+      return document.createElement("remove-this");
+    },
     id: Symbol(),
     isSVG: isSVG || false,
-    last: null,
     path,
     addDisposer(handler: PartDispose) {
       if (
@@ -172,41 +305,158 @@ export function Part(path: Array<number | string>, isSVG?: boolean, start?: Star
         disposers.push(handler);
       }
     },
-    pull: () => PullTarget(result),
+    pull: () => PullTarget(result)(),
     removeDisposer(handler: PartDispose) {
       const index = disposers.indexOf(handler);
       if (index > -1) {
         disposers.splice(index, 1);
       }
     },
+    type: "part",
     update(value?: PartValue) {
       if (value == null) {
         return;
       }
-      // this.set(value);
-      // TODO: finish rewrite...
+      set(result, value);
+      last = value;
     }
   };
-  PartDisposers.set(result.id, disposers);
+  partDisposers.set(result.id, disposers);
+  partAttachers.set(result.id, (node: Node) => {
+    if (start != null || end != null) {
+      throw new RangeError("can't re-attach a part that has been initialized");
+    }
+    const target = followDOMPath(node, result.path);
+    if (target == null) {
+      throw new RangeError();
+    }
+    if (Array.isArray(target)) {
+      start = target[0];
+      end = target[1];
+    } else {
+      start = end = target as Node;
+    }
+  });
   return Object.seal(result);
 }
 
+function isAttributePart(part: IPart): Node | null {
+  const start = part.getStart();
+  const end = part.getEnd();
+  if (typeof end === "string" && start && start.nodeType) {
+    return start;
+  }
+  return null;
+}
+
+function removeAttribute(part: IPart, name: string) {
+  const element = isAttributePart(part) as HTMLElement;
+  if (element == null) {
+    throw new RangeError();
+  }
+  if (part.isSVG) {
+    element.removeAttributeNS(SVG_NS, name);
+  } else {
+    element.removeAttribute(name);
+  }
+}
+
+function setAttribute(
+  part: IPart,
+  name: string,
+  value: any
+) {
+  const element = isAttributePart(part) as HTMLElement;
+  if (element == null) {
+    throw new RangeError();
+  }
+  if (part.isSVG) {
+    element.setAttributeNS(SVG_NS, name, value);
+  } else {
+    element.setAttribute(name, value);
+  }
+}
+
+type NodeAttribute = [Node, string];
+function followDOMPath(
+  node: Node | null | undefined,
+  pointer: Array<string | number>
+): Node | NodeAttribute | null | undefined {
+  if (
+    pointer.length === 0 ||
+    node == null ||
+    (node && (node.nodeType === TEXT_NODE || node.nodeType === COMMENT_NODE))
+  ) {
+    return node;
+  }
+  const cPath = pointer.slice(0);
+  const current = cPath.shift();
+  const num = typeof current === "string" ? parseInt(current, 10) : current;
+  if (typeof current === "string") {
+    return [node, current];
+  } else if (num != null && !isNaN(num as number)) {
+    const el =
+      node &&
+      node.childNodes &&
+      node.childNodes.length < num &&
+      node.childNodes[num]
+        ? node.childNodes[num as number]
+        : null;
+    return followDOMPath(el, cPath);
+  } else {
+    throw new RangeError("part path not found");
+  }
+}
+
+function isDirective(part: IPart, expression: any) {
+  const end = part.getEnd();
+  if (typeof expression === "function") {
+    if (typeof end === "string" && (end as string).startsWith("on")) {
+      return false;
+    } else {
+      return true;
+    }
+  } else {
+    return false;
+  }
+}
+
+function isNode(x: any): boolean {
+  return x as Node && (x as Node).nodeType > 0;
+}
+
+function isPartComment(x: any | null | undefined): boolean {
+  return (
+    isNode(x) && (x as Node).nodeType === COMMENT_NODE && x.nodeValue === "{{}}"
+  );
+}
+
+function isPromise(x: any): boolean {
+  return x && typeof x.then === "function";
+}
+
+function isTemplate(x: any): boolean {
+  return x && x.type && x.type === "template";
+}
+
 export interface ITemplate extends IDomTarget {
+  getValues: () => PartValue[] | null | undefined;
   readonly key: string;
-  readonly template: HTMLTemplateElement;
-  update: (template: ITemplate) => void;
+  readonly type: string,
+  update: (newValues: PartValue[] | null | undefined) => void;
   dispose: () => void;
 };
 export function Template(
   key: string,
-  templateElement: HTMLTemplateElement,
+  template: HTMLTemplateElement,
   parts: IPart[],
-  values: PartValue[],
-  start?: StartEdge,
-  end?: EndEdge
+  values: PartValue[]
 ): ITemplate {
-  // TODO: rewrite template class functional
   let result: ITemplate;
+  let fragment: DocumentFragment | null = null;
+  let last: PartValue[] | null = null;
+  let start: Node | null = null;
+  let end: Node | string | null = null;
   result = {
     getStart() {
       return document.createElement("remove-this");
@@ -214,15 +464,39 @@ export function Template(
     getEnd() {
       return "remove-this";
     },
+    getValues() {
+      return last;
+    },
     key,
-    pull: () => PullTarget(result),
-    template: templateElement,
-    update(template: ITemplate) {
-
+    pull: () => PullTarget(result)(),
+    type: "template",
+    update(newValues: PartValue[] | null | undefined) {
+      if (newValues != null && newValues.length !== parts.length) {
+        throw new RangeError("invalid number of new values for template");
+      } 
+      if (fragment == null) {
+        const t: HTMLTemplateElement = document.importNode(template, true);
+        fragment = t.content;
+        start = fragment.firstChild as Node;
+        end = fragment.lastChild as Node; 
+        parts.forEach(part => {
+          const attacher = partAttachers.get(part.id);
+          if (attacher == null) {
+            throw new RangeError();
+          }
+          attacher(fragment as Node);
+        });
+      }
+      last = newValues == null ? values : newValues;
+      parts.forEach((part, i) => {
+        if (last != null) {
+          part.update(last[i]);
+        }
+      });
     },
     dispose() {
       parts.forEach(part => {
-        const disposer = PartDisposers.get(part.id);
+        const disposer = partDisposers.get(part.id);
         if (typeof disposer === "function") {
           disposer(part);
         }
@@ -367,10 +641,6 @@ function templateSetup(parts: IPart[]): WalkFn {
         nodes.forEach(node => {
           parent.insertBefore(node, element as Node);
         });
-        /* // really not sure why I had this here...
-        if (parent != null && [].indexOf.call(parent.childNodes, element) > -1) {
-          throw new RangeError(`${parent}, ${parent.childNodes}, ${element}`);
-        }*/
         parent.removeChild(element);
       }
     } else if (nodeType === ELEMENT_NODE) {
@@ -405,453 +675,105 @@ export function html(
   return Template(staticMarkUp, template, parts, exprs);
 }
 
-// export class Template extends DomTarget{
-//   public fragment: DocumentFragment;
-//   constructor(
-//     public key: string,
-//     public template: HTMLTemplateElement,
-//     public parts: Part[],
-//     public values: PartValue[],
-//     start?: StartEdge,
-//     end?: EndEdge
-//   ) {
-//     super(start, end);
-//   }
+function getChildTemplate(
+  target: HTMLElement | null | undefined
+): ITemplate | undefined {
+  if (target == null) {
+    return;
+  }
+  if (
+    target.childNodes &&
+    target.childNodes.length > 0 &&
+    (target.childNodes[0] as any).__template
+  ) {
+    return (target.childNodes[0] as any).__template;
+  }
+  return;
+}
 
-//   public dispose() {
-//     this.parts.forEach(part =>
-//       part.disposers.forEach(
-//         dispose => typeof dispose === "function" && dispose(part)
-//       )
-//     );
-//     this.pull();
-//   }
-
-//   public update(values?: PartValue[]) {
-//     if (values != null && Array.isArray(values)) {
-//       this.values = values;
-//     }
-//     if (!this.fragment) {
-//       const t: HTMLTemplateElement = document.importNode(this.template, true);
-//       const frag = t.content;
-//       this.fragment = frag;
-//       const templateStart = this.fragment.firstChild as Node;
-//       const templateEnd = this.fragment.lastChild as Node;
-//       /* TODO: can't we keep start and end private to DomTarget?
-//       this.target.start = isPartComment(templateStart)
-//         ? this.parts[0]
-//         : templateStart;
-//       this.target.end = isPartComment(templateEnd)
-//         ? this.parts[this.parts.length - 1]
-//         : templateEnd;
-//       */
-//       this.parts.forEach(part => {
-//         const target = followDOMPath(this.fragment, part.path);
-//         if (Array.isArray(target)) {
-//           part.start = target[0];
-//           part.end = target[1];
-//         } else {
-//           part.start = target;
-//           part.end = target;
-//         }
-//       });
-//     }
-//     this.parts.forEach((part, i) => {
-//       const newVal: PartValue = this.values[i];
-//       if (isDirective(part, newVal)) {
-//         (newVal as Directive)(part);
-//       } else {
-//         part.update(newVal);
-//       }
-//     });
-//   }
-// }
-
-// function isPromise(x: any): boolean {
-//   return x && typeof x.then === "function";
-// }
-
-// function isTemplate(x: any): boolean {
-//   return x && x.values && x.parts && x.update;
-// }
-
-// function isDirective(part: Part, expression: any) {
-//   const end = part.getEnd();
-//   if (typeof expression === "function") {
-//     if (typeof end === "string" && (end as string).startsWith("on")) {
-//       return false;
-//     } else {
-//       return true;
-//     }
-//   } else {
-//     return false;
-//   }
-// }
-
-// function isPartComment(x: any | null | undefined): boolean {
-//   return (
-//     isNode(x) && (x as Node).nodeType === COMMENT_NODE && x.nodeValue === "{{}}"
-//   );
-// }
-
-// function isNode(x: any): boolean {
-//   return x as Node && (x as Node).nodeType > 0;
-// }
-
-// function isPart(x: any): boolean {
-//   return x instanceof Part;
-// }
-
-// export function render(
-//   template: Template,
-//   target: Node | Part = document.body
-// ): void {
-//   if (target == null) {
-//     throw new RangeError("invalid render target");
-//   }
-//   const part: Node | Part | null =
-//     (target as Node).nodeType == null ? target : null;
-//   const start = part && (part as Part).getStart();
-//   const instance: Template =
-//     (target as any).__template ||
-//     (start && (start as any).__template) ||
-//     getChildTemplate(target as HTMLElement);
-//   if (instance) {
-//     if (instance.key === template.key) {
-//       instance.update(template.values);
-//     } else {
-//       instance.dispose();
-//       // TODO: move this logic into Template class, maybe add an attach method
-//       /*
-//       const fragment = document.createDocumentFragment();
-//       const comment = document.createComment("{{}}");
-//       fragment.appendChild(comment);
-//       render(template, comment);
-//       const first = fragment.firstChild;
-//       template.start = first != null ? first : null;
-//       template.end = fragment.lastChild;
-//       (first as any).__template = template;
-//       */
-//       // END
-//       // re-write
-//       /*
-//       const parent = findParentNode(instance.getStart());
-//       if (parent) {
-//         parent.replaceChild(fragment, instance.getStart());
-//       }
-//       */
-//     }
-//     return;
-//   }
-//   if (part == null && target != null) {
-//     const node = target;
-//     // TODO: fix here...  we should remove all children, in target
-//     //   create new comment node, and set templates target to the new node,
-//     //   and appendChild to target...
-//     template.start = template.end = target;
-//     if ((node as Node).childNodes.length > 0) {
-//       while ((node as Node).hasChildNodes) {
-//         const lastChild = (node as Node).lastChild;
-//         if (lastChild) {
-//           (node as Node).removeChild(lastChild);
-//         }
-//       }
-//     }
-//     if (template.fragment != null) {
-//       template.start = template.fragment.firstChild;
-//       template.end = template.fragment.lastChild;
-//       (template.fragment.firstChild as any).__template = template;
-//       (target as Node).appendChild(template.fragment);
-//     }
-//   } else {
-//     if (part == null) {
-//       throw new RangeError();
-//     }
-//     template.update();
-//     const start = findEdge(part, "start");
-//     const parent = start.parentNode;
-//     if (part != null) {
-//       const p: Part = part as Part;
-//       p.start = template.fragment.firstChild;
-//       p.end = template.fragment.lastChild;
-//       if (parent) {
-//         parent.replaceChild(template.fragment, start as Node);
-//         if (p.start != null) {
-//           (p.start as any).__template = template;
-//         }
-//       }
-//     }
-//   }
-// }
-
-// function removeAttribute(part: Part, element: HTMLElement, name: string) {
-//   if (element == null) {
-//     throw new RangeError();
-//   }
-//   if (part.isSVG) {
-//     element.removeAttributeNS(SVG_NS, name);
-//   } else {
-//     element.removeAttribute(name);
-//   }
-// }
-
-// function setAttribute(
-//   part: Part,
-//   element: HTMLElement,
-//   name: string,
-//   value: any
-// ) {
-//   if (element == null) {
-//     throw new RangeError();
-//   }
-//   if (part.isSVG) {
-//     element.setAttributeNS(SVG_NS, name, value);
-//   } else {
-//     element.setAttribute(name, value);
-//   }
-// }
-
-// function getChildTemplate(
-//   target: HTMLElement | null | undefined
-// ): Template | undefined {
-//   if (target == null) {
-//     return;
-//   }
-//   if (
-//     target.childNodes &&
-//     target.childNodes.length > 0 &&
-//     (target.childNodes[0] as any).__template
-//   ) {
-//     return (target.childNodes[0] as any).__template;
-//   }
-//   return;
-// }
-
-// export type Directive = (part: Part) => void;
-// export type PartValue =
-//   | string
-//   | number
-//   | Node
-//   | DocumentFragment
-//   | Directive
-//   | Template
-//   | IPartPromise
-//   | IPartArray;
-// export interface IPartPromise extends Promise<PartValue> {};
-// export interface IPartArray extends Array<PartValue> {};
-// export type EdgeTypes = "start" | "end";
-// export type Edge = StartEdge | EndEdge;
-// export type StartEdge = Node | Part | null | undefined;
-// export type EndEdge = StartEdge | string;
-// export type PartDispose = (part: Part) => void;
-
-// export class DomTarget {
-//   constructor(protected start: StartEdge, protected end: EndEdge) {}
-//   public getStart(): Node {
-//     const result = this.findEdge(this, "start");
-//     if (!result) {
-//       throw new RangeError("invalid target start");
-//     }
-//     return result as Node;
-//   }
-//   public getEnd(): Node | string {
-//     const result = this.findEdge(this, "end");
-//     if (!result) {
-//       throw new RangeError("invalid target end");
-//     }
-//     return result as Node | string;
-//   }
-//   public pull(): DocumentFragment {
-//     const fragment = document.createDocumentFragment();
-//     const start = this.findEdge(this, "start");
-//     const parent = start.parentNode;
-//     if (parent == null) {
-//       throw new RangeError("invalid dom parentNode");
-//     }
-//     const end = this.findEdge(this, "end");
-//     let cursor: Node | null = end;
-//     while (cursor != null) {
-//       const next: Node | null = cursor !== start ? cursor.previousSibling : null;
-//       fragment.insertBefore(parent.removeChild(cursor), fragment.firstChild);
-//       cursor = next;
-//     }
-//     return fragment;
-//   }
-
-//   private findEdge(
-//     target: DomTarget | Node,
-//     edge: EdgeTypes
-//   ): Node {
-//     if (isNode(target)) {
-//       return target as Node;
-//     }
-//     return this.findEdge((target as any)[edge], edge);
-//   }
-
-//   private findParentNode(
-//     part: Node | Edge | Part | null | undefined
-//   ): Node | null | undefined {
-//     if (part != null && isPart(part)) {
-//       const start = this.findEdge(part as Part, "start") as Node;
-//       return start.parentNode;
-//     } else if (isNode(part)) {
-//       const parent = (part as Node).parentNode;
-//       if ((part && !isNode(part)) || (parent && !isNode(parent))) {
-//         throw new RangeError("8");
-//       }
-//       return parent as Node;
-//     }
-//     return;
-//   }
-// }
-
-// type NodeAttribute = [Node, string];
-// function followDOMPath(
-//   node: Node | null | undefined,
-//   pointer: Array<string | number>
-// ): Node | NodeAttribute | null | undefined {
-//   if (
-//     pointer.length === 0 ||
-//     node == null ||
-//     (node && (node.nodeType === TEXT_NODE || node.nodeType === COMMENT_NODE))
-//   ) {
-//     return node;
-//   }
-//   const cPath = pointer.slice(0);
-//   const current = cPath.shift();
-//   const num = typeof current === "string" ? parseInt(current, 10) : current;
-//   if (typeof current === "string") {
-//     return [node, current];
-//   } else if (num != null && !isNaN(num as number)) {
-//     const el =
-//       node &&
-//       node.childNodes &&
-//       node.childNodes.length < num &&
-//       node.childNodes[num]
-//         ? node.childNodes[num as number]
-//         : null;
-//     return followDOMPath(el, cPath);
-//   } else {
-//     throw new RangeError("part path not found");
-//   }
-// }
-
-// export function defaultKeyFn(item: any, index?: number): Key;
-// export function defaultKeyFn(index: number): Key {
-//   return index;
-// }
-
-// export function defaultTemplateFn(item: any): Template {
-//   return html`${item}`;
-// }
-
-// export function repeat(
-//   items: Array<{}>,
-//   keyFn: typeof defaultKeyFn = defaultKeyFn,
-//   templateFn: typeof defaultTemplateFn = defaultTemplateFn
-// ): Directive {
-//   return (part: Part) => {
-//     const target = findEdge(part, "start");
-//     const parent = findParentNode(part);
-//     const id = part.id;
-//     const isSVG = part.isSVG;
-
-//     const normalized = items.map(item => {
-//       if (isTemplate(item)) {
-//         return item;
-//       }
-//       return templateFn(item);
-//     }) as Template[];
-//     const keys = items.map((_, index) => keyFn(index));
-//     const cacheEntry = repeatCache.get(id);
-//     let map = new Map<Key, number>();
-//     let list: Part[] = [];
-//     if (cacheEntry && cacheEntry.map && cacheEntry.list) {
-//       map = cacheEntry.map;
-//       list = cacheEntry.list;
-//     }
-//     let i = 0;
-//     if (map != null && target && (target as Node).nodeType === COMMENT_NODE) {
-//       const fragment = document.createDocumentFragment();
-//       const len = keys.length;
-//       for (; i < len; i++) {
-//         const key = keys[i];
-//         const node = document.createComment("{{}}");
-//         const newPart: Part = new Part([0, 0], isSVG || false, node, node);
-//         if (i === 0) {
-//           part.start = newPart;
-//         } else if (i === len) {
-//           part.targe.end = newPart;
-//         }
-//         list.push(newPart);
-//         map.set(key, i);
-//         fragment.appendChild(node);
-//         render(normalized[i] as Template, newPart);
-//       }
-//       repeatCache.set(id, { map, list });
-//       if (parent) {
-//         parent.replaceChild(fragment, target as Node);
-//       }
-//       return;
-//     }
-//     const normLen = normalized.length;
-//     const oldLen = list && list.length;
-//     const maxLen = Math.max(normLen, oldLen || 0);
-//     Object.keys(map).forEach(key => {
-//       if (keys.indexOf(key) === -1) {
-//         const oldIndex = map.get(key);
-//         if (oldIndex) {
-//           list[oldIndex].pull();
-//           list.splice(oldIndex, 1);
-//         }
-//         map.delete(key);
-//       }
-//     });
-//     for (i = 0; i < maxLen; i++) {
-//       const newTemplate = normalized[i];
-//       const newKey = keys[i];
-//       const oldIndex = map.get(newKey) || -1;
-//       const oldPart = oldIndex ? list[oldIndex] : null;
-//       if (oldPart && oldIndex === i) {
-//         // update existing in place
-//         oldPart.update(newTemplate);
-//       } else if (oldIndex > -1 && parent != null) {
-//         // add new
-//         const p = list[oldIndex];
-//         const move = p.pull();
-//         p.update(newTemplate);
-//         const el = findEdge(list[i], "start");
-//         if (el) {
-//           parent.insertBefore(move, el as Node);
-//           list.splice(oldIndex, 1);
-//           // TODO: clean up...
-//           //list.splice(i, 0, move.part);
-//         }
-//       } else {
-//         // move and update...
-//         const fragment = document.createDocumentFragment();
-//         const node = document.createComment("{{}}");
-//         fragment.appendChild(node);
-//         const newPart = new Part([0, 0], false, node, node);
-//         render(newTemplate, newPart);
-//         const elEdge = findEdge(list[i], "start");
-//         if (elEdge && parent) {
-//           parent.insertBefore(fragment, elEdge as Node);
-//           list.splice(i, 0, newPart);
-//         }
-//       }
-//       // TODO: why did you have this?
-//       // parent && parent.removeChild(map[list[i]])
-//     }
-//   };
-// }
-
-// export function until(
-//   promise: Promise<PartValue>,
-//   defaultContent: PartValue
-// ): Directive {
-//   return (part: Part) => {
-//     part.update(defaultContent);
-//     promise.then(value => part.update(value));
-//   };
-// }
+// TODO: major re-write of render function...
+export function render(
+  template: ITemplate,
+  target: Node | IPart = document.body
+): void {
+  if (target == null) {
+    throw new RangeError("invalid render target");
+  }
+  const part: Node | IPart | null =
+    (target as Node).nodeType == null ? target : null;
+  const start = part && (part as IPart).getStart();
+  const instance: ITemplate =
+    (target as any).__template ||
+    (start && (start as any).__template) ||
+    getChildTemplate(target as HTMLElement);
+  if (instance) {
+    if (instance.key === template.key) {
+      instance.update(template.getValues());
+    } else {
+      instance.dispose();
+      // TODO: move this logic into Template class, maybe add an attach method
+      /*
+      const fragment = document.createDocumentFragment();
+      const comment = document.createComment("{{}}");
+      fragment.appendChild(comment);
+      render(template, comment);
+      const first = fragment.firstChild;
+      template.start = first != null ? first : null;
+      template.end = fragment.lastChild;
+      (first as any).__template = template;
+      */
+      // END
+      // re-write
+      /*
+      const parent = findParentNode(instance.getStart());
+      if (parent) {
+        parent.replaceChild(fragment, instance.getStart());
+      }
+      */
+    }
+    return;
+  }
+  if (part == null && target != null) {
+    const node = target;
+    // TODO: fix here...  we should remove all children, in target
+    //   create new comment node, and set templates target to the new node,
+    //   and appendChild to target...
+    /*
+    template.start = template.end = target;
+    if ((node as Node).childNodes.length > 0) {
+      while ((node as Node).hasChildNodes) {
+        const lastChild = (node as Node).lastChild;
+        if (lastChild) {
+          (node as Node).removeChild(lastChild);
+        }
+      }
+    }
+    if (template.fragment != null) {
+      template.start = template.fragment.firstChild;
+      template.end = template.fragment.lastChild;
+      (template.fragment.firstChild as any).__template = template;
+      (target as Node).appendChild(template.fragment);
+    }
+    */
+  } else {
+    if (part == null) {
+      throw new RangeError();
+    }
+    template.update(null);
+    /* TODO: clean up use of private start/end etc...
+    const start = findEdge(part, "start");
+    const parent = start.parentNode;
+    if (part != null) {
+      const p: Part = part as Part;
+      p.start = template.fragment.firstChild;
+      p.end = template.fragment.lastChild;
+      if (parent) {
+        parent.replaceChild(template.fragment, start as Node);
+        if (p.start != null) {
+          (p.start as any).__template = template;
+        }
+      }
+    }
+    */
+  }
+}
