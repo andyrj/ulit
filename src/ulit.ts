@@ -53,7 +53,7 @@ export interface IPart extends IDomTarget {
   readonly id: symbol;
   readonly path: Array<number | string>;
   readonly isSVG: boolean;
-  getLast: () => PartValue | null;
+  getValue: () => PartValue | null;
   addDisposer: (disposer: PartDispose) => void;
   removeDisposer: (disposer: PartDispose) => void;
   readonly type: string;
@@ -65,7 +65,7 @@ function PullTarget(target: IPart | ITemplate): () => DocumentFragment {
   const fragment = document.createDocumentFragment();
   if (typeof end === "string") {
     // should we remove attribute if pulled?
-    removeAttribute(target as IPart, end);
+    removeAttribute(start, end);
   } else {
     const parent = start.parentNode;
     let cursor: Node | null = start;
@@ -284,7 +284,7 @@ export function Part(path: Array<number | string>, isSVG?: boolean, initStart?: 
   }
   
   result = {
-    getLast() {
+    getValue() {
       return last;
     },
     getEnd() {

@@ -5,12 +5,13 @@
 [![Build Status](https://travis-ci.org/andyrj/ulit.svg?branch=master)](https://travis-ci.org/andyrj/ulit)
 
 *WIP* Tagged Template Literal html template library.  Inspired by lit-html/hyperHTML.
- - This branch is a rewrite to typescript...
+ - This branch is a rewrite to functional typescript...
 
 TODO:
-1. fix AVA typescript setup...
-2. get test coverage up to 100/100
-3. Add SSR (already prepared for this with part serialization in first comment nodeValue, and part paths...)
+1. Correct repeat()
+2. Finish re-write of render()
+3. get test coverage up to 100/100
+4. Add SSR (already prepared for this with part serialization in first comment nodeValue, and part paths...)
 
 ## Why another tagged template literal library?
 "I cannot understand what I cannot build." - Feynman
