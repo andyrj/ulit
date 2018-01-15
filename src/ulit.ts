@@ -241,25 +241,24 @@ export function Part(path: Array<number | string>, isSVG?: boolean, initStart?: 
       end = newEnd;
     }
   }
-  const updateAttribute = (part: IPart, value: any) => {
-    const element = part.getStart();
-    const tEnd = part.getEnd();
-    const name = typeof tEnd === "string" ? tEnd : "";
+  const updateAttribute = (value: any) => {
+    const element = start as Node;
+    const name = typeof end === "string" ? end : "";
     try {
       (element as any)[name] = value == null ? "" : value;
     } catch (_) {}
     if (element != null && typeof value !== "function" && isNode(element)) {
       if (value == null) {
-        removeAttribute(part, name);
+        removeAttribute(element, name);
       } else {
-        setAttribute(part, name, value);
+        setAttribute(element, name, value);
       }
     }
   }
 
-  const set = (part: IPart, value: PartValue) => {
+  const set = (value: PartValue) => {
     if (typeof end === "string") {
-      updateAttribute(result, value);
+      updateAttribute(value);
     } else {
       if (
         typeof value !== "string" &&
@@ -270,7 +269,7 @@ export function Part(path: Array<number | string>, isSVG?: boolean, initStart?: 
       }
       if (isPromise(value)) {
         (value as Promise<PartValue>).then(promised => {
-          set(result, promised);
+          set(promised);
         });
       } else if (isTemplate(value)) {
         // TODO: change this, instead here we should get part.getStart().__template.update(value.getValues()) or render template to a new
@@ -317,7 +316,7 @@ export function Part(path: Array<number | string>, isSVG?: boolean, initStart?: 
       if (value == null) {
         return;
       }
-      set(result, value);
+      set(value);
       last = value;
     }
   };
@@ -349,31 +348,30 @@ function isAttributePart(part: IPart): Node | null {
   return null;
 }
 
-function removeAttribute(part: IPart, name: string) {
-  const element = isAttributePart(part) as HTMLElement;
+function removeAttribute(element: Node, name: string, isSVG: boolean = false) {
   if (element == null) {
     throw new RangeError();
   }
-  if (part.isSVG) {
-    element.removeAttributeNS(SVG_NS, name);
+  if (isSVG) {
+    (element as HTMLElement).removeAttributeNS(SVG_NS, name);
   } else {
-    element.removeAttribute(name);
+    (element as HTMLElement).removeAttribute(name);
   }
 }
 
 function setAttribute(
-  part: IPart,
+  element: Node,
   name: string,
-  value: any
+  value: any,
+  isSVG: boolean = false
 ) {
-  const element = isAttributePart(part) as HTMLElement;
   if (element == null) {
     throw new RangeError();
   }
-  if (part.isSVG) {
-    element.setAttributeNS(SVG_NS, name, value);
+  if (isSVG) {
+    (element as HTMLElement).setAttributeNS(SVG_NS, name, value);
   } else {
-    element.setAttribute(name, value);
+    (element as HTMLElement).setAttribute(name, value);
   }
 }
 
