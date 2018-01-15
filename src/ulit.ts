@@ -33,10 +33,6 @@ export type PartValue =
   | ITemplate;
 export interface IPartPromise extends Promise<PartValue> {};
 export interface IPartArray extends Array<PartValue> {};
-export type EdgeTypes = "start" | "end";
-export type Edge = StartEdge | EndEdge;
-export type StartEdge = Node | IPart | null | undefined;
-export type EndEdge = StartEdge | string;
 export type PartDispose = (part: IPart) => void;
 
 export interface IDomTarget {
@@ -63,10 +59,7 @@ function PullTarget(target: IPart | ITemplate): () => DocumentFragment {
   const start = target.getStart();
   const end = target.getEnd();
   const fragment = document.createDocumentFragment();
-  if (typeof end === "string") {
-    // should we remove attribute if pulled?
-    removeAttribute(start, end);
-  } else {
+  if (typeof end !== "string") {
     const parent = start.parentNode;
     let cursor: Node | null = start;
     while (cursor != null) {
@@ -124,9 +117,9 @@ export function repeat(
         const newPart: IPart = Part([0, 0], isSVG || false, node, node);
         if (i === 0) {
           // TODO: need to reconsider logic here to instead use pull()...
-          start = newPart;
+          //start = newPart;
         } else if (i === len) {
-          end = newPart;
+          //end = newPart;
         }
         list.push(newPart);
         map.set(key, i);
@@ -170,7 +163,7 @@ export function repeat(
           parent.insertBefore(move, el as Node);
           list.splice(oldIndex, 1);
           // TODO: clean up...
-          //list.splice(i, 0, move.part);
+          // list.splice(i, 0, move.part);
         }
       } else {
         // move and update...
