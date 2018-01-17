@@ -121,9 +121,9 @@ export function repeat(
         const newPart: IPart = Part([0, 0], node, node, isSVG);
         if (i === 0) {
           // TODO: need to reconsider logic here to instead use pull()...
-          //start = newPart;
+          // start = newPart;
         } else if (i === len) {
-          //end = newPart;
+          // end = newPart;
         }
         list.push(newPart);
         map.set(key, i);
@@ -210,14 +210,6 @@ function isNumber(x: any): boolean {
   return typeof x === "number";
 }
 
-function isUndef(x: any): boolean {
-  return x === undefined;
-}
-
-function isNull(x: any): boolean {
-  return x === null;
-}
-
 function followEdge(target: IDomTarget | Node, edge: "start" | "end"): Node {
   if (isNode(target)) {
     return target as Node;
@@ -259,20 +251,20 @@ export function Part(
     const element = part.getStart() as Node;
     const parent = element.parentNode;
     if (!parent) {
-      throw new RangeError("6");
+      throw new RangeError();
     }
     const valueIsNumber = isNumber(value);
-    const newVal = isNumber(value) ? value.toString() : value.toString();
     if (valueIsNumber || isString(value)) {
+      const strVal = value.toString();
       if (element.nodeType !== TEXT_NODE) {
-        const newEl = document.createTextNode(newVal);
+        const newEl = document.createTextNode(strVal);
         parent.insertBefore(newEl, element);
         part.pull();
         start = newEl;
         end = newEl;
       }
       if (element.nodeValue !== value) {
-        (element as Text).nodeValue = newVal;
+        (element as Text).nodeValue = strVal;
       }
     } else {
       const isFrag = (value as Node).nodeType === DOCUMENT_FRAGMENT;
@@ -294,10 +286,10 @@ export function Part(
     if (isFunction(value) || name in element) {
       (element as any)[name] = !value && value !== false ? "" : value
     } else if (value || value === false) {
-      (element as HTMLElement).setAttribute(name, value)
+      setAttribute(element, name, value, isSVG);
     }
     if (!value || value !== false) {
-      (element as HTMLElement).removeAttribute(name)
+      removeAttribute(element, name, isSVG);
     }
   }
 
@@ -364,7 +356,7 @@ export function Part(
   partDisposers.set(result.id, disposers);
   partAttachers.set(result.id, (node: Node) => {
     if (!start || !end) {
-      throw new RangeError("can't re-attach a part that has been initialized");
+      throw new RangeError();
     }
     const target = followDOMPath(node, result.path);
     if (!target) {
@@ -380,6 +372,7 @@ export function Part(
   return Object.seal(result);
 }
 
+// TODO: remove this method?
 function isAttributePart(part: IPart): Node | IDomTarget | undefined {
   const start = part.getStart();
   const end = part.getEnd();
@@ -389,6 +382,8 @@ function isAttributePart(part: IPart): Node | IDomTarget | undefined {
   return;
 }
 
+// TODO: move the following into Part closure...
+// START_MOVE
 function removeAttribute(element: Node, name: string, isSVG: boolean = false) {
   if (!element) {
     throw new RangeError();
@@ -415,6 +410,7 @@ function setAttribute(
     (element as HTMLElement).setAttribute(name, value);
   }
 }
+// END_MOVE
 
 type NodeAttribute = [Node, string];
 function followDOMPath(
@@ -443,7 +439,7 @@ function followDOMPath(
         : undefined;
     return followDOMPath(el, cPath);
   } else {
-    throw new RangeError("part path not found");
+    throw new RangeError();
   }
 }
 
@@ -515,7 +511,7 @@ export function Template(
     type: "template",
     update(newValues: PartValue[] | null | undefined) {
       if (!newValues || newValues.length !== parts.length) {
-        throw new RangeError("invalid number of new values for template");
+        throw new RangeError();
       } 
       if (!fragment) {
         const t: HTMLTemplateElement = document.importNode(template, true);
@@ -631,7 +627,7 @@ function walkDOM(
   }
   if (element && element.childNodes.length > 0) {
     if (!element) {
-      throw new RangeError("2");
+      throw new RangeError();
     }
     [].forEach.call(element.childNodes, (child: Node, index: number) => {
       walkPath.push(index);
@@ -655,10 +651,11 @@ function isSVGChild(node: Node | null | undefined): boolean {
   return result;
 }
 
+// TODO: update templateSetup() to be sure and maintain start and stop for template as well as parts...
 function templateSetup(parts: IPart[]): WalkFn {
   return (parent, element) => {
     if (!element) {
-      throw new RangeError("invalid <WalkFn> call with null element");
+      throw new RangeError();
     }
     const nodeType = element && element.nodeType;
     if (nodeType === TEXT_NODE) {
@@ -741,7 +738,7 @@ export function render(
   target: Node | IPart = document.body
 ): void {
   if (!target) {
-    throw new RangeError("invalid render target");
+    throw new RangeError();
   }
   const part: Node | IPart | undefined =
     !(target as Node).nodeType ? target : undefined;
