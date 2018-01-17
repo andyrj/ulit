@@ -128,7 +128,7 @@ export function repeat(
         list.push(newPart);
         map.set(key, i);
         fragment.appendChild(node);
-        render(normalized[i] as ITemplate, newPart);
+        // render(normalized[i] as ITemplate, newPart);
       }
       repeatCache.set(id, { map, list });
       if (parent) {
@@ -175,7 +175,7 @@ export function repeat(
         const node = document.createComment("{{}}");
         fragment.appendChild(node);
         const newPart = Part([0, 0], node, node, false);
-        render(newTemplate, newPart);
+        // render(newTemplate, newPart);
         const elEdge = list[i].getStart();
         if (elEdge && parent) {
           parent.insertBefore(fragment, elEdge as Node);
@@ -319,7 +319,8 @@ export function Part(
       } else if (isTemplate(value)) {
         // TODO: change this, instead here we should get part.getStart().__template.update(value.getValues()) or render template to a new
         //   DocumentFragment that should be replacing whatever is currently in dom, (insertBefore + pull)...
-        render(value as ITemplate, result);
+        //   part of major re-write...
+        // render(value as ITemplate, result);
       } else if (Array.isArray(value)) {
         updateArray(result, value);
       } else {
@@ -459,9 +460,12 @@ function isTemplate(x: any): boolean {
 }
 
 export interface ITemplate extends IDomTarget {
+  append: (node: Node) => void;
   getValues: () => PartValue[] | undefined;
+  hydrate: (target: Node) => boolean;
+  insertBefore: (target?: Node | IDomTarget) => void;
   readonly key: string;
-  readonly type: string,
+  readonly type: string;
   update: (newValues?: PartValue[]) => void;
   dispose: () => void;
 };
@@ -477,11 +481,21 @@ export function Template(
   let start: Node;
   let end: Node | string;
   result = {
+    append: (node: Node) => {
+      // TODO: finish writing this...
+    },
     firstNode: () => followEdge(result, "start"),
     getEnd: () => end,
     getStart: () => start,
     getValues() {
       return last;
+    },
+    hydrate: (target: Node) => {
+      return false;
+    },
+    insertBefore: (target?: Node | IDomTarget) => {
+      result.update();
+      // TODO: finish writing this...
     },
     key,
     lastNode: () => followEdge(result, "end"),
@@ -497,6 +511,7 @@ export function Template(
         start = fragment.firstChild as Node;
         end = fragment.lastChild as Node; 
         parts.forEach(part => {
+          // TODO: can't we just provide a part.attach(DocumentFragment)?
           const attacher = partAttachers.get(part.id);
           if (!attacher || !isFunction(attacher)) {
             throw new RangeError();
@@ -710,89 +725,37 @@ function getChildTemplate(
   return;
 }
 
-// TODO: major re-write of render function...
 export function render(
   template: ITemplate,
-  target: Node | IPart = document.body
-): void {
+  target?: Node
+) {
   if (!target) {
-    throw new RangeError();
+    target = document.body;
   }
-  const part: Node | IPart | undefined =
-    !(target as Node).nodeType ? target : undefined;
-  const start = part && (part as IPart).getStart();
-  const instance: ITemplate =
-    (target as any).__template ||
-    (start && (start as any).__template) ||
-    getChildTemplate(target as HTMLElement);
+  const instance: ITemplate = (target as any).__template;
   if (instance) {
     if (instance.key === template.key) {
       instance.update(template.getValues());
     } else {
-      instance.dispose();
-      // TODO: move this logic into Template class, maybe add an attach method
-      /*
-      const fragment = document.createDocumentFragment();
-      const comment = document.createComment("{{}}");
-      fragment.appendChild(comment);
-      render(template, comment);
-      const first = fragment.firstChild;
-      template.start = first != null ? first : null;
-      template.end = fragment.lastChild;
-      (first as any).__template = template;
-      */
-      // END
-      // re-write
-      /*
-      const parent = findParentNode(instance.getStart());
-      if (parent) {
-        parent.replaceChild(fragment, instance.getStart());
-      }
-      */
+      template.insertBefore(instance.firstNode());
+      instance.pull();
+      (target as any).__template = template;
     }
-    return;
-  }
-  if (!part && target) {
-    const node = target;
-    // TODO: fix here...  we should remove all children, in target
-    //   create new comment node, and set templates target to the new node,
-    //   and appendChild to target...
-    /*
-    template.start = template.end = target;
-    if ((node as Node).childNodes.length > 0) {
-      while ((node as Node).hasChildNodes) {
-        const lastChild = (node as Node).lastChild;
-        if (lastChild) {
-          (node as Node).removeChild(lastChild);
-        }
-      }
-    }
-    if (template.fragment != null) {
-      template.start = template.fragment.firstChild;
-      template.end = template.fragment.lastChild;
-      (template.fragment.firstChild as any).__template = template;
-      (target as Node).appendChild(template.fragment);
-    }
-    */
   } else {
-    if (!part) {
-      throw new RangeError();
-    }
-    template.update();
-    /* TODO: clean up use of private start/end etc...
-    const start = findEdge(part, "start");
-    const parent = start.parentNode;
-    if (part != null) {
-      const p: Part = part as Part;
-      p.start = template.fragment.firstChild;
-      p.end = template.fragment.lastChild;
-      if (parent) {
-        parent.replaceChild(template.fragment, start as Node);
-        if (p.start != null) {
-          (p.start as any).__template = template;
+    if (target.hasChildNodes) {
+      const hydrated = template.hydrate(target);
+      const first = target.firstChild;
+      if (!hydrated) {
+        let cursor: Optional<Node | null> = target.lastChild;
+        while (cursor) {
+          const next: Optional<Node | null> = cursor.previousSibling;
+          target.removeChild(cursor);
+          cursor = cursor !== first ? next : undefined;
         }
+        template.append(target);
       }
+    } else {
+      template.append(target);
     }
-    */
   }
 }
