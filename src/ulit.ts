@@ -382,14 +382,14 @@ export function Part(
 }
 
 // TODO: remove this method?
-function isAttributePart(part: IPart): Node | IDomTarget | undefined {
-  const start = part.getStart();
-  const end = part.getEnd();
-  if (isString(end) && isNode(start)) {
-    return start;
-  }
-  return;
-}
+// function isAttributePart(part: IPart): Node | IDomTarget | undefined {
+//   const start = part.getStart();
+//   const end = part.getEnd();
+//   if (isString(end) && isNode(start)) {
+//     return start;
+//   }
+//   return;
+// }
 
 type NodeAttribute = [Node, string];
 function followDOMPath(
@@ -422,33 +422,34 @@ function followDOMPath(
   }
 }
 
-function isDirective(part: IPart, expression: any) {
-  const end = part.getEnd();
-  if (isFunction(expression)) {
-    if (isString(end) && (end as string).startsWith("on")) {
-      return false;
-    } else {
-      return true;
-    }
-  } else {
-    return false;
-  }
-}
+// TODO: keep?
+// function isDirective(part: IPart, expression: any) {
+//   const end = part.getEnd();
+//   if (isFunction(expression)) {
+//     if (isString(end) && (end as string).startsWith("on")) {
+//       return false;
+//     } else {
+//       return true;
+//     }
+//   } else {
+//     return false;
+//   }
+// }
+
+// function isDocumentFragment(x: any): boolean {
+//   return isNode(x) && (x as Node).nodeType === DOCUMENT_FRAGMENT;
+// }
+
+// function isComment(x: any) {
+//   return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
+// }
+
+// function isPartComment(x: any | null | undefined): boolean {
+//   return isComment(x) && x.nodeValue === "{{}}";
+// }
 
 function isNode(x: any): boolean {
   return x as Node && (x as Node).nodeType > 0;
-}
-
-function isDocumentFragment(x: any): boolean {
-  return isNode(x) && (x as Node).nodeType === DOCUMENT_FRAGMENT;
-}
-
-function isComment(x: any) {
-  return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
-}
-
-function isPartComment(x: any | null | undefined): boolean {
-  return isComment(x) && x.nodeValue === "{{}}";
 }
 
 function isPromise(x: any): boolean {
@@ -709,21 +710,22 @@ export function html(
   return Template(staticMarkUp, template, parts, exprs);
 }
 
-function getChildTemplate(
-  target: HTMLElement | null | undefined
-): ITemplate | undefined {
-  if (!target) {
-    return;
-  }
-  if (
-    target.childNodes &&
-    target.childNodes.length > 0 &&
-    (target.childNodes[0] as any).__template
-  ) {
-    return (target.childNodes[0] as any).__template;
-  }
-  return;
-}
+// deprecated: no longer needed for simplified render()
+// function getChildTemplate(
+//   target: HTMLElement | null | undefined
+// ): ITemplate | undefined {
+//   if (!target) {
+//     return;
+//   }
+//   if (
+//     target.childNodes &&
+//     target.childNodes.length > 0 &&
+//     (target.childNodes[0] as any).__template
+//   ) {
+//     return (target.childNodes[0] as any).__template;
+//   }
+//   return;
+// }
 
 export function render(
   template: ITemplate,
