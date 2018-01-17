@@ -11,6 +11,7 @@
     "noImplicitAny": true,
     "noImplicitThis": true,
     "noImplicitReturns": true,
+    "noUnusedLocals": true,
     "alwaysStrict": true,
     "noFallthroughCasesInSwitch": true,
     "sourceMap": true,
