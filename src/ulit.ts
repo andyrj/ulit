@@ -66,7 +66,7 @@ function PullTarget(target: IPart | ITemplate): () => DocumentFragment {
   const start = target.getStart();
   const end = target.getEnd();
   const fragment = document.createDocumentFragment();
-  if (typeof end !== "string") {
+  if (!isString(end)) {
     let cursor: Optional<Node> = start as Node;
     while (cursor !== undefined) {
       const next: Node = cursor.nextSibling as Node;
@@ -282,25 +282,33 @@ export function Part(
   }
   const updateAttribute = (value: any) => {
     const element: Node = start as Node;
-    const name = typeof end === "string" ? end : "";
+    const name: string = isString(end) ? end as string : "";
     if (isFunction(value) || name in element) {
       (element as any)[name] = !value && value !== false ? "" : value
     } else if (value || value === false) {
-      setAttribute(element, name, value, isSVG);
+      if (isSVG) {
+        (element as HTMLElement).setAttributeNS(SVG_NS, name, value);
+      } else {
+        (element as HTMLElement).setAttribute(name, value);
+      }
     }
     if (!value || value !== false) {
-      removeAttribute(element, name, isSVG);
+      if (isSVG) {
+        (element as HTMLElement).removeAttributeNS(SVG_NS, name);
+      } else {
+        (element as HTMLElement).removeAttribute(name);
+      }
     }
   }
 
   const set = (value: PartValue) => {
-    if (typeof end === "string") {
+    if (isString(end)) {
       updateAttribute(value);
     } else {
       if (
-        typeof value !== "string" &&
+        !isString(value) &&
         !Array.isArray(value) &&
-        typeof (value as any)[Symbol.iterator] === "function"
+        isFunction((value as any)[Symbol.iterator])
       ) {
         value = Array.from(value as any);
       }
@@ -331,7 +339,7 @@ export function Part(
     path,
     addDisposer(handler: PartDispose) {
       if (
-        typeof handler === "function" &&
+        isFunction(handler) &&
         disposers.indexOf(handler) === -1
       ) {
         disposers.push(handler);
@@ -376,41 +384,11 @@ export function Part(
 function isAttributePart(part: IPart): Node | IDomTarget | undefined {
   const start = part.getStart();
   const end = part.getEnd();
-  if (typeof end === "string" && isNode(start)) {
+  if (isString(end) && isNode(start)) {
     return start;
   }
   return;
 }
-
-// TODO: move the following into Part closure...
-// START_MOVE
-function removeAttribute(element: Node, name: string, isSVG: boolean = false) {
-  if (!element) {
-    throw new RangeError();
-  }
-  if (isSVG) {
-    (element as HTMLElement).removeAttributeNS(SVG_NS, name);
-  } else {
-    (element as HTMLElement).removeAttribute(name);
-  }
-}
-
-function setAttribute(
-  element: Node,
-  name: string,
-  value: any,
-  isSVG: boolean = false
-) {
-  if (!element) {
-    throw new RangeError();
-  }
-  if (isSVG) {
-    (element as HTMLElement).setAttributeNS(SVG_NS, name, value);
-  } else {
-    (element as HTMLElement).setAttribute(name, value);
-  }
-}
-// END_MOVE
 
 type NodeAttribute = [Node, string];
 function followDOMPath(
@@ -473,7 +451,7 @@ function isPartComment(x: any | null | undefined): boolean {
 }
 
 function isPromise(x: any): boolean {
-  return x && typeof x.then === "function";
+  return x && isFunction(x.then);
 }
 
 function isTemplate(x: any): boolean {
