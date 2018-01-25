@@ -116,7 +116,7 @@ export function repeat(
         const newChild = document.createComment("");
         fragment.appendChild(newChild);
         map.set(keys[i], i);
-        const newPart = Part([i], newChild, newChild, part.isSVG);
+        const newPart = Part([i], newChild, newChild, isSVG);
         list.push(newPart);
         newPart.update(templates[i]);
       }
