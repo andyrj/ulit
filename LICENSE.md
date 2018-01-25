@@ -1,4 +1,4 @@
-Copyright © 2017-present [Andy Johnson] (https://github.com/andyrj)
+Copyright © 2017-2018 [Andy Johnson] (https://github.com/andyrj)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
