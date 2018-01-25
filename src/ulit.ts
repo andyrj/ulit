@@ -91,7 +91,7 @@ export function repeat(
   templateFn: typeof defaultTemplateFn = defaultTemplateFn
 ): Directive {
   return (part: IPart) => {
-    const target = part.getStart();
+    const target = part.firstNode();
     const parent: Optional<Node> = (target as Node).parentNode;
     const isSVG = part.isSVG;
 
