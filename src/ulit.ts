@@ -53,7 +53,6 @@ function isPart(x: any): boolean {
 type Optional<T> = T | undefined;
 
 export interface IPart extends IDomTarget {
-  readonly id: symbol;
   readonly path: Array<number | string>;
   readonly isSVG: boolean;
   addDisposer: (disposer: PartDispose) => void;
@@ -346,7 +345,6 @@ export function Part(
     getEnd: () => end,
     getStart: () => start,
     getValue: () => last as PartValue,
-    id: Symbol(),
     isSVG: isSVG || false,
     lastNode: () => followEdge(result, "end"),
     path,
@@ -422,13 +420,13 @@ function isAttributePart(part: IPart): boolean {
   return false;
 }
 
-function isEventPart(part: IPart): boolean {
-  const end = part.getEnd();
-  if (isAttributePart(part) && isString(end) && (end as string).startsWith("on")) {
-    return true;
-  }
-  return false;
-}
+// function isEventPart(part: IPart): boolean {
+//   const end = part.getEnd();
+//   if (isAttributePart(part) && isString(end) && (end as string).startsWith("on")) {
+//     return true;
+//   }
+//   return false;
+// }
 
 type NodeAttribute = [Node, string];
 function followDOMPath(
@@ -473,9 +471,9 @@ function isComment(x: any) {
   return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
 }
 
-function isPartComment(x: any | null | undefined): boolean {
-  return isComment(x) && x.nodeValue === "{{}}";
-}
+// function isPartComment(x: any | null | undefined): boolean {
+//   return isComment(x) && x.nodeValue === "{{}}";
+// }
 
 function isNode(x: any): boolean {
   return x as Node && (x as Node).nodeType > 0;

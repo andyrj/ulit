@@ -9,9 +9,7 @@
 
 TODO:
 1. Correct repeat()
-2. Finish re-write of render()
-3. get test coverage up to 100/100
-4. Add SSR (already prepared for this with part serialization in first comment nodeValue, and part paths...)
+2. get test coverage up to 100/100
 
 ## Why another tagged template literal library?
 "I cannot understand what I cannot build." - Feynman
