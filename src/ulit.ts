@@ -95,7 +95,7 @@ export function repeat(
     const parent: Optional<Node> = (target as Node).parentNode;
     const isSVG = part.isSVG;
 
-    const normalized = items.map(item => {
+    const templates = items.map(item => {
       if (isTemplate(item)) {
         return item;
       }
@@ -108,32 +108,29 @@ export function repeat(
     if (cacheEntry && cacheEntry.map && cacheEntry.list) {
       map = cacheEntry.map;
       list = cacheEntry.list;
-    }
-    let i = 0;
-    if (target && (target as Node).nodeType === COMMENT_NODE) {
+    } 
+    
+    if (isComment(target) && map.size === 0 && list.length === 0) {
       const fragment = document.createDocumentFragment();
-      const len = keys.length;
-      for (; i < len; i++) {
-        const key = keys[i];
-        const node = document.createComment("{{}}");
-        const newPart: IPart = Part([0, 0], node, node, isSVG);
-        if (i === 0) {
-          // TODO: need to reconsider logic here to instead use pull()...
-          // start = newPart;
-        } else if (i === len) {
-          // end = newPart;
-        }
+      for(let i = 0; i < keys.length; i++) {
+        const newChild = document.createComment("");
+        fragment.appendChild(newChild);
+        map.set(keys[i], i);
+        const newPart = Part([i], newChild, newChild, part.isSVG);
         list.push(newPart);
-        map.set(key, i);
-        fragment.appendChild(node);
-        // render(normalized[i] as ITemplate, newPart);
+        newPart.update(templates[i]);
       }
-      repeatCache.set(part, { map, list });
       if (parent) {
-        parent.replaceChild(fragment, target as Node);
+        parent.replaceChild(fragment, target);
+        repeatCache.set(part, { map, list });
+        return;
+      } else {
+        throw new Error();
       }
-      return;
+    } else {
+
     }
+    /*
     const normLen = normalized.length;
     const oldLen = list && list.length;
     const maxLen = Math.max(normLen, oldLen || 0);
@@ -183,6 +180,7 @@ export function repeat(
       // TODO: why did you have this?
       // parent && parent.removeChild(map[list[i]])
     }
+    */
   };
 }
 
@@ -467,9 +465,9 @@ function isDocumentFragment(x: any): boolean {
   return isNode(x) && (x as Node).nodeType === DOCUMENT_FRAGMENT;
 }
 
-// function isComment(x: any) {
-//   return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
-// }
+function isComment(x: any) {
+  return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
+}
 
 // function isPartComment(x: any | null | undefined): boolean {
 //   return isComment(x) && x.nodeValue === "{{}}";
