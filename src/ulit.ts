@@ -411,14 +411,14 @@ export function Part(
   return Object.seal(result);
 }
 
-function isAttributePart(part: IPart): boolean {
-  const start = part.getStart();
-  const end = part.getEnd();
-  if (isString(end) && isNode(start)) {
-    return true;
-  }
-  return false;
-}
+// function isAttributePart(part: IPart): boolean {
+//   const start = part.getStart();
+//   const end = part.getEnd();
+//   if (isString(end) && isNode(start)) {
+//     return true;
+//   }
+//   return false;
+// }
 
 // function isEventPart(part: IPart): boolean {
 //   const end = part.getEnd();
@@ -467,9 +467,9 @@ function isDocumentFragment(x: any): boolean {
   return isNode(x) && (x as Node).nodeType === DOCUMENT_FRAGMENT;
 }
 
-function isComment(x: any) {
-  return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
-}
+// function isComment(x: any) {
+//   return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
+// }
 
 // function isPartComment(x: any | null | undefined): boolean {
 //   return isComment(x) && x.nodeValue === "{{}}";
