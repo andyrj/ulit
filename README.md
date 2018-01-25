@@ -18,49 +18,19 @@ Started this from a desire to see how hard it would be to improve upon the imple
 
 ## What was the result?
 
-Rough parity with lit-extended on features and general api setup/naming.
+Rough parity with lit-extended on features and general api setup.
 
 Improvements:
 * Transparent svg support - (no need for special svg tag function)
-* Simple depth first search walkDOM(fn) avoids using slow TreeWalker api.
-* SSR support via serializable part paths.  This uses followPath(Array<Number|String>), which enables most of the setup work can be pre-rendered down to static html that can be delivered to the client and hydrated.
-* By using "{{}}" for attributes and <!--{{}}--> for part placeholders, means this library doesn't need to use regex and can be generally simpler.
-* Would be smaller than lit-html if we split out repeat and until into a seperate lib but I re-used the repeat() to implement array/iterable handling which makes more sense to keep it as a single small enough batteries included bundle that should work well with code splitting.
-
-## Benchmarks?
-Not yet, but generally speaking we chose to do the simplest thing imagined for any given functionality, while keeping the code DRY.  Got better ideas I'd love to see a PR!
+* Simple depth first search walkDOM(fn) avoids using slow TreeWalker api (even if that's only a perf hit in the initial un-cached render()) client side, and will allow for smaller client versions of this library with many methods stripped out which are only required server side in an SSR'd app.
+* SSR support via serializable part paths.  This uses followPath(Array<Number|String>), which handles most of the setup work can be pre-rendered down to static html that can be delivered to the client and hydrated.
+* By using "{{}}" for attributes and <!--{{}}--> for part placeholders, this library doesn't need to use regex, doesn't force quotes on attributes in templates and can be generally simpler.
+* Similar in bundle size to lit-html (probably smaller once the code is split into client/server implementations where server can be tree-shaken/dead code eliminated, from the client bundle).
 
 ## How can I use it?
 ### Install
 ```
 npm install --save ulit
-```
-
-### Use
-#### Pseudo Types
-```js
-/* pseudo.flow.js */
-type TemplateResult = {
-  key: String,
-  fragment: DocumentFragment|null|undefined,
-  start: HTMLElement|Part|null,
-  end: HTMLElement|Part|null,
-  values: ValidPart,
-  parts: Array<Part>,
-  dispose(): void,
-  update(values: Array<ValidPart>): void
-};
-type Part = { 
-  id: Symbol,
-  path: Array<String>,
-  start: HTMLElement|Part|null,
-  end: HTMLElement|Part|null,
-  update: part => void,
-  addDisposer(handler: Function): void,
-  removeDisposer(handler: Function): void
-};
-type Directive = part => void;
-type ValidPart = Number|String|HTMLElment|DocumentFragment|Promise|Directive|Array<ValidPart>|TemplateResult;
 ```
 
 #### Simple Example Code
