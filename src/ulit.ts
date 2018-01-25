@@ -50,7 +50,7 @@ function isPart(x: any): boolean {
   return x && x.type && x.type === "part";
 }
 
-type Optional<T> = T | undefined;
+type Optional<T> = T | undefined | null;
 
 export interface IPart extends IDomTarget {
   readonly path: Array<number | string>;
@@ -92,7 +92,7 @@ export function repeat(
 ): Directive {
   return (part: IPart) => {
     const target = part.getStart();
-    const parent: Optional<Node> = (target as Node).parentNode || undefined;
+    const parent: Optional<Node> = (target as Node).parentNode;
     const isSVG = part.isSVG;
 
     const normalized = items.map(item => {
