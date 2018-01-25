@@ -5,13 +5,13 @@ const COMMENT_NODE = 8;
 const DOCUMENT_FRAGMENT = 11;
 const templateCache = new Map<number, ITemplateCacheEntry>();
 const idCache = new Map<string, number>();
-const repeatCache = new Map<symbol, IRepeatCacheEntry>();
-const walkPath: Array<number | string> = [];
+const repeatCache = new Map<IPart, IRepeatCacheEntry>();
 
 type WalkFn = (
   parent: Node,
-  element: Node | null | undefined
-) => void;
+  element: Node | null | undefined,
+  path: Array<string | number>
+) => boolean;
 
 interface ITemplateCacheEntry {
   template: HTMLTemplateElement;
@@ -56,8 +56,8 @@ export interface IPart extends IDomTarget {
   readonly id: symbol;
   readonly path: Array<number | string>;
   readonly isSVG: boolean;
-  getValue: () => PartValue | null;
   addDisposer: (disposer: PartDispose) => void;
+  getValue: () => PartValue | null;
   removeDisposer: (disposer: PartDispose) => void;
   readonly type: string;
   update: (value: PartValue) => void;
@@ -94,7 +94,6 @@ export function repeat(
   return (part: IPart) => {
     const target = part.getStart();
     const parent: Optional<Node> = (target as Node).parentNode || undefined;
-    const id = part.id;
     const isSVG = part.isSVG;
 
     const normalized = items.map(item => {
@@ -104,7 +103,7 @@ export function repeat(
       return templateFn(item);
     }) as ITemplate[];
     const keys = items.map((_, index) => keyFn(index));
-    const cacheEntry = repeatCache.get(id);
+    const cacheEntry = repeatCache.get(part);
     let map = new Map<Key, number>();
     let list: IPart[] = [];
     if (cacheEntry && cacheEntry.map && cacheEntry.list) {
@@ -130,7 +129,7 @@ export function repeat(
         fragment.appendChild(node);
         // render(normalized[i] as ITemplate, newPart);
       }
-      repeatCache.set(id, { map, list });
+      repeatCache.set(part, { map, list });
       if (parent) {
         parent.replaceChild(fragment, target as Node);
       }
@@ -231,8 +230,8 @@ function followEdge(target: IDomTarget | Node, edge: "start" | "end"): Node {
 }
 
 type PartAttacher = (target: Node) => void;
-const partDisposers = new Map<symbol, PartDispose[]>();
-const partAttachers = new Map<symbol, PartAttacher>();
+const partDisposers = new Map<IPart, PartDispose[]>();
+const partAttachers = new Map<IPart, PartAttacher>();
 export function Part(
   path: Array<number | string>,
   initStart: Node,
@@ -255,7 +254,7 @@ export function Part(
     }
     const valueIsNumber = isNumber(value);
     if (valueIsNumber || isString(value)) {
-      const strVal = value.toString();
+      const strVal = valueIsNumber ? value as string : value.toString();
       if (element.nodeType !== TEXT_NODE) {
         const newEl = document.createTextNode(strVal);
         parent.insertBefore(newEl, element);
@@ -279,7 +278,19 @@ export function Part(
         throw new RangeError();
       }
     }
-  }
+  };
+  const updateTemplate = (part: IPart, template: ITemplate) => {
+    if (isTemplate(last) && template.key === (last as ITemplate).key) {
+      (last as ITemplate).update(template.getValues());
+    } else {
+      const newStart = template.firstNode();
+      const newEnd = template.lastNode();
+      template.insertBefore(part);
+      part.pull();
+      start = newStart;
+      end = newEnd;
+    }
+  };
   const updateAttribute = (value: any) => {
     const element: Node = start as Node;
     const name: string = isString(end) ? end as string : "";
@@ -302,6 +313,10 @@ export function Part(
   }
 
   const set = (value: PartValue) => {
+    if (isDirectivePart(value)) {
+      (value as Directive)(result);
+      return;
+    }
     if (isString(end)) {
       updateAttribute(value);
     } else {
@@ -317,17 +332,14 @@ export function Part(
           set(promised);
         });
       } else if (isTemplate(value)) {
-        // TODO: change this, instead here we should get part.getStart().__template.update(value.getValues()) or render template to a new
-        //   DocumentFragment that should be replacing whatever is currently in dom, (insertBefore + pull)...
-        //   part of major re-write...
-        // render(value as ITemplate, result);
+        updateTemplate(result, value as ITemplate);
       } else if (Array.isArray(value)) {
         updateArray(result, value);
       } else {
-        updateNode(result, value as Node | DocumentFragment);
+        updateNode(result, value as PrimitivePart);
       }
     }
-  }
+  };
   
   result = {
     firstNode: () => followEdge(result, "start"),
@@ -362,8 +374,8 @@ export function Part(
       last = value;
     }
   };
-  partDisposers.set(result.id, disposers);
-  partAttachers.set(result.id, (node: Node) => {
+  partDisposers.set(result, disposers);
+  partAttachers.set(result, (node: Node) => {
     if (!start || !end) {
       throw new RangeError();
     }
@@ -371,25 +383,52 @@ export function Part(
     if (!target) {
       throw new RangeError();
     }
+
     if (Array.isArray(target)) {
       start = target[0];
       end = target[1];
     } else {
-      start = end = target as Node;
+      start = target;
+      if (isDocumentFragment(last)) {
+        let newPath;
+        walkDOM(node as HTMLElement | DocumentFragment, undefined, (parent, element, walkPath) => {
+          if (element === (last as DocumentFragment).lastChild) {
+            newPath = walkPath;
+            return false;
+          }
+          return true;
+        });
+        if (newPath) {
+          end = followDOMPath(node, result.path.concat(newPath)) as Node;
+        } else {
+          throw new RangeError();
+        }
+      } else if (isTemplate(last)) {
+        end = (last as ITemplate).lastNode();
+      } else {
+        end = target;
+      }
     }
   });
   return Object.seal(result);
 }
 
-// TODO: remove this method?
-// function isAttributePart(part: IPart): Node | IDomTarget | undefined {
-//   const start = part.getStart();
-//   const end = part.getEnd();
-//   if (isString(end) && isNode(start)) {
-//     return start;
-//   }
-//   return;
-// }
+function isAttributePart(part: IPart): boolean {
+  const start = part.getStart();
+  const end = part.getEnd();
+  if (isString(end) && isNode(start)) {
+    return true;
+  }
+  return false;
+}
+
+function isEventPart(part: IPart): boolean {
+  const end = part.getEnd();
+  if (isAttributePart(part) && isString(end) && (end as string).startsWith("on")) {
+    return true;
+  }
+  return false;
+}
 
 type NodeAttribute = [Node, string];
 function followDOMPath(
@@ -422,31 +461,21 @@ function followDOMPath(
   }
 }
 
-// TODO: keep?
-// function isDirective(part: IPart, expression: any) {
-//   const end = part.getEnd();
-//   if (isFunction(expression)) {
-//     if (isString(end) && (end as string).startsWith("on")) {
-//       return false;
-//     } else {
-//       return true;
-//     }
-//   } else {
-//     return false;
-//   }
-// }
+function isDirectivePart(x: any) {
+  return isFunction(x) && x.length === 1;
+}
 
-// function isDocumentFragment(x: any): boolean {
-//   return isNode(x) && (x as Node).nodeType === DOCUMENT_FRAGMENT;
-// }
+function isDocumentFragment(x: any): boolean {
+  return isNode(x) && (x as Node).nodeType === DOCUMENT_FRAGMENT;
+}
 
-// function isComment(x: any) {
-//   return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
-// }
+function isComment(x: any) {
+  return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
+}
 
-// function isPartComment(x: any | null | undefined): boolean {
-//   return isComment(x) && x.nodeValue === "{{}}";
-// }
+function isPartComment(x: any | null | undefined): boolean {
+  return isComment(x) && x.nodeValue === "{{}}";
+}
 
 function isNode(x: any): boolean {
   return x as Node && (x as Node).nodeType > 0;
@@ -463,8 +492,8 @@ function isTemplate(x: any): boolean {
 export interface ITemplate extends IDomTarget {
   append: (node: Node) => void;
   getValues: () => PartValue[] | undefined;
-  hydrate: (target: Node) => boolean;
-  insertBefore: (target?: Node | IDomTarget) => void;
+  hydrate: (target: Node) => void | never;
+  insertBefore: (target: Node | IDomTarget) => void;
   readonly key: string;
   readonly type: string;
   update: (newValues?: PartValue[]) => void;
@@ -480,10 +509,25 @@ export function Template(
   let fragment: DocumentFragment;
   let last: PartValue[];
   let start: Node;
-  let end: Node | string;
+  let end: Node;
+  const attachPart = (part: IPart, target: Node) => {
+    const cursor = followDOMPath(target, part.path);
+    if (!cursor) {
+      throw new RangeError();
+    }
+    const attacher = partAttachers.get(part);
+    if (!attacher || !isFunction(attacher)) {
+      throw new RangeError();
+    }
+    attacher(isNode(cursor) ? cursor as Node : (cursor as [Node, string]) [0]);
+  };
   result = {
     append: (node: Node) => {
-      // TODO: finish writing this...
+      if (fragment) {
+        throw new Error();
+      }
+      result.update();
+      node.appendChild(fragment);
     },
     firstNode: () => followEdge(result, "start"),
     getEnd: () => end,
@@ -492,11 +536,34 @@ export function Template(
       return last;
     },
     hydrate: (target: Node) => {
-      return false;
-    },
-    insertBefore: (target?: Node | IDomTarget) => {
+      if (fragment) {
+        throw new Error();
+      }
       result.update();
-      // TODO: finish writing this...
+      try {
+        parts.forEach(part => attachPart(part, target));
+        const frag = fragment as DocumentFragment;
+        if (frag) {
+          while (frag.hasChildNodes) {
+            frag.removeChild(frag.lastChild as Node);
+          }
+        }
+      } catch(err) {
+        throw err;
+      }
+    },
+    insertBefore: (target: Node | IDomTarget) => {
+      if (fragment) {
+        throw new Error();
+      }
+      result.update();
+      const t = isNode(target) ? target as Node : (target as IDomTarget).firstNode() as Node;
+      const parent = t.parentNode;
+      if (parent) {
+        parent.insertBefore(t, fragment);
+      } else {
+        throw new Error();
+      }
     },
     key,
     lastNode: () => followEdge(result, "end"),
@@ -511,14 +578,7 @@ export function Template(
         fragment = t.content;
         start = fragment.firstChild as Node;
         end = fragment.lastChild as Node; 
-        parts.forEach(part => {
-          // TODO: can't we just provide a part.attach(DocumentFragment)?
-          const attacher = partAttachers.get(part.id);
-          if (!attacher || !isFunction(attacher)) {
-            throw new RangeError();
-          }
-          attacher(fragment as Node);
-        });
+        parts.forEach(part => attachPart(part, fragment));
       }
       last = !newValues ? values : newValues;
       if (last) {
@@ -529,7 +589,7 @@ export function Template(
     },
     dispose() {
       parts.forEach(part => {
-        const disposers = partDisposers.get(part.id);
+        const disposers = partDisposers.get(part);
         if (disposers) {
           disposers.forEach(disposer => {
             disposer(part);
@@ -612,21 +672,23 @@ function checkForSerialized(
 function walkDOM(
   parent: HTMLElement | DocumentFragment,
   element: Node | null | undefined,
-  fn: WalkFn
+  fn: WalkFn,
+  path: Array<number | string> = []
 ) {
+  let cont = true;
   if (element) {
-    fn(parent, element);
+    cont = fn(parent, element, path);
   } else {
     element = parent;
   }
-  if (element && element.childNodes.length > 0) {
+  if (cont && element && element.childNodes.length > 0) {
     if (!element) {
       throw new RangeError();
     }
     [].forEach.call(element.childNodes, (child: Node, index: number) => {
-      walkPath.push(index);
-      walkDOM(element as HTMLElement, child, fn);
-      walkPath.pop();
+      path.push(index);
+      walkDOM(element as HTMLElement, child, fn, path);
+      path.pop();
     });
   }
 }
@@ -645,9 +707,8 @@ function isSVGChild(node: Node | null | undefined): boolean {
   return result;
 }
 
-// TODO: update templateSetup() to be sure and maintain start and stop for template as well as parts...
 function templateSetup(parts: IPart[]): WalkFn {
-  return (parent, element) => {
+  return (parent, element, walkPath) => {
     if (!element) {
       throw new RangeError();
     }
@@ -688,6 +749,7 @@ function templateSetup(parts: IPart[]): WalkFn {
         }
       });
     }
+    return true;
   };
 }
 
@@ -709,23 +771,6 @@ export function html(
   }
   return Template(staticMarkUp, template, parts, exprs);
 }
-
-// deprecated: no longer needed for simplified render()
-// function getChildTemplate(
-//   target: HTMLElement | null | undefined
-// ): ITemplate | undefined {
-//   if (!target) {
-//     return;
-//   }
-//   if (
-//     target.childNodes &&
-//     target.childNodes.length > 0 &&
-//     (target.childNodes[0] as any).__template
-//   ) {
-//     return (target.childNodes[0] as any).__template;
-//   }
-//   return;
-// }
 
 export function render(
   template: ITemplate,
