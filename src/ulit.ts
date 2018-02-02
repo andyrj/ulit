@@ -1,11 +1,12 @@
 const SVG_NS = "https://www.w3.org/2000/svg";
+const PART_MARKER="{{}}";
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 const DOCUMENT_FRAGMENT = 11;
 const templateCache = new Map<number, ITemplateCacheEntry>();
 const idCache = new Map<string, number>();
-const repeatCache = new Map<IPart, IRepeatCacheEntry>();
+const repeatCache = new Map<IPart, [Key[], Map<Key, ITemplate>]>();
 
 type WalkFn = (
   parent: Node,
@@ -18,10 +19,6 @@ interface ITemplateCacheEntry {
   parts: IPart[];
 }
 export type Key = symbol | number | string;
-interface IRepeatCacheEntry {
-  map: Map<Key, number>;
-  list: IPart[];
-}
 export type Directive = (part: IPart) => void;
 export type PrimitivePart = 
   | string
@@ -94,6 +91,8 @@ export function repeat(
     const target = part.firstNode();
     const parent: Optional<Node> = (target as Node).parentNode;
     const isSVG = part.isSVG;
+    // might need for hydrate...
+    // const attacher = partAttachers.get(part);
 
     const templates = items.map(item => {
       if (isTemplate(item)) {
@@ -101,86 +100,40 @@ export function repeat(
       }
       return templateFn(item);
     }) as ITemplate[];
-    const keys = items.map((_, index) => keyFn(index));
-    const cacheEntry = repeatCache.get(part);
-    let map = new Map<Key, number>();
-    let list: IPart[] = [];
-    if (cacheEntry && cacheEntry.map && cacheEntry.list) {
-      map = cacheEntry.map;
-      list = cacheEntry.list;
-    } 
-    
-    if (isComment(target) && map.size === 0 && list.length === 0) {
-      const fragment = document.createDocumentFragment();
-      for(let i = 0; i < keys.length; i++) {
-        const newChild = document.createComment("");
-        fragment.appendChild(newChild);
-        map.set(keys[i], i);
-        const newPart = Part([i], newChild, newChild, isSVG);
-        list.push(newPart);
-        newPart.update(templates[i]);
-      }
-      if (parent) {
-        parent.replaceChild(fragment, target);
-        repeatCache.set(part, { map, list });
-        return;
-      } else {
-        throw new Error();
-      }
-    } else {
-
-    }
-    /*
-    const normLen = normalized.length;
-    const oldLen = list && list.length;
-    const maxLen = Math.max(normLen, oldLen || 0);
-    Object.keys(map).forEach(key => {
-      if (keys.indexOf(key) === -1) {
-        const oldIndex = map.get(key);
-        if (oldIndex) {
-          list[oldIndex].pull();
-          list.splice(oldIndex, 1);
-        }
-        map.delete(key);
+    const keys = items.map((item, index) => keyFn(item, index));
+    const [oldCacheOrder, oldCacheMap] = repeatCache.get(part) || [[], new Map<Key, ITemplate>()];
+    const newCache = [keys, new Map<Key, ITemplate>()];
+    const newCacheMap = newCache[1] as Map<Key, ITemplate>;
+    // build LUT for new keys/templates
+    keys.forEach((key, index) => {
+      newCacheMap.set(key, templates[index]);
+    });
+    // remove keys no longer in keys/list
+    const removeKeys: number[] = [];
+    oldCacheOrder.forEach((key, index) => {
+      const newEntry = newCacheMap.get(key);
+      const oldEntry = oldCacheMap.get(key);
+      if (oldEntry && !newEntry) {
+        oldEntry.pull();
+        oldCacheMap.delete(key);
+        removeKeys.push(index);
       }
     });
-    for (i = 0; i < maxLen; i++) {
-      const newTemplate = normalized[i];
-      const newKey = keys[i];
-      const oldIndex = map.get(newKey) || -1;
-      const oldPart = oldIndex ? list[oldIndex] : undefined;
-      if (oldPart && oldIndex === i) {
-        // update existing in place
-        oldPart.update(newTemplate);
-      } else if (oldIndex > -1 && !parent) {
-        // add new
-        const p = list[oldIndex];
-        const move = p.pull();
-        p.update(newTemplate);
-        const el = list[i].getStart();
-        if (el && parent) {
-          (parent as Node).insertBefore(move, el as Node);
-          list.splice(oldIndex, 1);
-          // TODO: clean up...
-          // list.splice(i, 0, move.part);
-        }
-      } else {
-        // move and update...
-        const fragment = document.createDocumentFragment();
-        const node = document.createComment("{{}}");
-        fragment.appendChild(node);
-        const newPart = Part([0, 0], node, node, false);
-        // render(newTemplate, newPart);
-        const elEdge = list[i].getStart();
-        if (elEdge && parent) {
-          parent.insertBefore(fragment, elEdge as Node);
-          list.splice(i, 0, newPart);
-        }
+    // can't mutate oldCacheOrder while in forEach
+    while (true) {
+      const index = removeKeys.pop();
+      if (index && index > -1) {
+        oldCacheOrder.splice(index, 1);
+        continue;
       }
-      // TODO: why did you have this?
-      // parent && parent.removeChild(map[list[i]])
+      break;
     }
-    */
+    // only templates found in newCacheMap remain in DOM, only need to add and move/update
+    // loop over new key list and old list (i,j)
+    // if keys match in position update
+    // else if keys don't match
+    //   if key in oldKeys -> move old Template to new position via Template.insertBefore
+    //   else -> add new Template
   };
 }
 
@@ -227,8 +180,8 @@ function followEdge(target: IDomTarget | Node, edge: "start" | "end"): Node {
 }
 
 type PartAttacher = (target: Node) => void;
-const partDisposers = new Map<IPart, PartDispose[]>();
-const partAttachers = new Map<IPart, PartAttacher>();
+const partDisposers = new WeakMap<IPart, PartDispose[]>();
+const partAttachers = new WeakMap<IPart, PartAttacher>();
 export function Part(
   path: Array<number | string>,
   initStart: Node,
@@ -420,7 +373,7 @@ export function Part(
 
 // function isEventPart(part: IPart): boolean {
 //   const end = part.getEnd();
-//   if (isAttributePart(part) && isString(end) && (end as string).startsWith("on")) {
+//   if (isAttributePart(part) && (end as string).startsWith("on")) {
 //     return true;
 //   }
 //   return false;
@@ -470,7 +423,7 @@ function isComment(x: any) {
 }
 
 // function isPartComment(x: any | null | undefined): boolean {
-//   return isComment(x) && x.nodeValue === "{{}}";
+//   return isComment(x) && x.nodeValue === PART_MARKER;
 // }
 
 function isNode(x: any): boolean {
@@ -489,6 +442,7 @@ export interface ITemplate extends IDomTarget {
   append: (node: Node) => void;
   getValues: () => PartValue[] | undefined;
   hydrate: (target: Node) => void | never;
+  insertAfter: (target: Node | IDomTarget) => void;
   insertBefore: (target: Node | IDomTarget) => void;
   readonly key: string;
   readonly type: string;
@@ -519,11 +473,9 @@ export function Template(
   };
   result = {
     append: (node: Node) => {
-      if (fragment) {
-        throw new Error();
+      if (fragment && fragment.hasChildNodes()) {
+        node.appendChild(fragment);
       }
-      result.update();
-      node.appendChild(fragment);
     },
     firstNode: () => followEdge(result, "start"),
     getEnd: () => end,
@@ -533,7 +485,7 @@ export function Template(
     },
     hydrate: (target: Node) => {
       if (fragment) {
-        throw new Error();
+        throw new Error(); // only hydrate newly created Templates...
       }
       result.update();
       try {
@@ -548,11 +500,26 @@ export function Template(
         throw err;
       }
     },
-    insertBefore: (target: Node | IDomTarget) => {
-      if (fragment) {
+    insertAfter: (target: Node | IDomTarget) => {
+      if (!fragment || !fragment.hasChildNodes()) {
+        return;
+      }
+      const t = isNode(target) ? target as Node : (target as IDomTarget).lastNode() as Node;
+      const next = t.nextSibling;
+      const parent = t.parentNode;
+      if (!parent) {
         throw new Error();
       }
-      result.update();
+      if (!next) {
+        result.append(parent);
+      } else if (next){
+        result.insertBefore(next);
+      }
+    },
+    insertBefore: (target: Node | IDomTarget) => {
+      if (!fragment || !fragment.hasChildNodes()) {
+        return;
+      }
       const t = isNode(target) ? target as Node : (target as IDomTarget).firstNode() as Node;
       const parent = t.parentNode;
       if (parent) {
@@ -712,7 +679,7 @@ function templateSetup(parts: IPart[]): WalkFn {
     if (nodeType === TEXT_NODE) {
       const isSVG = isSVGChild(element);
       const text = element && element.nodeValue;
-      const split = text && text.split("{{}}");
+      const split = text && text.split(PART_MARKER);
       const end = split ? split.length - 1 : undefined;
       const nodes: Node[] = [];
       let cursor = 0;
@@ -723,7 +690,7 @@ function templateSetup(parts: IPart[]): WalkFn {
             cursor++;
           }
           if (i < end) {
-            const newPartComment = document.createComment("{{}}");
+            const newPartComment = document.createComment(PART_MARKER);
             nodes.push(newPartComment);
             const adjustedPath = walkPath.slice(0);
             const len = adjustedPath.length - 1;
@@ -740,7 +707,7 @@ function templateSetup(parts: IPart[]): WalkFn {
     } else if (nodeType === ELEMENT_NODE) {
       const isSVG = isSVGChild(element);
       [].forEach.call(element.attributes, (attr: Attr) => {
-        if (attr.nodeValue === "{{}}") {
+        if (attr.nodeValue === PART_MARKER) {
           parts.push(Part(walkPath.concat(attr.nodeName), element, attr, isSVG));
         }
       });
@@ -761,7 +728,7 @@ export function html(
   const parts = (des && des.parts) || [];
   if (!template) {
     template = document.createElement("template");
-    template.innerHTML = strs.join("{{}}");
+    template.innerHTML = strs.join(PART_MARKER);
     walkDOM(template.content, undefined, templateSetup(parts));
     templateCache.set(id, { template, parts });
   }
