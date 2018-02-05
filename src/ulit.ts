@@ -788,6 +788,8 @@ export function html(
   return Template(staticMarkUp, template, parts, exprs);
 }
 
+const renderedTemplates = new Map<Node, ITemplate>();
+
 export function render(
   template: ITemplate,
   target?: Node
@@ -795,14 +797,14 @@ export function render(
   if (!target) {
     target = document.body;
   }
-  const instance: ITemplate = (target as any).__template;
+  const instance = renderedTemplates.get(target);
   if (instance) {
     if (instance.key === template.key) {
       instance.update(template.getValues());
     } else {
-      template.insertBefore(instance.firstNode());
+      template.insertBefore(instance);
       instance.pull();
-      (target as any).__template = template;
+      renderedTemplates.set(target, template);
     }
   } else {
     if (target.hasChildNodes()) {
@@ -821,5 +823,6 @@ export function render(
       template.update();
       template.append(target);
     }
+    renderedTemplates.set(target, template);
   }
 }
