@@ -22,6 +22,7 @@ test("static templates", t => {
   t.is(document.body.firstChild.firstChild.nodeValue, "test");
 });
 
+/*
 test("dynamic template with string child", t => {
   const str = "test";
   const template = html`<div id="test">${str}</div>`;
@@ -49,11 +50,9 @@ test("dynamic nodes dispersed in static nodes", t => {
   t.is(document.body.innerHTML, "a");
   // t.is((document.body.firstChild as HTMLElement).innerHTML, "dynamic is at start");
 
-  /*
   const template2 = html`<div>in the middle it's ${str}!</div>`;
   render(template2);
   t.is((document.body.firstChild as HTMLElement).innerHTML, "in the middle it's dynamic!");
-  */
 });
 
 /*
