@@ -36,31 +36,22 @@ export interface IPartArray extends Array<PartValue> {};
 export type PartDispose = (part: IPart) => void;
 
 export interface IDomTarget {
-  getStart: () => Node | IDomTarget;
+  end: Node | IDomTarget | string;
   firstNode: () => Node;
-  getEnd: () => Node | IDomTarget | string;
   lastNode: () => Node;
   pull: () => DocumentFragment;
+  start: Node | IDomTarget;
 }
 
 function isPart(x: any): boolean {
   return x && x.type && x.type === "part";
 }
 
-type Optional<T> = T | undefined | null;
+export type Optional<T> = T | undefined | null;
 
-export interface IPart extends IDomTarget {
-  readonly path: Array<number | string>;
-  readonly isSVG: boolean;
-  addDisposer: (disposer: PartDispose) => void;
-  getValue: () => PartValue | null;
-  removeDisposer: (disposer: PartDispose) => void;
-  readonly type: string;
-  update: (value: PartValue) => void;
-};
 function PullTarget(target: IPart | ITemplate): () => DocumentFragment {
-  const start = target.getStart();
-  const end = target.getEnd();
+  const start = target.start;
+  const end = target.end;
   const fragment = document.createDocumentFragment();
   if (!isString(end)) {
     let cursor: Optional<Node> = start as Node;
@@ -136,7 +127,7 @@ export function repeat(
         if (key === oldCacheOrder[index]) {
           // update in place
           if (oldEntry.key === nextTemplate.key) {
-            oldEntry.update(nextTemplate.getValues());
+            oldEntry.update(nextTemplate.values);
           } else {
             //  maybe at some point think about diffing between templates?
             nextTemplate.update();
@@ -159,7 +150,7 @@ export function repeat(
           //  and pull IDomTarget as needed...
           // const frag = oldEntry.pull();
           if (oldEntry.key === nextTemplate.key) {
-            oldEntry.update(nextTemplate.getValues());
+            oldEntry.update(nextTemplate.values);
             oldEntry.insertBefore(target);
           } else {
             nextTemplate.update();
@@ -215,23 +206,82 @@ function followEdge(target: IDomTarget | Node, edge: "start" | "end"): Node {
   } else {
     const cond = edge === "start";
     const next = cond
-      ? (target as IDomTarget).getStart()
-      : (target as IDomTarget).getEnd();
+      ? (target as IDomTarget).start
+      : (target as IDomTarget).end;
     if (isPart(next) || isTemplate(next)) {
       return followEdge(next as IDomTarget, edge);
     } else if (isNode(next)) {
       return next as Node;
     } else if (isString(next)) {
-      return (target as IDomTarget).getStart() as Node;
+      return (target as IDomTarget).start as Node;
     } else {
       throw new RangeError();
     }
   }
 }
 
-type PartAttacher = (target: Node) => void;
-const partDisposers = new WeakMap<IPart, PartDispose[]>();
-const partAttachers = new WeakMap<IPart, PartAttacher>();
+function createAPIProxy(hide: string[], ro: string[], obj: any) {
+  const APIHandler = {
+    get(target: any, name: string) {
+      if (name in target && hide.indexOf(name) === -1) {
+        return target[name];
+      } else {
+        return undefined;
+      }
+    },
+    set(target: any, name: string, value: any) {
+      if (hide.indexOf(name) > -1) {
+        return false;
+      }
+      if (ro.indexOf(name) > -1) {
+        throw new RangeError(`${name} is readonly`);
+      }
+      if (name in target) {
+        target[name] = value;
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+  return new Proxy(obj, APIHandler);
+}
+
+export interface Part extends IDomTarget {
+  addDisposer: (disposer: PartDispose) => void;
+  attach: (node: Node) => void;
+  disposers: PartDispose[];
+  isSVG: boolean;
+  path: Array<number | string>;
+  removeDisposer: (disposer: PartDispose) => void;
+  type: string;
+  update: (value: PartValue) => void;
+  value: Optional<PartValue>;
+};
+
+export interface IPart extends Part {
+  readonly end: Node | IDomTarget | string;
+  readonly path: Array<number | string>;
+  readonly isSVG: boolean;
+  readonly start: Node | IDomTarget;
+  readonly type: string;
+  readonly value: Optional<PartValue>;
+};
+
+const PartRO: string[] = [
+  "end",
+  "isSVG",
+  "path",
+  "start",
+  "type",
+  "value"
+];
+const PartHide: string[] = [
+  "attach",
+  "disposers"
+]; 
+
+const partCache = new WeakMap<IPart, Part>();
 export function Part(
   path: Array<number | string>,
   initStart: Node,
@@ -239,7 +289,7 @@ export function Part(
   isSVG: boolean = false
 ): IPart {
   const disposers: PartDispose[] = [];
-  let result: IPart;
+  let result: Part;
   let start: Node | IDomTarget = initStart;
   let end: Node | IDomTarget | string = initEnd; 
   let last: Optional<PartValue>; 
@@ -247,7 +297,7 @@ export function Part(
     repeat(value)(part);
   }
   const updateNode = (part: IPart, value: PrimitivePart) => {
-    const element = part.getStart() as Node;
+    const element = part.start as Node;
     const parent = element.parentNode;
     if (!parent) {
       throw new RangeError();
@@ -281,7 +331,7 @@ export function Part(
   };
   const updateTemplate = (part: IPart, template: ITemplate) => {
     if (isTemplate(last) && template.key === (last as ITemplate).key) {
-      (last as ITemplate).update(template.getValues());
+      (last as ITemplate).update(template.values);
     } else {
       const newStart = template.firstNode();
       const newEnd = template.lastNode();
@@ -342,13 +392,6 @@ export function Part(
   };
   
   result = {
-    firstNode: () => followEdge(result, "start"),
-    getEnd: () => end,
-    getStart: () => start,
-    getValue: () => last as PartValue,
-    isSVG: isSVG || false,
-    lastNode: () => followEdge(result, "end"),
-    path,
     addDisposer(handler: PartDispose) {
       if (
         isFunction(handler) &&
@@ -357,6 +400,12 @@ export function Part(
         disposers.push(handler);
       }
     },
+    disposers,
+    end,
+    firstNode: () => followEdge(result, "start"),
+    isSVG: isSVG || false,
+    lastNode: () => followEdge(result, "end"),
+    path,
     pull: () => PullTarget(result)(),
     removeDisposer(handler: PartDispose) {
       const index = disposers.indexOf(handler);
@@ -364,6 +413,7 @@ export function Part(
         disposers.splice(index, 1);
       }
     },
+    start,
     type: "part",
     update(value?: PartValue) {
       if (value === undefined) {
@@ -371,45 +421,48 @@ export function Part(
       }
       set(value);
       last = value;
-    }
-  };
-  partDisposers.set(result, disposers);
-  partAttachers.set(result, (node: Node) => {
-    if (!start || !end) {
-      throw new RangeError();
-    }
-    const target = followDOMPath(node, result.path);
-    if (!target) {
-      throw new RangeError();
-    }
-
-    if (Array.isArray(target)) {
-      start = target[0];
-      end = target[1];
-    } else {
-      start = target;
-      if (isDocumentFragment(last)) {
-        let newPath;
-        walkDOM(node as HTMLElement | DocumentFragment, undefined, (parent, element, walkPath) => {
-          if (element === (last as DocumentFragment).lastChild) {
-            newPath = walkPath;
-            return false;
-          }
-          return true;
-        });
-        if (newPath) {
-          end = followDOMPath(node, result.path.concat(newPath)) as Node;
-        } else {
-          throw new RangeError();
-        }
-      } else if (isTemplate(last)) {
-        end = (last as ITemplate).lastNode();
+    },
+    value: last,
+    attach(node: Node) {
+      if (!start || !end) {
+        throw new RangeError();
+      }
+      const target = followDOMPath(node, result.path);
+      if (!target) {
+        throw new RangeError();
+      }
+  
+      if (Array.isArray(target)) {
+        start = target[0];
+        end = target[1];
       } else {
-        end = target;
+        start = target;
+        if (isDocumentFragment(last)) {
+          let newPath;
+          walkDOM(node as HTMLElement | DocumentFragment, undefined, (parent, element, walkPath) => {
+            if (element === (last as DocumentFragment).lastChild) {
+              newPath = walkPath;
+              return false;
+            }
+            return true;
+          });
+          if (newPath) {
+            end = followDOMPath(node, result.path.concat(newPath)) as Node;
+          } else {
+            throw new RangeError();
+          }
+        } else if (isTemplate(last)) {
+          end = (last as ITemplate).lastNode();
+        } else {
+          end = target;
+        }
       }
     }
-  });
-  return Object.seal(result);
+  };
+  Object.seal(result);
+  const proxy = createAPIProxy(PartHide, PartRO, result);
+  partCache.set(proxy, result);
+  return proxy;
 }
 
 // function isAttributePart(part: IPart): boolean {
@@ -487,52 +540,73 @@ function isTemplate(x: any): boolean {
   return x && x.type && x.type === "template";
 }
 
-export interface ITemplate extends IDomTarget {
-  append: (node: Node) => void;
-  getValues: () => PartValue[] | undefined;
+let defaultNode: Node;
+function getDefaultNode() {
+  if (!defaultNode) {
+    defaultNode = document.createComment("{{}}");
+  } 
+  return defaultNode;
+};
+
+export interface Template extends IDomTarget {
+  appendTo: (node: Node) => void;
+  dispose: () => void;
   hydrate: (target: Node) => void | never;
   insertAfter: (target: Node | IDomTarget) => void;
   insertBefore: (target: Node | IDomTarget) => void;
-  readonly key: string;
+  key: string;
+  parts: IPart[];
   replace: (target: Node | IDomTarget) => void;
-  readonly type: string;
+  type: string;
   update: (newValues?: PartValue[]) => void;
-  dispose: () => void;
+  values: PartValue[];
 };
+export interface ITemplate extends Template {
+  readonly end: Node | IDomTarget | string;
+  readonly key: string;
+  readonly start: Node | IDomTarget;
+  readonly type: string;
+};
+const ROTemplateKeys = [
+  "end",
+  "key",
+  "parts",
+  "start",
+  "type",
+  "values"
+];
+const PrivTemplateKeys = [];
+
 export function Template(
   key: string,
   template: HTMLTemplateElement,
   parts: IPart[],
   values: PartValue[]
 ): ITemplate {
-  let result: ITemplate;
+  let result: Template;
   let fragment: DocumentFragment;
-  let last: PartValue[];
-  let start: Node;
-  let end: Node;
+  let last: PartValue[] = [];
+  let start: Node = getDefaultNode();
+  let end: Node = getDefaultNode();
   const attachPart = (part: IPart, target: Node) => {
-    const cursor = followDOMPath(target, part.path);
+    const p = partCache.get(part);
+    if (!p) {
+      throw new RangeError();
+    }
+    const cursor = followDOMPath(target, p.path);
     if (!cursor) {
       throw new RangeError();
     }
-    const attacher = partAttachers.get(part);
-    if (!attacher || !isFunction(attacher)) {
-      throw new RangeError();
-    }
-    attacher(isNode(cursor) ? cursor as Node : (cursor as [Node, string]) [0]);
+    p.attach(isNode(cursor) ? cursor as Node : (cursor as [Node, string]) [0]);
   };
   result = {
-    append: (node: Node) => {
-      if (fragment && fragment.hasChildNodes()) {
+    appendTo: (node: Node) => {
+      if (fragment && !fragment.hasChildNodes()) {
         node.appendChild(fragment);
       }
     },
+    end,
     firstNode: () => followEdge(result, "start"),
-    getEnd: () => end,
-    getStart: () => start,
-    getValues() {
-      return last;
-    },
     hydrate: (target: Node) => {
       if (fragment) {
         throw new Error(); // only hydrate newly created Templates...
@@ -561,7 +635,7 @@ export function Template(
         throw new Error();
       }
       if (!next) {
-        result.append(parent);
+        result.appendTo(parent);
       } else if (next){
         result.insertBefore(next);
       }
@@ -580,11 +654,14 @@ export function Template(
     },
     key,
     lastNode: () => followEdge(result, "end"),
+    parts,
     pull: () => PullTarget(result)(),
     replace: (target: Node | IDomTarget) => {
       // TODO: implement replace...
     },
+    start,
     type: "template",
+    values: last,
     update(newValues: PartValue[] | null | undefined) {
       // if (!newValues || newValues.length !== parts.length) {
       //   throw new RangeError();
@@ -605,7 +682,11 @@ export function Template(
     },
     dispose() {
       parts.forEach(part => {
-        const disposers = partDisposers.get(part);
+        const p = partCache.get(part);
+        if (!p) {
+          throw new RangeError();
+        }
+        const disposers = p.disposers;
         if (disposers) {
           disposers.forEach(disposer => {
             disposer(part);
@@ -800,7 +881,7 @@ export function render(
   const instance = renderedTemplates.get(target);
   if (instance) {
     if (instance.key === template.key) {
-      instance.update(template.getValues());
+      instance.update(template.values);
     } else {
       template.insertBefore(instance);
       instance.pull();
@@ -817,11 +898,11 @@ export function render(
           target.removeChild(cursor);
           cursor = cursor !== first ? next : undefined;
         }
-        template.append(target);
+        template.appendTo(target);
       }
     } else {
       template.update();
-      template.append(target);
+      template.appendTo(target);
     }
     renderedTemplates.set(target, template);
   }
