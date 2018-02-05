@@ -88,7 +88,7 @@ export function repeat(
   templateFn: typeof defaultTemplateFn = defaultTemplateFn
 ): Directive {
   return (part: IPart) => {
-    const target = part.firstNode();
+    let target = part.firstNode();
     const parent: Optional<Node> = (target as Node).parentNode;
     const isSVG = part.isSVG;
     // might need for hydrate...
@@ -128,12 +128,62 @@ export function repeat(
       }
       break;
     }
-    // only templates found in newCacheMap remain in DOM, only need to add and move/update
-    // loop over new key list and old list (i,j)
-    // if keys match in position update
-    // else if keys don't match
-    //   if key in oldKeys -> move old Template to new position via Template.insertBefore
-    //   else -> add new Template
+    // move/update and add
+    keys.forEach((key, index) => {
+      let oldEntry = oldCacheMap.get(key);
+      const nextTemplate = templates[index];
+      if (oldEntry) {
+        if (key === oldCacheOrder[index]) {
+          // update in place
+          if (oldEntry.key === nextTemplate.key) {
+            oldEntry.update(nextTemplate.getValues());
+          } else {
+            //  maybe at some point think about diffing between templates?
+            nextTemplate.update();
+            nextTemplate.insertBefore(oldEntry);
+            oldEntry.pull();
+            oldCacheMap.set(key, nextTemplate);
+          }
+        } else {
+          const targetEntry = oldCacheMap.get(oldCacheOrder[index]);
+          if (!targetEntry) {
+            throw new RangeError();
+          }
+          target = targetEntry.firstNode();
+          // mutate oldCacheOrder to match move
+          const oldIndex = oldCacheOrder.indexOf(key);
+          oldCacheOrder.splice(oldIndex, 1);
+          oldCacheOrder.splice(index, 0, key);
+          // pull oldEntry from dom and update before moving to correct location
+          // TODO: change insertBefore/insertAfter/append/replace, to check if IDomTarget is attached
+          //  and pull IDomTarget as needed...
+          // const frag = oldEntry.pull();
+          if (oldEntry.key === nextTemplate.key) {
+            oldEntry.update(nextTemplate.getValues());
+            oldEntry.insertBefore(target);
+          } else {
+            nextTemplate.update();
+            nextTemplate.insertBefore(target);
+          }
+        }
+        return;
+      }
+      // add template to 
+      const cursor = oldCacheOrder[index];
+      oldEntry = oldCacheMap.get(cursor);
+      const firstNode = part.firstNode();
+      if (index === 0 && isPartComment(firstNode) && !cursor && !oldEntry) {
+        nextTemplate.replace(firstNode);
+        oldCacheOrder.push(key);
+      } else {
+        if (!oldEntry) {
+          throw new RangeError();
+        }
+        nextTemplate.insertBefore(oldEntry);
+        oldCacheOrder.splice(index, 0, key);
+      }
+      oldCacheMap.set(key, nextTemplate);
+    });
   };
 }
 
@@ -396,17 +446,16 @@ function followDOMPath(
   const num = isString(current) ? parseInt(current, 10) : current;
   if (isString(current)) {
     return [node, current as string];
-  } else if (num && !isNaN(num as number)) {
-    const el =
+  } else {
+    if (
       node &&
       node.childNodes &&
-      node.childNodes.length < num &&
+      node.childNodes.length > num &&
       (node.childNodes as any)[num]
-        ? node.childNodes[num as number]
-        : undefined;
-    return followDOMPath(el, cPath);
-  } else {
-    throw new RangeError();
+    ) {
+      const el = node.childNodes[num as number];
+      return followDOMPath(el, cPath);
+    }
   }
 }
 
@@ -422,9 +471,9 @@ function isComment(x: any) {
   return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
 }
 
-// function isPartComment(x: any | null | undefined): boolean {
-//   return isComment(x) && x.nodeValue === PART_MARKER;
-// }
+function isPartComment(x: any | null | undefined): boolean {
+  return isComment(x) && x.nodeValue === PART_MARKER;
+}
 
 function isNode(x: any): boolean {
   return x as Node && (x as Node).nodeType > 0;
@@ -445,6 +494,7 @@ export interface ITemplate extends IDomTarget {
   insertAfter: (target: Node | IDomTarget) => void;
   insertBefore: (target: Node | IDomTarget) => void;
   readonly key: string;
+  replace: (target: Node | IDomTarget) => void;
   readonly type: string;
   update: (newValues?: PartValue[]) => void;
   dispose: () => void;
@@ -531,11 +581,14 @@ export function Template(
     key,
     lastNode: () => followEdge(result, "end"),
     pull: () => PullTarget(result)(),
+    replace: (target: Node | IDomTarget) => {
+      // TODO: implement replace...
+    },
     type: "template",
     update(newValues: PartValue[] | null | undefined) {
-      if (!newValues || newValues.length !== parts.length) {
-        throw new RangeError();
-      } 
+      // if (!newValues || newValues.length !== parts.length) {
+      //   throw new RangeError();
+      // } 
       if (!fragment) {
         const t: HTMLTemplateElement = document.importNode(template, true);
         fragment = t.content;
@@ -752,7 +805,7 @@ export function render(
       (target as any).__template = template;
     }
   } else {
-    if (target.hasChildNodes) {
+    if (target.hasChildNodes()) {
       const hydrated = template.hydrate(target);
       const first = target.firstChild;
       if (!hydrated) {
@@ -765,6 +818,7 @@ export function render(
         template.append(target);
       }
     } else {
+      template.update();
       template.append(target);
     }
   }
