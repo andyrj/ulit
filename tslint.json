@@ -10,7 +10,8 @@
         "max-classes-per-file": false,
         "no-empty": false,
         "no-bitwise": false,
-        "no-null-keyword": true
+        "no-null-keyword": true,
+        "interface-name": false
     },
     "rulesDirectory": [],
     "linterOptions": {
