@@ -281,7 +281,7 @@ const PartHide: string[] = [
   "disposers"
 ]; 
 
-const partCache = new WeakMap<IPart, Part>();
+const iPartCache = new Map<IPart, Part>();
 export function Part(
   path: Array<number | string>,
   initStart: Node,
@@ -461,7 +461,7 @@ export function Part(
   };
   Object.seal(result);
   const proxy = createAPIProxy(PartHide, PartRO, result);
-  partCache.set(proxy, result);
+  iPartCache.set(proxy, result);
   return proxy;
 }
 
@@ -567,7 +567,7 @@ export interface ITemplate extends Template {
   readonly start: Node | IDomTarget;
   readonly type: string;
 };
-const ROTemplateKeys = [
+const TemplateRO: string[] = [
   "end",
   "key",
   "parts",
@@ -575,8 +575,8 @@ const ROTemplateKeys = [
   "type",
   "values"
 ];
-const PrivTemplateKeys = [];
-
+const TemplateHide: string[] = [];
+const iTemplateCache = new Map<ITemplate, Template>();
 export function Template(
   key: string,
   template: HTMLTemplateElement,
@@ -589,7 +589,7 @@ export function Template(
   let start: Node = getDefaultNode();
   let end: Node = getDefaultNode();
   const attachPart = (part: IPart, target: Node) => {
-    const p = partCache.get(part);
+    const p = iPartCache.get(part);
     if (!p) {
       throw new RangeError();
     }
@@ -682,7 +682,7 @@ export function Template(
     },
     dispose() {
       parts.forEach(part => {
-        const p = partCache.get(part);
+        const p = iPartCache.get(part);
         if (!p) {
           throw new RangeError();
         }
@@ -695,7 +695,10 @@ export function Template(
       });
     }
   };
-  return Object.seal(result);
+  Object.seal(result);
+  const proxy = createAPIProxy(TemplateHide, TemplateRO, result);
+  iTemplateCache.set(proxy, result);
+  return proxy as ITemplate;
 }
 
 function generateId(str: string): number {
