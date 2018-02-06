@@ -49,19 +49,17 @@ function isPart(x: any): boolean {
 
 export type Optional<T> = T | undefined | null;
 
-function PullTarget(target: IDomTarget): () => DocumentFragment {
-  const start = target.start;
-  const end = target.end;
+function PullTarget(target: IDomTarget): DocumentFragment {
+  const start = target.firstNode();
+  const end = target.lastNode();
   const fragment = document.createDocumentFragment();
-  if (!isString(end)) {
-    let cursor: Optional<Node> = start as Node;
-    while (cursor !== undefined) {
-      const next: Node = cursor.nextSibling as Node;
-      fragment.appendChild(cursor);
-      cursor = (cursor === end || !next) ? undefined : next;
-    }
+  let cursor: Optional<Node> = start;
+  while (cursor !== undefined) {
+    const next: Node = cursor.nextSibling as Node;
+    fragment.appendChild(cursor);
+    cursor = (cursor === end || !next) ? undefined : next;
   }
-  return () => fragment;
+  return fragment;
 }
 
 export function defaultKeyFn(item: any, index?: number): Key;
@@ -413,7 +411,7 @@ function Part(
     isSVG: isSVG || false,
     lastNode: () => followEdge(result, "end"),
     path,
-    remove: () => PullTarget(proxy)(),
+    remove: () => PullTarget(result),
     removeDisposer(handler: PartDispose) {
       const index = disposers.indexOf(handler);
       if (index > -1) {
@@ -664,7 +662,7 @@ function Template(
     key,
     lastNode: () => followEdge(result, "end"),
     parts,
-    remove: () => PullTarget(result)(),
+    remove: () => PullTarget(result),
     render: (target: Node) => {
       // TODO: implement render...
     },
