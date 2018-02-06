@@ -666,7 +666,25 @@ function Template(
     parts,
     remove: () => PullTarget(result),
     render: (target: Node) => {
-      // TODO: implement
+      // TODO: implement and create state in Template closure to track if Template is attached or detached.
+      /* // code commented out from exported render()...
+      if (target.hasChildNodes()) {
+        const hydrated = template.hydrate(target);
+        const first = target.firstChild;
+        if (!hydrated) {
+          let cursor: Optional<Node | null> = target.lastChild;
+          while (cursor) {
+            const next: Optional<Node | null> = cursor.previousSibling;
+            target.removeChild(cursor);
+            cursor = cursor !== first ? next : undefined;
+          }
+          template.appendTo(target);
+        }
+      } else {
+        template.update();
+        template.appendTo(target);
+      }
+      */
     },
     start,
     type: "template",
@@ -904,24 +922,6 @@ export function render(
       throw new RangeError();
     }
     t.render(target);
-    /*
-    if (target.hasChildNodes()) {
-      const hydrated = template.hydrate(target);
-      const first = target.firstChild;
-      if (!hydrated) {
-        let cursor: Optional<Node | null> = target.lastChild;
-        while (cursor) {
-          const next: Optional<Node | null> = cursor.previousSibling;
-          target.removeChild(cursor);
-          cursor = cursor !== first ? next : undefined;
-        }
-        template.appendTo(target);
-      }
-    } else {
-      template.update();
-      template.appendTo(target);
-    }
-    */
     renderedTemplates.set(target, template);
   }
 }
