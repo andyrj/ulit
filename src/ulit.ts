@@ -39,7 +39,7 @@ export interface IDomTarget {
   end: Node | IDomTarget | string;
   firstNode: () => Node;
   lastNode: () => Node;
-  pull: () => DocumentFragment;
+  remove: () => DocumentFragment;
   start: Node | IDomTarget;
 }
 
@@ -49,7 +49,7 @@ function isPart(x: any): boolean {
 
 export type Optional<T> = T | undefined | null;
 
-function PullTarget(target: IPart | ITemplate): () => DocumentFragment {
+function PullTarget(target: IDomTarget): () => DocumentFragment {
   const start = target.start;
   const end = target.end;
   const fragment = document.createDocumentFragment();
@@ -105,7 +105,7 @@ export function repeat(
       const newEntry = newCacheMap.get(key);
       const oldEntry = oldCacheMap.get(key);
       if (oldEntry && !newEntry) {
-        oldEntry.pull();
+        oldEntry.remove();
         oldCacheMap.delete(key);
         removeKeys.push(index);
       }
@@ -132,7 +132,7 @@ export function repeat(
             //  maybe at some point think about diffing between templates?
             nextTemplate.update();
             nextTemplate.insertBefore(oldEntry);
-            oldEntry.pull();
+            oldEntry.remove();
             oldCacheMap.set(key, nextTemplate);
           }
         } else {
@@ -146,7 +146,7 @@ export function repeat(
           oldCacheOrder.splice(oldIndex, 1);
           oldCacheOrder.splice(index, 0, key);
           // pull oldEntry from dom and update before moving to correct location
-          // TODO: change insertBefore/insertAfter/append/replace, to check if IDomTarget is attached
+          // TODO: change insertBefore/insertAfter/render/update, to check if IDomTarget is attached
           //  and pull IDomTarget as needed...
           // const frag = oldEntry.pull();
           if (oldEntry.key === nextTemplate.key) {
@@ -164,9 +164,9 @@ export function repeat(
       oldEntry = oldCacheMap.get(cursor);
       const firstNode = part.firstNode();
       if (index === 0 && isPartComment(firstNode) && !cursor && !oldEntry) {
-        // TODO: build replace out of pull and insert...
-        nextTemplate.replace(firstNode);
-        oldCacheOrder.push(key);
+        // TODO: build replace out of remove and insert...
+        // nextTemplate.replace(firstNode);
+        // oldCacheOrder.push(key);
       } else {
         if (!oldEntry) {
           throw new RangeError();
@@ -264,6 +264,8 @@ export interface IPart extends IDomTarget {
   addDisposer: (disposer: PartDispose) => void;
   readonly end: Node | IDomTarget | string;
   readonly isSVG: boolean;
+  insertAfter: (target: Node | IDomTarget) => void;
+  insertBefore: (target: Node | IDomTarget) => void;
   readonly path: Array<number | string>;
   readonly start: Node | IDomTarget;
   removeDisposer: (disposer: PartDispose) => void;
@@ -286,7 +288,7 @@ const PartHide: string[] = [
 ]; 
 
 const iPartCache = new Map<IPart, Part>();
-export function Part(
+function Part(
   path: Array<number | string>,
   initStart: Node,
   initEnd: Node | string,
@@ -297,11 +299,12 @@ export function Part(
   let start: Node | IDomTarget = initStart;
   let end: Node | IDomTarget | string = initEnd; 
   let last: Optional<PartValue>; 
-  const updateArray = (part: IPart, value: PartValue[]) => {
-    repeat(value)(part);
+  let proxy: IPart;
+  const updateArray = (value: PartValue[]) => {
+    repeat(value)(proxy);
   }
-  const updateNode = (part: IPart, value: PrimitivePart) => {
-    const element = part.start as Node;
+  const updateNode = (value: PrimitivePart) => {
+    const element = result.firstNode();
     const parent = element.parentNode;
     if (!parent) {
       throw new RangeError();
@@ -312,7 +315,7 @@ export function Part(
       if (element.nodeType !== TEXT_NODE) {
         const newEl = document.createTextNode(strVal);
         parent.insertBefore(newEl, element);
-        part.pull();
+        result.remove();
         start = newEl;
         end = newEl;
       }
@@ -324,7 +327,7 @@ export function Part(
       const newStart = isFrag ? (value as DocumentFragment).firstChild : value as Node;
       const newEnd = isFrag ? (value as DocumentFragment).lastChild : value as Node;
       parent.insertBefore(value as Node | DocumentFragment, element);
-      part.pull();
+      result.remove();
       if (newStart && newEnd) {
         start = newStart;
         end = newEnd;
@@ -333,14 +336,14 @@ export function Part(
       }
     }
   };
-  const updateTemplate = (part: IPart, template: ITemplate) => {
+  const updateTemplate = (template: ITemplate) => {
     if (isTemplate(last) && template.key === (last as ITemplate).key) {
       (last as ITemplate).update(template.values);
     } else {
       const newStart = template.firstNode();
       const newEnd = template.lastNode();
-      template.insertBefore(part);
-      part.pull();
+      template.insertBefore(result);
+      result.remove();
       start = newStart;
       end = newEnd;
     }
@@ -368,7 +371,7 @@ export function Part(
 
   const set = (value: PartValue) => {
     if (isDirectivePart(value)) {
-      (value as Directive)(result);
+      (value as Directive)(proxy);
       return;
     }
     if (isString(end)) {
@@ -386,11 +389,11 @@ export function Part(
           set(promised);
         });
       } else if (isTemplate(value)) {
-        updateTemplate(result, value as ITemplate);
+        updateTemplate(value as ITemplate);
       } else if (Array.isArray(value)) {
-        updateArray(result, value);
+        updateArray(value);
       } else {
-        updateNode(result, value as PrimitivePart);
+        updateNode(value as PrimitivePart);
       }
     }
   };
@@ -410,7 +413,7 @@ export function Part(
     isSVG: isSVG || false,
     lastNode: () => followEdge(result, "end"),
     path,
-    pull: () => PullTarget(result)(),
+    remove: () => PullTarget(proxy)(),
     removeDisposer(handler: PartDispose) {
       const index = disposers.indexOf(handler);
       if (index > -1) {
@@ -461,7 +464,7 @@ export function Part(
     }
   };
   Object.seal(result);
-  const proxy = createAPIProxy(PartHide, PartRO, result);
+  proxy = createAPIProxy(PartHide, PartRO, result);
   iPartCache.set(proxy, result);
   return proxy;
 }
@@ -509,6 +512,8 @@ function followDOMPath(
     ) {
       const el = node.childNodes[num as number];
       return followDOMPath(el, cPath);
+    } else {
+      throw new RangeError();
     }
   }
 }
@@ -568,7 +573,6 @@ export interface ITemplate extends IDomTarget {
   insertBefore: (target: Node | IDomTarget) => void;
   readonly key: string;
   readonly parts: IPart[];
-  render: (target: Node) => void;
   readonly start: Node | IDomTarget;
   readonly type: string;
   update: (newValues?: PartValue[]) => void;
@@ -583,12 +587,11 @@ const TemplateRO: string[] = [
   "values"
 ];
 const TemplateHide: string[] = [
-  "dispose",
   "hydrate",
-  ""
+  "render"
 ];
 const iTemplateCache = new Map<ITemplate, Template>();
-export function Template(
+function Template(
   key: string,
   template: HTMLTemplateElement,
   parts: IPart[],
@@ -611,12 +614,6 @@ export function Template(
     p.attach(isNode(cursor) ? cursor as Node : (cursor as [Node, string]) [0]);
   };
   result = {
-    /*
-    appendTo: (node: Node) => {
-      if (fragment && !fragment.hasChildNodes()) {
-        node.appendChild(fragment);
-      }
-    },*/
     end,
     firstNode: () => followEdge(result, "start"),
     hydrate: (target: Node) => {
@@ -667,7 +664,7 @@ export function Template(
     key,
     lastNode: () => followEdge(result, "end"),
     parts,
-    pull: () => PullTarget(result)(),
+    remove: () => PullTarget(result)(),
     render: (target: Node) => {
       // TODO: implement render...
     },
@@ -898,7 +895,7 @@ export function render(
       instance.update(template.values);
     } else {
       template.insertBefore(instance);
-      instance.pull();
+      instance.remove();
       renderedTemplates.set(target, template);
     }
   } else {
