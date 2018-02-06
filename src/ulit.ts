@@ -81,7 +81,10 @@ export function repeat(
 ): Directive {
   return (part: IPart) => {
     let target = part.firstNode();
-    // const parent = target.parentNode;
+    const parent = target.parentNode;
+    if (!parent) {
+      throw new RangeError();
+    }
     // const isSVG = part.isSVG;
     // might need for hydrate...
     // const attacher = partAttachers.get(part);
@@ -124,7 +127,6 @@ export function repeat(
     keys.forEach((key, index) => {
       let oldEntry = oldCacheMap.get(key);
       const nextTemplate = templates[index];
-      let parent: Optional<Node>;
       if (oldEntry) {
         if (key === oldCacheOrder[index]) {
           // update in place
@@ -143,17 +145,9 @@ export function repeat(
             throw new RangeError();
           }
           target = targetEntry.firstNode();
-          parent = target.parentNode;
-          if (!parent) {
-            throw new RangeError();
-          }
-          // mutate oldCacheOrder to match move
           const oldIndex = oldCacheOrder.indexOf(key);
           oldCacheOrder.splice(oldIndex, 1);
           oldCacheOrder.splice(index, 0, key);
-          // pull oldEntry from dom and update before moving to correct location
-          // TODO: change insertBefore/insertAfter/render/update, to check if IDomTarget is attached
-          //  and pull IDomTarget as needed...
           const frag = oldEntry.remove();
           if (oldEntry.key === nextTemplate.key) {
             oldEntry.update(nextTemplate.values);
@@ -169,10 +163,6 @@ export function repeat(
       const cursor = oldCacheOrder[index];
       oldEntry = oldCacheMap.get(cursor);
       const firstNode = part.firstNode();
-      parent = firstNode.parentNode;
-      if (!parent) {
-        throw new RangeError();
-      }
       if (index === 0 && isPartComment(firstNode) && !cursor && !oldEntry) {
         nextTemplate.insertBefore(firstNode);
         parent.removeChild(firstNode);
