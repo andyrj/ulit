@@ -1,5 +1,8 @@
 const SVG_NS = "https://www.w3.org/2000/svg";
-const PART_MARKER="{{}}";
+const PART_START="{{";
+const PART_END="}}";
+const PART_MARKER=`${PART_START}${PART_END}`;
+const SERIAL_PART_START=`${PART_START}parts:`;
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
@@ -121,6 +124,7 @@ export function repeat(
     keys.forEach((key, index) => {
       let oldEntry = oldCacheMap.get(key);
       const nextTemplate = templates[index];
+      let parent: Optional<Node>;
       if (oldEntry) {
         if (key === oldCacheOrder[index]) {
           // update in place
@@ -139,6 +143,10 @@ export function repeat(
             throw new RangeError();
           }
           target = targetEntry.firstNode();
+          parent = target.parentNode;
+          if (!parent) {
+            throw new RangeError();
+          }
           // mutate oldCacheOrder to match move
           const oldIndex = oldCacheOrder.indexOf(key);
           oldCacheOrder.splice(oldIndex, 1);
@@ -146,10 +154,10 @@ export function repeat(
           // pull oldEntry from dom and update before moving to correct location
           // TODO: change insertBefore/insertAfter/render/update, to check if IDomTarget is attached
           //  and pull IDomTarget as needed...
-          // const frag = oldEntry.pull();
+          const frag = oldEntry.remove();
           if (oldEntry.key === nextTemplate.key) {
             oldEntry.update(nextTemplate.values);
-            oldEntry.insertBefore(target);
+            parent.insertBefore(frag, target);
           } else {
             nextTemplate.update();
             nextTemplate.insertBefore(target);
@@ -161,10 +169,14 @@ export function repeat(
       const cursor = oldCacheOrder[index];
       oldEntry = oldCacheMap.get(cursor);
       const firstNode = part.firstNode();
+      parent = firstNode.parentNode;
+      if (!parent) {
+        throw new RangeError();
+      }
       if (index === 0 && isPartComment(firstNode) && !cursor && !oldEntry) {
-        // TODO: build replace out of remove and insert...
-        // nextTemplate.replace(firstNode);
-        // oldCacheOrder.push(key);
+        nextTemplate.insertBefore(firstNode);
+        parent.removeChild(firstNode);
+        oldCacheOrder.push(key);
       } else {
         if (!oldEntry) {
           throw new RangeError();
@@ -547,7 +559,7 @@ function isTemplate(x: any): boolean {
 let defaultNode: Node;
 function getDefaultNode() {
   if (!defaultNode) {
-    defaultNode = document.createComment("{{}}");
+    defaultNode = document.createComment(PART_MARKER);
   } 
   return defaultNode;
 };
@@ -664,7 +676,7 @@ function Template(
     parts,
     remove: () => PullTarget(result),
     render: (target: Node) => {
-      // TODO: implement render...
+      // TODO: implement
     },
     start,
     type: "template",
@@ -708,7 +720,7 @@ function Template(
   return proxy as ITemplate;
 }
 
-function generateId(str: string): number {
+function hashCode(str: string): number {
   let id = 0;
   if (str.length > 0) {
     for (let i = 0; i < str.length; i++) {
@@ -730,7 +742,7 @@ function isFirstChildSerial(parent: DocumentFragment): boolean {
   return (child &&
     child.nodeType === COMMENT_NODE &&
     child.nodeValue &&
-    child.nodeValue.startsWith("{{parts:")) as boolean;
+    child.nodeValue.startsWith(SERIAL_PART_START)) as boolean;
 }
 
 function parseSerializedParts(
@@ -865,7 +877,7 @@ export function html(
   ...exprs: PartValue[]
 ) {
   const staticMarkUp = strs.toString();
-  const id = idCache.get(staticMarkUp) || generateId(staticMarkUp);
+  const id = idCache.get(staticMarkUp) || hashCode(staticMarkUp);
   const cacheEntry = templateCache.get(id);
   const des = cacheEntry ? cacheEntry : checkForSerialized(id) as IDeserializedTemplate;
   let template = des && des.template;
