@@ -164,6 +164,7 @@ export function repeat(
       oldEntry = oldCacheMap.get(cursor);
       const firstNode = part.firstNode();
       if (index === 0 && isPartComment(firstNode) && !cursor && !oldEntry) {
+        // TODO: build replace out of pull and insert...
         nextTemplate.replace(firstNode);
         oldCacheOrder.push(key);
       } else {
@@ -418,10 +419,7 @@ export function Part(
     },
     start,
     type: "part",
-    update(value?: PartValue) {
-      if (value === undefined) {
-        return;
-      }
+    update(value: PartValue) {
       set(value);
       last = value;
     },
@@ -573,6 +571,7 @@ export interface ITemplate extends IDomTarget {
   render: (target: Node) => void;
   readonly start: Node | IDomTarget;
   readonly type: string;
+  update: (newValues?: PartValue[]) => void;
   readonly values: PartValue[];
 };
 const TemplateRO: string[] = [
@@ -612,11 +611,12 @@ export function Template(
     p.attach(isNode(cursor) ? cursor as Node : (cursor as [Node, string]) [0]);
   };
   result = {
+    /*
     appendTo: (node: Node) => {
       if (fragment && !fragment.hasChildNodes()) {
         node.appendChild(fragment);
       }
-    },
+    },*/
     end,
     firstNode: () => followEdge(result, "start"),
     hydrate: (target: Node) => {
@@ -647,7 +647,7 @@ export function Template(
         throw new Error();
       }
       if (!next) {
-        result.appendTo(parent);
+        result.render(parent);
       } else if (next){
         result.insertBefore(next);
       }
@@ -670,9 +670,6 @@ export function Template(
     pull: () => PullTarget(result)(),
     render: (target: Node) => {
       // TODO: implement render...
-    },
-    replace: (target: Node | IDomTarget) => {
-      // TODO: implement replace...
     },
     start,
     type: "template",
@@ -930,5 +927,4 @@ export function render(
     */
     renderedTemplates.set(target, template);
   }
-  */
 }
