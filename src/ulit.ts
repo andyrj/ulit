@@ -78,8 +78,8 @@ export function repeat(
 ): Directive {
   return (part: IPart) => {
     let target = part.firstNode();
-    const parent: Optional<Node> = (target as Node).parentNode;
-    const isSVG = part.isSVG;
+    // const parent = target.parentNode;
+    // const isSVG = part.isSVG;
     // might need for hydrate...
     // const attacher = partAttachers.get(part);
 
