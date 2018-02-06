@@ -247,7 +247,7 @@ function createAPIProxy(hide: string[], ro: string[], obj: any) {
   return new Proxy(obj, APIHandler);
 }
 
-export interface Part extends IDomTarget {
+interface Part extends IDomTarget {
   addDisposer: (disposer: PartDispose) => void;
   attach: (node: Node) => void;
   disposers: PartDispose[];
@@ -259,12 +259,15 @@ export interface Part extends IDomTarget {
   value: Optional<PartValue>;
 };
 
-export interface IPart extends Part {
+export interface IPart extends IDomTarget {
+  addDisposer: (disposer: PartDispose) => void;
   readonly end: Node | IDomTarget | string;
-  readonly path: Array<number | string>;
   readonly isSVG: boolean;
+  readonly path: Array<number | string>;
   readonly start: Node | IDomTarget;
+  removeDisposer: (disposer: PartDispose) => void;
   readonly type: string;
+  update: (value: PartValue) => void;
   readonly value: Optional<PartValue>;
 };
 
@@ -548,24 +551,29 @@ function getDefaultNode() {
   return defaultNode;
 };
 
-export interface Template extends IDomTarget {
-  appendTo: (node: Node) => void;
+interface Template extends IDomTarget {
   dispose: () => void;
   hydrate: (target: Node) => void | never;
   insertAfter: (target: Node | IDomTarget) => void;
   insertBefore: (target: Node | IDomTarget) => void;
   key: string;
   parts: IPart[];
-  replace: (target: Node | IDomTarget) => void;
+  render: (target: Node) => void;
   type: string;
   update: (newValues?: PartValue[]) => void;
   values: PartValue[];
 };
-export interface ITemplate extends Template {
+export interface ITemplate extends IDomTarget {
+  dispose: () => void;
   readonly end: Node | IDomTarget | string;
+  insertAfter: (target: Node | IDomTarget) => void;
+  insertBefore: (target: Node | IDomTarget) => void;
   readonly key: string;
+  readonly parts: IPart[];
+  render: (target: Node) => void;
   readonly start: Node | IDomTarget;
   readonly type: string;
+  readonly values: PartValue[];
 };
 const TemplateRO: string[] = [
   "end",
@@ -575,7 +583,11 @@ const TemplateRO: string[] = [
   "type",
   "values"
 ];
-const TemplateHide: string[] = [];
+const TemplateHide: string[] = [
+  "dispose",
+  "hydrate",
+  ""
+];
 const iTemplateCache = new Map<ITemplate, Template>();
 export function Template(
   key: string,
@@ -656,6 +668,9 @@ export function Template(
     lastNode: () => followEdge(result, "end"),
     parts,
     pull: () => PullTarget(result)(),
+    render: (target: Node) => {
+      // TODO: implement render...
+    },
     replace: (target: Node | IDomTarget) => {
       // TODO: implement replace...
     },
@@ -873,7 +888,6 @@ export function html(
 }
 
 const renderedTemplates = new Map<Node, ITemplate>();
-
 export function render(
   template: ITemplate,
   target?: Node
@@ -891,6 +905,12 @@ export function render(
       renderedTemplates.set(target, template);
     }
   } else {
+    const t = iTemplateCache.get(template);
+    if (!t) {
+      throw new RangeError();
+    }
+    t.render(target);
+    /*
     if (target.hasChildNodes()) {
       const hydrated = template.hydrate(target);
       const first = target.firstChild;
@@ -907,6 +927,8 @@ export function render(
       template.update();
       template.appendTo(target);
     }
+    */
     renderedTemplates.set(target, template);
   }
+  */
 }

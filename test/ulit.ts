@@ -18,6 +18,7 @@ test.beforeEach(t => {
 test("static templates", t => {
   const template = html`<div id="test">test</div>`;
   render(template);
+  t.is(!document.body.firstChild, false);
   t.is((document.body.firstChild as HTMLElement).id, "test");
   t.is(document.body.firstChild.firstChild.nodeValue, "test");
 });
