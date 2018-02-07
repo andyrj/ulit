@@ -7,9 +7,8 @@ const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 const DOCUMENT_FRAGMENT = 11;
-const templateCache = new Map<number, ITemplateCacheEntry>();
+const serialCache = new Map<number, ISerialCacheEntry>();
 const idCache = new Map<string, number>();
-const repeatCache = new Map<IPart, [Key[], Map<Key, ITemplate>]>();
 
 type WalkFn = (
   parent: Node,
@@ -17,10 +16,11 @@ type WalkFn = (
   path: Array<string | number>
 ) => boolean;
 
-interface ITemplateCacheEntry {
+interface ISerialCacheEntry {
   template: HTMLTemplateElement;
   parts: IPart[];
 }
+
 export type Key = symbol | number | string;
 export type Directive = (part: IPart) => void;
 export type PrimitivePart = 
@@ -36,14 +36,138 @@ export type PartValue =
   | ITemplate;
 export interface IPartPromise extends Promise<PartValue> {};
 export interface IPartArray extends Array<PartValue> {};
-export type PartDispose = (part: IPart) => void;
+export type IDomTargetDispose = (part: IPart) => void;
+
+const DomTargetHide: string[] = [
+  "disposers",
+  "fragment",
+  "start",
+  "end"
+];
+const DomTargetRO: string[] = [
+  "isAttached",
+  "isSVG"
+];
 
 export interface IDomTarget {
-  end: Node | IDomTarget | string;
+  readonly isAttached: boolean;
+  addDisposer: (handler: IDomTargetDispose) => void;
   firstNode: () => Node;
   lastNode: () => Node;
+  appendTo: (parent: Node) => void;
+  insertAfter: (target: IDomTarget | Node) => void;
+  insertBefore: (target: IDomTarget | Node) => void;
   remove: () => DocumentFragment;
-  start: Node | IDomTarget;
+  removeDisposer: (handler: IDomTargetDispose) => void;
+}
+
+const fragmentCache: DocumentFragment[] = [];
+function getFragment(): DocumentFragment {
+  if (fragmentCache.length > 0) {
+    const frag = fragmentCache.pop();
+    if (!frag) {
+      throw new Error();
+    }
+    return frag;
+  } else {
+    return document.createDocumentFragment();
+  }
+}
+
+class DomTarget {
+  public isAttached: boolean = false;
+  public fragment: DocumentFragment;
+  public isSVG: boolean;
+  public disposers: IDomTargetDispose[] = [];
+  constructor(
+    public start: Node | DomTarget,
+    public end: Node | DomTarget | string, 
+  ) {}
+  
+  public addDisposer(handler: IDomTargetDispose) {
+    if (
+      isFunction(handler) &&
+      this.disposers.indexOf(handler) === -1
+    ) {
+      this.disposers.push(handler);
+    }
+  }
+
+  public removeDisposer(handler: IDomTargetDispose) {
+    const index = this.disposers.indexOf(handler);
+      if (index > -1) {
+        this.disposers.splice(index, 1);
+      }
+  }
+
+  public firstNode(): Node {
+    return followEdge(this, "start");
+  }
+  public lastNode(): Node {
+    return followEdge(this, "end");
+  }
+
+  public appendTo(parent: Node) {
+    if (this.isAttached) {
+      this.remove();
+    }
+    parent.appendChild(this.fragment);
+    this.isAttached = true;
+  }
+
+  public insertAfter(target: DomTarget | Node) {
+    if (this.isAttached) {
+      this.remove();
+    }
+    if (!this.fragment || !this.fragment.hasChildNodes()) {
+      return;
+    }
+    const t = isNode(target) ? target as Node : (target as DomTarget).lastNode() as Node;
+    const next = t.nextSibling;
+    const parent = t.parentNode;
+    if (!parent) {
+      throw new Error();
+    }
+    if (!next) {
+      this.appendTo(parent);
+    } else if (next){
+      this.insertBefore(next);
+    }
+    this.isAttached = true;
+  }
+  public insertBefore(target: DomTarget | Node) {
+    if (this.isAttached) {
+      this.remove();
+    }
+    if (!this.fragment || !this.fragment.hasChildNodes()) {
+      return;
+    }
+    const t = isNode(target) ? target as Node : (target as DomTarget).firstNode() as Node;
+    const parent = t.parentNode;
+    if (parent) {
+      parent.insertBefore(t, this.fragment);
+    } else {
+      throw new Error();
+    }
+    this.isAttached = true;
+  }
+
+  public remove() {
+    if (!this.fragment) {
+      this.fragment = getFragment();
+    }
+    if (!this.isAttached) {
+      return;
+    }
+    let cursor: Optional<Node> = this.firstNode();
+    while (cursor !== undefined) {
+      const next: Node = cursor.nextSibling as Node;
+      this.fragment.appendChild(cursor);
+      cursor = (cursor === this.end || !next) ? undefined : next;
+    }
+    this.isAttached = false;
+    return this.fragment;
+  }
 }
 
 function isPart(x: any): boolean {
@@ -51,143 +175,6 @@ function isPart(x: any): boolean {
 }
 
 export type Optional<T> = T | undefined | null;
-
-function PullTarget(target: IDomTarget): DocumentFragment {
-  const start = target.firstNode();
-  const end = target.lastNode();
-  const fragment = document.createDocumentFragment();
-  let cursor: Optional<Node> = start;
-  while (cursor !== undefined) {
-    const next: Node = cursor.nextSibling as Node;
-    fragment.appendChild(cursor);
-    cursor = (cursor === end || !next) ? undefined : next;
-  }
-  return fragment;
-}
-
-export function defaultKeyFn(item: any, index?: number): Key;
-export function defaultKeyFn(index: number): Key {
-  return index;
-}
-
-export function defaultTemplateFn(item: any): ITemplate {
-  return html`${item}`;
-}
-
-export function repeat(
-  items: Array<{}>,
-  keyFn: typeof defaultKeyFn = defaultKeyFn,
-  templateFn: typeof defaultTemplateFn = defaultTemplateFn
-): Directive {
-  return (part: IPart) => {
-    let target = part.firstNode();
-    const parent = target.parentNode;
-    if (!parent) {
-      throw new RangeError();
-    }
-    // const isSVG = part.isSVG;
-    // might need for hydrate...
-    // const attacher = partAttachers.get(part);
-
-    const templates = items.map(item => {
-      if (isTemplate(item)) {
-        return item;
-      }
-      return templateFn(item);
-    }) as ITemplate[];
-    const keys = items.map((item, index) => keyFn(item, index));
-    const [oldCacheOrder, oldCacheMap] = repeatCache.get(part) || [[], new Map<Key, ITemplate>()];
-    const newCache = [keys, new Map<Key, ITemplate>()];
-    const newCacheMap = newCache[1] as Map<Key, ITemplate>;
-    // build LUT for new keys/templates
-    keys.forEach((key, index) => {
-      newCacheMap.set(key, templates[index]);
-    });
-    // remove keys no longer in keys/list
-    const removeKeys: number[] = [];
-    oldCacheOrder.forEach((key, index) => {
-      const newEntry = newCacheMap.get(key);
-      const oldEntry = oldCacheMap.get(key);
-      if (oldEntry && !newEntry) {
-        oldEntry.remove();
-        oldCacheMap.delete(key);
-        removeKeys.push(index);
-      }
-    });
-    // can't mutate oldCacheOrder while in forEach
-    while (true) {
-      const index = removeKeys.pop();
-      if (index && index > -1) {
-        oldCacheOrder.splice(index, 1);
-        continue;
-      }
-      break;
-    }
-    // move/update and add
-    keys.forEach((key, index) => {
-      let oldEntry = oldCacheMap.get(key);
-      const nextTemplate = templates[index];
-      if (oldEntry) {
-        if (key === oldCacheOrder[index]) {
-          // update in place
-          if (oldEntry.key === nextTemplate.key) {
-            oldEntry.update(nextTemplate.values);
-          } else {
-            //  maybe at some point think about diffing between templates?
-            nextTemplate.update();
-            nextTemplate.insertBefore(oldEntry);
-            oldEntry.remove();
-            oldCacheMap.set(key, nextTemplate);
-          }
-        } else {
-          const targetEntry = oldCacheMap.get(oldCacheOrder[index]);
-          if (!targetEntry) {
-            throw new RangeError();
-          }
-          target = targetEntry.firstNode();
-          const oldIndex = oldCacheOrder.indexOf(key);
-          oldCacheOrder.splice(oldIndex, 1);
-          oldCacheOrder.splice(index, 0, key);
-          const frag = oldEntry.remove();
-          if (oldEntry.key === nextTemplate.key) {
-            oldEntry.update(nextTemplate.values);
-            parent.insertBefore(frag, target);
-          } else {
-            nextTemplate.update();
-            nextTemplate.insertBefore(target);
-          }
-        }
-        return;
-      }
-      // add template to 
-      const cursor = oldCacheOrder[index];
-      oldEntry = oldCacheMap.get(cursor);
-      const firstNode = part.firstNode();
-      if (index === 0 && isPartComment(firstNode) && !cursor && !oldEntry) {
-        nextTemplate.insertBefore(firstNode);
-        parent.removeChild(firstNode);
-        oldCacheOrder.push(key);
-      } else {
-        if (!oldEntry) {
-          throw new RangeError();
-        }
-        nextTemplate.insertBefore(oldEntry);
-        oldCacheOrder.splice(index, 0, key);
-      }
-      oldCacheMap.set(key, nextTemplate);
-    });
-  };
-}
-
-export function until(
-  promise: Promise<PartValue>,
-  defaultContent: PartValue
-): Directive {
-  return (part: IPart) => {
-    part.update(defaultContent);
-    promise.then(value => part.update(value));
-  };
-}
 
 function isFunction(x: any): boolean {
   return typeof x === "function";
@@ -201,20 +188,20 @@ function isNumber(x: any): boolean {
   return typeof x === "number";
 }
 
-function followEdge(target: IDomTarget | Node, edge: "start" | "end"): Node {
+function followEdge(target: DomTarget | Node, edge: "start" | "end"): Node {
   if (isNode(target)) {
     return target as Node;
   } else {
     const cond = edge === "start";
     const next = cond
-      ? (target as IDomTarget).start
-      : (target as IDomTarget).end;
+      ? (target as DomTarget).start
+      : (target as DomTarget).end;
     if (isPart(next) || isTemplate(next)) {
-      return followEdge(next as IDomTarget, edge);
+      return followEdge(next as DomTarget, edge);
     } else if (isNode(next)) {
       return next as Node;
     } else if (isString(next)) {
-      return (target as IDomTarget).start as Node;
+      return (target as DomTarget).start as Node;
     } else {
       throw new RangeError();
     }
@@ -248,63 +235,78 @@ function createAPIProxy(hide: string[], ro: string[], obj: any) {
   return new Proxy(obj, APIHandler);
 }
 
-interface Part extends IDomTarget {
-  addDisposer: (disposer: PartDispose) => void;
-  attach: (node: Node) => void;
-  disposers: PartDispose[];
-  isSVG: boolean;
-  path: Array<number | string>;
-  removeDisposer: (disposer: PartDispose) => void;
-  type: string;
-  update: (value: PartValue) => void;
-  value: Optional<PartValue>;
-};
-
-export interface IPart extends IDomTarget {
-  addDisposer: (disposer: PartDispose) => void;
-  readonly end: Node | IDomTarget | string;
-  readonly isSVG: boolean;
-  insertAfter: (target: Node | IDomTarget) => void;
-  insertBefore: (target: Node | IDomTarget) => void;
+export interface IPart extends IDomTarget{
   readonly path: Array<number | string>;
-  readonly start: Node | IDomTarget;
-  removeDisposer: (disposer: PartDispose) => void;
-  readonly type: string;
   update: (value: PartValue) => void;
   readonly value: Optional<PartValue>;
 };
 
-const PartRO: string[] = [
-  "end",
-  "isSVG",
+const PartRO: string[] = DomTargetRO.concat([
   "path",
-  "start",
-  "type",
   "value"
-];
-const PartHide: string[] = [
+]);
+const PartHide: string[] = DomTargetHide.concat([
   "attach",
-  "disposers"
-]; 
+  "proxy",
+  "updateArray",
+  "updateNode",
+  "updateTemplate",
+  "updateAttribute",
+  "set"
+]);
 
-const iPartCache = new Map<IPart, Part>();
-function Part(
-  path: Array<number | string>,
-  initStart: Node,
-  initEnd: Node | string,
-  isSVG: boolean = false
-): IPart {
-  const disposers: PartDispose[] = [];
-  let result: Part;
-  let start: Node | IDomTarget = initStart;
-  let end: Node | IDomTarget | string = initEnd; 
-  let last: Optional<PartValue>; 
-  let proxy: IPart;
-  const updateArray = (value: PartValue[]) => {
-    repeat(value)(proxy);
+const iPartCache = new Map<IPart, PrivatePart>();
+class PrivatePart extends DomTarget {
+  public value: PartValue;
+  public proxy: IPart;
+  constructor(
+    public path: Array<string | number>,
+    public start: Node | DomTarget,
+    public end: Node | DomTarget | string,
+    public isSVG: boolean = false
+  ) {
+    super(start, end);
   }
-  const updateNode = (value: PrimitivePart) => {
-    const element = result.firstNode();
+
+  public attach(node: Node) {
+    const target = followDOMPath(node, this.path);
+    if (!target) {
+      throw new RangeError();
+    }
+
+    if (Array.isArray(target)) {
+      this.start = target[0];
+      this.end = target[1];
+    } else {
+      this.start = target;
+      if (isDocumentFragment(this.value)) {
+        let newPath;
+        walkDOM(node as HTMLElement | DocumentFragment, undefined, (parent, element, walkPath) => {
+          if (element === (this.value as DocumentFragment).lastChild) {
+            newPath = walkPath;
+            return false;
+          }
+          return true;
+        });
+        if (newPath) {
+          this.end = followDOMPath(node, this.path.concat(newPath)) as Node;
+        } else {
+          throw new RangeError();
+        }
+      } else if (isTemplate(this.value)) {
+        this.end = (this.value as ITemplate).lastNode();
+      } else {
+        this.end = target;
+      }
+    }
+  }
+
+  public updateArray(value: PartValue[]) {
+    repeat(value)(this.proxy);
+  }
+  
+  public updateNode(value: PrimitivePart) {
+    const element = this.firstNode();
     const parent = element.parentNode;
     if (!parent) {
       throw new RangeError();
@@ -315,9 +317,9 @@ function Part(
       if (element.nodeType !== TEXT_NODE) {
         const newEl = document.createTextNode(strVal);
         parent.insertBefore(newEl, element);
-        result.remove();
-        start = newEl;
-        end = newEl;
+        this.remove();
+        this.start = newEl;
+        this.end = newEl;
       }
       if (element.nodeValue !== value) {
         (element as Text).nodeValue = strVal;
@@ -327,41 +329,43 @@ function Part(
       const newStart = isFrag ? (value as DocumentFragment).firstChild : value as Node;
       const newEnd = isFrag ? (value as DocumentFragment).lastChild : value as Node;
       parent.insertBefore(value as Node | DocumentFragment, element);
-      result.remove();
+      this.remove();
       if (newStart && newEnd) {
-        start = newStart;
-        end = newEnd;
+        this.start = newStart;
+        this.end = newEnd;
       } else {
         throw new RangeError();
       }
     }
-  };
-  const updateTemplate = (template: ITemplate) => {
-    if (isTemplate(last) && template.key === (last as ITemplate).key) {
-      (last as ITemplate).update(template.values);
+  }
+
+  public updateTemplate(template: ITemplate) {
+    if (isTemplate(this.value) && template.key === (this.value as ITemplate).key) {
+      (this.value as ITemplate).update(template.values);
     } else {
       const newStart = template.firstNode();
       const newEnd = template.lastNode();
-      template.insertBefore(result);
-      result.remove();
-      start = newStart;
-      end = newEnd;
+      template.insertBefore(this.firstNode());
+      this.remove();
+      this.start = newStart;
+      this.end = newEnd;
     }
-  };
-  const updateAttribute = (value: any) => {
-    const element: Node = start as Node;
-    const name: string = isString(end) ? end as string : "";
+  }
+
+  public updateAttribute(value: any) {
+    const element: Node = this.start as Node;
+    const name: string = isString(this.end) ? this.end as string : "";
     if (isFunction(value) || name in element) {
       (element as any)[name] = !value && value !== false ? "" : value
     } else if (value || value === false) {
-      if (isSVG) {
+      if (this.isSVG) {
         (element as HTMLElement).setAttributeNS(SVG_NS, name, value);
       } else {
         (element as HTMLElement).setAttribute(name, value);
       }
     }
     if (!value || value !== false) {
-      if (isSVG) {
+      if (this.isSVG) {
         (element as HTMLElement).removeAttributeNS(SVG_NS, name);
       } else {
         (element as HTMLElement).removeAttribute(name);
@@ -369,13 +373,13 @@ function Part(
     }
   }
 
-  const set = (value: PartValue) => {
+  public set(value: PartValue) {
     if (isDirectivePart(value)) {
-      (value as Directive)(proxy);
+      (value as Directive)(this.proxy);
       return;
     }
-    if (isString(end)) {
-      updateAttribute(value);
+    if (isString(this.end)) {
+      this.updateAttribute(value);
     } else {
       if (
         !isString(value) &&
@@ -386,92 +390,40 @@ function Part(
       }
       if (isPromise(value)) {
         (value as Promise<PartValue>).then(promised => {
-          set(promised);
+          this.set(promised);
         });
       } else if (isTemplate(value)) {
-        updateTemplate(value as ITemplate);
+        this.updateTemplate(value as ITemplate);
       } else if (Array.isArray(value)) {
-        updateArray(value);
+        this.updateArray(value);
       } else {
-        updateNode(value as PrimitivePart);
+        this.updateNode(value as PrimitivePart);
       }
     }
   };
-  
-  result = {
-    addDisposer(handler: PartDispose) {
-      if (
-        isFunction(handler) &&
-        disposers.indexOf(handler) === -1
-      ) {
-        disposers.push(handler);
-      }
-    },
-    disposers,
-    end,
-    firstNode: () => followEdge(result, "start"),
-    isSVG: isSVG || false,
-    lastNode: () => followEdge(result, "end"),
-    path,
-    remove: () => PullTarget(result),
-    removeDisposer(handler: PartDispose) {
-      const index = disposers.indexOf(handler);
-      if (index > -1) {
-        disposers.splice(index, 1);
-      }
-    },
-    start,
-    type: "part",
-    update(value: PartValue) {
-      set(value);
-      last = value;
-    },
-    value: last,
-    attach(node: Node) {
-      if (!start || !end) {
-        throw new RangeError();
-      }
-      const target = followDOMPath(node, result.path);
-      if (!target) {
-        throw new RangeError();
-      }
-  
-      if (Array.isArray(target)) {
-        start = target[0];
-        end = target[1];
-      } else {
-        start = target;
-        if (isDocumentFragment(last)) {
-          let newPath;
-          walkDOM(node as HTMLElement | DocumentFragment, undefined, (parent, element, walkPath) => {
-            if (element === (last as DocumentFragment).lastChild) {
-              newPath = walkPath;
-              return false;
-            }
-            return true;
-          });
-          if (newPath) {
-            end = followDOMPath(node, result.path.concat(newPath)) as Node;
-          } else {
-            throw new RangeError();
-          }
-        } else if (isTemplate(last)) {
-          end = (last as ITemplate).lastNode();
-        } else {
-          end = target;
-        }
-      }
-    }
-  };
-  Object.seal(result);
-  proxy = createAPIProxy(PartHide, PartRO, result);
-  iPartCache.set(proxy, result);
+
+  public update(value: PartValue) {
+    this.set(value);
+  }
+}
+
+export function Part(
+  path: Array<number | string>,
+  start: Node,
+  end: Node | string,
+  isSVG: boolean = false
+): IPart {
+  const part = new PrivatePart(path, start, end, isSVG);
+  const proxy = createAPIProxy(PartHide, PartRO, part);
+  part.proxy = proxy;
+  iPartCache.set(proxy, part);
+  Object.seal(part);
   return proxy;
 }
 
 // function isAttributePart(part: IPart): boolean {
-//   const start = part.getStart();
-//   const end = part.getEnd();
+//   const start = part.start;
+//   const end = part.end;
 //   if (isString(end) && isNode(start)) {
 //     return true;
 //   }
@@ -479,7 +431,7 @@ function Part(
 // }
 
 // function isEventPart(part: IPart): boolean {
-//   const end = part.getEnd();
+//   const end = part.end;
 //   if (isAttributePart(part) && (end as string).startsWith("on")) {
 //     return true;
 //   }
@@ -554,55 +506,40 @@ function getDefaultNode() {
   return defaultNode;
 };
 
-interface Template extends IDomTarget {
-  dispose: () => void;
-  hydrate: (target: Node) => void | never;
-  insertAfter: (target: Node | IDomTarget) => void;
-  insertBefore: (target: Node | IDomTarget) => void;
-  key: string;
-  parts: IPart[];
-  render: (target: Node) => void;
-  type: string;
-  update: (newValues?: PartValue[]) => void;
-  values: PartValue[];
-};
 export interface ITemplate extends IDomTarget {
   dispose: () => void;
-  readonly end: Node | IDomTarget | string;
-  insertAfter: (target: Node | IDomTarget) => void;
-  insertBefore: (target: Node | IDomTarget) => void;
   readonly key: string;
   readonly parts: IPart[];
-  readonly start: Node | IDomTarget;
-  readonly type: string;
   update: (newValues?: PartValue[]) => void;
   readonly values: PartValue[];
 };
-const TemplateRO: string[] = [
-  "end",
+const TemplateRO: string[] = DomTargetRO.concat([
   "key",
   "parts",
-  "start",
-  "type",
   "values"
-];
+]);
 const TemplateHide: string[] = [
   "hydrate",
-  "render"
+  "render",
+  "proxy"
 ];
-const iTemplateCache = new Map<ITemplate, Template>();
-function Template(
-  key: string,
-  template: HTMLTemplateElement,
-  parts: IPart[],
-  values: PartValue[]
-): ITemplate {
-  let result: Template;
-  let fragment: DocumentFragment;
-  let last: PartValue[] = [];
-  let start: Node = getDefaultNode();
-  let end: Node = getDefaultNode();
-  const attachPart = (part: IPart, target: Node) => {
+
+class PrivateTemplate extends DomTarget {
+  public initialized: boolean = false;
+  public proxy: ITemplate;
+  public disposers: IDomTargetDispose[] = [];
+  constructor(
+    public key: string,
+    public template: HTMLTemplateElement,
+    public parts: IPart[],
+    public values: PartValue[]
+  ) {
+    super(defaultNode || getDefaultNode(), defaultNode);
+    // TODO: finsih writing code to move from old functional setup...
+    
+  }
+  
+  public attachPart(part: IPart, target: Node) {
     const p = iPartCache.get(part);
     if (!p) {
       throw new RangeError();
@@ -612,119 +549,85 @@ function Template(
       throw new RangeError();
     }
     p.attach(isNode(cursor) ? cursor as Node : (cursor as [Node, string]) [0]);
-  };
-  result = {
-    end,
-    firstNode: () => followEdge(result, "start"),
-    hydrate: (target: Node) => {
-      if (fragment) {
-        throw new Error(); // only hydrate newly created Templates...
-      }
-      result.update();
-      try {
-        parts.forEach(part => attachPart(part, target));
-        const frag = fragment as DocumentFragment;
-        if (frag) {
-          while (frag.hasChildNodes) {
-            frag.removeChild(frag.lastChild as Node);
-          }
+  }
+
+  public hydrate(target: Node): void | never {
+    if (this.fragment) {
+      throw new Error(); // only hydrate newly created Templates...
+    }
+    this.update();
+    try {
+      this.parts.forEach(part => this.attachPart(part, target));
+      const frag = this.fragment as DocumentFragment;
+      if (frag) {
+        while (frag.hasChildNodes) {
+          frag.removeChild(frag.lastChild as Node);
         }
-      } catch(err) {
-        throw err;
       }
-    },
-    insertAfter: (target: Node | IDomTarget) => {
-      if (!fragment || !fragment.hasChildNodes()) {
-        return;
-      }
-      const t = isNode(target) ? target as Node : (target as IDomTarget).lastNode() as Node;
-      const next = t.nextSibling;
-      const parent = t.parentNode;
-      if (!parent) {
-        throw new Error();
-      }
-      if (!next) {
-        result.render(parent);
-      } else if (next){
-        result.insertBefore(next);
-      }
-    },
-    insertBefore: (target: Node | IDomTarget) => {
-      if (!fragment || !fragment.hasChildNodes()) {
-        return;
-      }
-      const t = isNode(target) ? target as Node : (target as IDomTarget).firstNode() as Node;
-      const parent = t.parentNode;
-      if (parent) {
-        parent.insertBefore(t, fragment);
-      } else {
-        throw new Error();
-      }
-    },
-    key,
-    lastNode: () => followEdge(result, "end"),
-    parts,
-    remove: () => PullTarget(result),
-    render: (target: Node) => {
-      // TODO: implement and create state in Template closure to track if Template is attached or detached.
-      /* // code commented out from exported render()...
-      if (target.hasChildNodes()) {
-        const hydrated = template.hydrate(target);
-        const first = target.firstChild;
-        if (!hydrated) {
-          let cursor: Optional<Node | null> = target.lastChild;
-          while (cursor) {
-            const next: Optional<Node | null> = cursor.previousSibling;
-            target.removeChild(cursor);
-            cursor = cursor !== first ? next : undefined;
-          }
-          template.appendTo(target);
-        }
-      } else {
-        template.update();
-        template.appendTo(target);
-      }
-      */
-    },
-    start,
-    type: "template",
-    values: last,
-    update(newValues: PartValue[] | null | undefined) {
-      // if (!newValues || newValues.length !== parts.length) {
-      //   throw new RangeError();
-      // } 
-      if (!fragment) {
-        const t: HTMLTemplateElement = document.importNode(template, true);
-        fragment = t.content;
-        start = fragment.firstChild as Node;
-        end = fragment.lastChild as Node; 
-        parts.forEach(part => attachPart(part, fragment));
-      }
-      last = !newValues ? values : newValues;
-      if (last) {
-        parts.forEach((part, i) => {
-          part.update(last[i]);
-        });
-      }
-    },
-    dispose() {
-      parts.forEach(part => {
-        const p = iPartCache.get(part);
-        if (!p) {
-          throw new RangeError();
-        }
-        const disposers = p.disposers;
-        if (disposers) {
-          disposers.forEach(disposer => {
-            disposer(part);
-          });
-        }
-      });
+    } catch(err) {
+      throw err;
     }
   };
-  Object.seal(result);
-  const proxy = createAPIProxy(TemplateHide, TemplateRO, result);
-  iTemplateCache.set(proxy, result);
+
+  public render(target: Node) {
+    // TODO: implement and create state in Template closure to track if Template is attached or detached.
+    // // code commented out from exported render()...
+    // if (target.hasChildNodes()) {
+    //   const hydrated = template.hydrate(target);
+    //   const first = target.firstChild;
+    //   if (!hydrated) {
+    //     let cursor: Optional<Node | null> = target.lastChild;
+    //     while (cursor) {
+    //       const next: Optional<Node | null> = cursor.previousSibling;
+    //       target.removeChild(cursor);
+    //       cursor = cursor !== first ? next : undefined;
+    //     }
+    //     template.appendTo(target);
+    //   }
+    // } else {
+    //   template.update();
+    //   template.appendTo(target);
+    // }
+  }
+
+  public dispose() {
+    this.parts.forEach(part => {
+      const p = iPartCache.get(part);
+      if (!p) {
+        throw new RangeError();
+      }
+      if (this.disposers) {
+        this.disposers.forEach(disposer => {
+          disposer(part);
+        });
+      }
+    });
+  }
+
+  public update(values?: PartValue[]) { 
+    if (!this.initialized) {
+      const t: HTMLTemplateElement = document.importNode(this.template, true);
+      this.fragment = t.content;
+      this.start = this.fragment.firstChild as Node;
+      this.end = this.fragment.lastChild as Node; 
+      this.parts.forEach(part => this.attachPart(part, this.fragment));
+    }
+    // TODO: simplify this? maybe pass newValue oldValue arguments?
+    this.values = !values ? this.values : values;
+    if (this.values) {
+      this.parts.forEach((part, i) => {
+        part.update(this.values[i]);
+      });
+    }
+  }
+}
+
+const iTemplateCache = new Map<ITemplate, PrivateTemplate>();
+export function Template(key: string, tempEl: HTMLTemplateElement, parts: IPart[], values: PartValue[]) {
+  const template = new PrivateTemplate(key, tempEl, parts, values);
+  const proxy = createAPIProxy(TemplateHide, TemplateRO, template);
+  iTemplateCache.set(proxy, template);
+  template.proxy = proxy;
   return proxy as ITemplate;
 }
 
@@ -886,7 +789,7 @@ export function html(
 ) {
   const staticMarkUp = strs.toString();
   const id = idCache.get(staticMarkUp) || hashCode(staticMarkUp);
-  const cacheEntry = templateCache.get(id);
+  const cacheEntry = serialCache.get(id);
   const des = cacheEntry ? cacheEntry : checkForSerialized(id) as IDeserializedTemplate;
   let template = des && des.template;
   const parts = (des && des.parts) || [];
@@ -894,7 +797,7 @@ export function html(
     template = document.createElement("template");
     template.innerHTML = strs.join(PART_MARKER);
     walkDOM(template.content, undefined, templateSetup(parts));
-    templateCache.set(id, { template, parts });
+    serialCache.set(id, { template, parts });
   }
   return Template(staticMarkUp, template, parts, exprs);
 }
@@ -924,4 +827,130 @@ export function render(
     t.render(target);
     renderedTemplates.set(target, template);
   }
+}
+
+export function defaultKeyFn(item: any, index?: number): Key;
+export function defaultKeyFn(index: number): Key {
+  return index;
+}
+
+export function defaultTemplateFn(item: any): ITemplate {
+  return html`${item}`;
+}
+
+const repeatCache = new Map<IPart, [Key[], Map<Key, ITemplate>]>();
+
+export function repeat(
+  items: Array<{}>,
+  keyFn: typeof defaultKeyFn = defaultKeyFn,
+  templateFn: typeof defaultTemplateFn = defaultTemplateFn
+): Directive {
+  return (part: IPart) => {
+    let target = part.firstNode();
+    const parent = target.parentNode;
+    if (!parent) {
+      throw new RangeError();
+    }
+    // const isSVG = part.isSVG;
+    // might need for hydrate...
+    // const attacher = partAttachers.get(part);
+
+    const templates = items.map(item => {
+      if (isTemplate(item)) {
+        return item;
+      }
+      return templateFn(item);
+    }) as ITemplate[];
+    const keys = items.map((item, index) => keyFn(item, index));
+    const [oldCacheOrder, oldCacheMap] = repeatCache.get(part) || [[], new Map<Key, ITemplate>()];
+    const newCache = [keys, new Map<Key, ITemplate>()];
+    const newCacheMap = newCache[1] as Map<Key, ITemplate>;
+    // build LUT for new keys/templates
+    keys.forEach((key, index) => {
+      newCacheMap.set(key, templates[index]);
+    });
+    // remove keys no longer in keys/list
+    const removeKeys: number[] = [];
+    oldCacheOrder.forEach((key, index) => {
+      const newEntry = newCacheMap.get(key);
+      const oldEntry = oldCacheMap.get(key);
+      if (oldEntry && !newEntry) {
+        oldEntry.remove();
+        oldCacheMap.delete(key);
+        removeKeys.push(index);
+      }
+    });
+    // can't mutate oldCacheOrder while in forEach
+    while (true) {
+      const index = removeKeys.pop();
+      if (index && index > -1) {
+        oldCacheOrder.splice(index, 1);
+        continue;
+      }
+      break;
+    }
+    // move/update and add
+    keys.forEach((key, index) => {
+      let oldEntry = oldCacheMap.get(key);
+      const nextTemplate = templates[index];
+      if (oldEntry) {
+        if (key === oldCacheOrder[index]) {
+          // update in place
+          if (oldEntry.key === nextTemplate.key) {
+            oldEntry.update(nextTemplate.values);
+          } else {
+            //  maybe at some point think about diffing between templates?
+            nextTemplate.update();
+            nextTemplate.insertBefore(oldEntry);
+            oldEntry.remove();
+            oldCacheMap.set(key, nextTemplate);
+          }
+        } else {
+          const targetEntry = oldCacheMap.get(oldCacheOrder[index]);
+          if (!targetEntry) {
+            throw new RangeError();
+          }
+          target = targetEntry.firstNode();
+          const oldIndex = oldCacheOrder.indexOf(key);
+          oldCacheOrder.splice(oldIndex, 1);
+          oldCacheOrder.splice(index, 0, key);
+          const frag = oldEntry.remove();
+          if (oldEntry.key === nextTemplate.key) {
+            oldEntry.update(nextTemplate.values);
+            parent.insertBefore(frag, target);
+          } else {
+            nextTemplate.update();
+            nextTemplate.insertBefore(target);
+          }
+        }
+        return;
+      }
+      // add template to 
+      const cursor = oldCacheOrder[index];
+      oldEntry = oldCacheMap.get(cursor);
+      const firstNode = part.firstNode();
+      if (index === 0 && isPartComment(firstNode) && !cursor && !oldEntry) {
+        nextTemplate.insertBefore(firstNode);
+        parent.removeChild(firstNode);
+        oldCacheOrder.push(key);
+      } else {
+        if (!oldEntry) {
+          throw new RangeError();
+        }
+        nextTemplate.insertBefore(oldEntry);
+        oldCacheOrder.splice(index, 0, key);
+      }
+      oldCacheMap.set(key, nextTemplate);
+    });
+  };
+}
+
+export function until(
+  promise: Promise<PartValue>,
+  defaultContent: PartValue
+): Directive {
+  return (part: IPart) => {
+    part.update(defaultContent);
+    promise.then(value => part.update(value));
+  };
 }
