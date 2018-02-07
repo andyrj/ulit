@@ -36,7 +36,7 @@ export type PartValue =
   | ITemplate;
 export interface IPartPromise extends Promise<PartValue> {};
 export interface IPartArray extends Array<PartValue> {};
-export type IDomTargetDispose = (part: IPart) => void;
+export type IDomTargetDispose = (part: IDomTarget) => void;
 
 const DomTargetHide: string[] = [
   "disposers",
@@ -57,7 +57,7 @@ export interface IDomTarget {
   appendTo: (parent: Node) => void;
   insertAfter: (target: IDomTarget | Node) => void;
   insertBefore: (target: IDomTarget | Node) => void;
-  remove: () => DocumentFragment;
+  remove: () => void;
   removeDisposer: (handler: IDomTargetDispose) => void;
 }
 
@@ -166,7 +166,6 @@ class DomTarget {
       cursor = (cursor === this.end || !next) ? undefined : next;
     }
     this.isAttached = false;
-    return this.fragment;
   }
 }
 
@@ -298,6 +297,12 @@ class PrivatePart extends DomTarget {
       } else {
         this.end = target;
       }
+    }
+  }
+
+  public dispose() {
+    if (this.disposers.length > 0) {
+      this.disposers.forEach(disposer => disposer(this.proxy));
     }
   }
 
@@ -570,24 +575,26 @@ class PrivateTemplate extends DomTarget {
   };
 
   public render(target: Node) {
-    // TODO: implement and create state in Template closure to track if Template is attached or detached.
-    // // code commented out from exported render()...
-    // if (target.hasChildNodes()) {
-    //   const hydrated = template.hydrate(target);
-    //   const first = target.firstChild;
-    //   if (!hydrated) {
-    //     let cursor: Optional<Node | null> = target.lastChild;
-    //     while (cursor) {
-    //       const next: Optional<Node | null> = cursor.previousSibling;
-    //       target.removeChild(cursor);
-    //       cursor = cursor !== first ? next : undefined;
-    //     }
-    //     template.appendTo(target);
-    //   }
-    // } else {
-    //   template.update();
-    //   template.appendTo(target);
-    // }
+    if (this.isAttached) {
+      return;
+    }
+    if (target.hasChildNodes()) {
+      const hydrated = this.hydrate(target);
+      const first = target.firstChild;
+      if(!hydrated) {
+        let cursor: Optional<Node | null> = target.lastChild;
+        while (cursor) {
+          const next: Optional<Node | null> = cursor.previousSibling;
+          target.removeChild(cursor);
+          cursor = cursor !== first ? next : undefined;
+        }
+        this.appendTo(target);    
+      }
+    } else {
+      this.update();
+      this.appendTo(target);
+    }
+    this.isAttached = true;
   }
 
   public dispose() {
@@ -596,12 +603,13 @@ class PrivateTemplate extends DomTarget {
       if (!p) {
         throw new RangeError();
       }
-      if (this.disposers) {
-        this.disposers.forEach(disposer => {
-          disposer(part);
-        });
-      }
+      p.dispose();
     });
+    if (this.disposers.length > 0) {
+      this.disposers.forEach(disposer => {
+        disposer(this.proxy);
+      });
+    }
   }
 
   public update(values?: PartValue[]) { 
@@ -612,7 +620,6 @@ class PrivateTemplate extends DomTarget {
       this.end = this.fragment.lastChild as Node; 
       this.parts.forEach(part => this.attachPart(part, this.fragment));
     }
-    // TODO: simplify this? maybe pass newValue oldValue arguments?
     this.values = !values ? this.values : values;
     if (this.values) {
       this.parts.forEach((part, i) => {
