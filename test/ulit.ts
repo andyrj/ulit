@@ -23,7 +23,6 @@ test("static templates", t => {
   t.is(document.body.firstChild.firstChild.nodeValue, "test");
 });
 
-/*
 test("dynamic template with string child", t => {
   const str = "test";
   const template = html`<div id="test">${str}</div>`;

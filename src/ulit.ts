@@ -74,15 +74,18 @@ function getFragment(): DocumentFragment {
   }
 }
 
+const iDomTargetCache = new Map<IDomTarget, PrivatePart | PrivateTemplate>();
 class DomTarget {
   public isAttached: boolean = false;
   public fragment: DocumentFragment;
-  public isSVG: boolean;
+  public isSVG: boolean = false;
   public disposers: IDomTargetDispose[] = [];
   constructor(
     public start: Node | DomTarget,
     public end: Node | DomTarget | string, 
-  ) {}
+  ) {
+    this.fragment = getFragment();
+  }
   
   public addDisposer(handler: IDomTargetDispose) {
     if (
@@ -108,14 +111,16 @@ class DomTarget {
   }
 
   public appendTo(parent: Node) {
+    const _ = iDomTargetCache.get(this as IDomTarget) || this;
     if (this.isAttached) {
       this.remove();
     }
     parent.appendChild(this.fragment);
-    this.isAttached = true;
+    _.isAttached = true;
   }
 
   public insertAfter(target: DomTarget | Node) {
+    const _ = iDomTargetCache.get(this as IDomTarget) || this;
     if (this.isAttached) {
       this.remove();
     }
@@ -133,9 +138,10 @@ class DomTarget {
     } else if (next){
       this.insertBefore(next);
     }
-    this.isAttached = true;
+    _.isAttached = true;
   }
   public insertBefore(target: DomTarget | Node) {
+    const _ = iDomTargetCache.get(this as IDomTarget) || this;
     if (this.isAttached) {
       this.remove();
     }
@@ -149,13 +155,11 @@ class DomTarget {
     } else {
       throw new Error();
     }
-    this.isAttached = true;
+    _.isAttached = true;
   }
 
   public remove() {
-    if (!this.fragment) {
-      this.fragment = getFragment();
-    }
+    const _ = iDomTargetCache.get(this as IDomTarget) || this;
     if (!this.isAttached) {
       return;
     }
@@ -165,7 +169,7 @@ class DomTarget {
       this.fragment.appendChild(cursor);
       cursor = (cursor === this.end || !next) ? undefined : next;
     }
-    this.isAttached = false;
+    _.isAttached = false;
   }
 }
 
@@ -250,11 +254,9 @@ const PartHide: string[] = DomTargetHide.concat([
   "updateArray",
   "updateNode",
   "updateTemplate",
-  "updateAttribute",
-  "set"
+  "updateAttribute"
 ]);
 
-const iPartCache = new Map<IPart, PrivatePart>();
 class PrivatePart extends DomTarget {
   public value: PartValue;
   public proxy: IPart;
@@ -265,20 +267,25 @@ class PrivatePart extends DomTarget {
     public isSVG: boolean = false
   ) {
     super(start, end);
+    if (!isNode(start)) {
+      throw new Error();
+    }
+    if (isString(end)) { 
+      this.value = isString(end) ? "" : start as Node;
+    }
   }
-
   public attach(node: Node) {
+    const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
     const target = followDOMPath(node, this.path);
     if (!target) {
       throw new RangeError();
     }
-
     if (Array.isArray(target)) {
-      this.start = target[0];
-      this.end = target[1];
+      _.start = target[0];
+      _.end = target[1];
     } else {
-      this.start = target;
-      if (isDocumentFragment(this.value)) {
+      _.start = target;
+      if (isDocumentFragment(_.value)) {
         let newPath;
         walkDOM(node as HTMLElement | DocumentFragment, undefined, (parent, element, walkPath) => {
           if (element === (this.value as DocumentFragment).lastChild) {
@@ -288,29 +295,33 @@ class PrivatePart extends DomTarget {
           return true;
         });
         if (newPath) {
-          this.end = followDOMPath(node, this.path.concat(newPath)) as Node;
+          _.end = followDOMPath(node, _.path.concat(newPath)) as Node;
         } else {
           throw new RangeError();
         }
-      } else if (isTemplate(this.value)) {
-        this.end = (this.value as ITemplate).lastNode();
+      } else if (isTemplate(_.value)) {
+        _.end = (_.value as ITemplate).lastNode();
       } else {
-        this.end = target;
+        _.end = target;
       }
     }
+    _.isAttached = true;
   }
 
   public dispose() {
-    if (this.disposers.length > 0) {
-      this.disposers.forEach(disposer => disposer(this.proxy));
+    const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
+    if (_.disposers.length > 0) {
+      _.disposers.forEach(disposer => disposer(_.proxy));
     }
   }
 
   public updateArray(value: PartValue[]) {
-    repeat(value)(this.proxy);
+    const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
+    repeat(value)(_.proxy);
   }
   
   public updateNode(value: PrimitivePart) {
+    const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
     const element = this.firstNode();
     const parent = element.parentNode;
     if (!parent) {
@@ -322,9 +333,9 @@ class PrivatePart extends DomTarget {
       if (element.nodeType !== TEXT_NODE) {
         const newEl = document.createTextNode(strVal);
         parent.insertBefore(newEl, element);
-        this.remove();
-        this.start = newEl;
-        this.end = newEl;
+        _.remove();
+        _.start = newEl;
+        _.end = newEl;
       }
       if (element.nodeValue !== value) {
         (element as Text).nodeValue = strVal;
@@ -334,10 +345,10 @@ class PrivatePart extends DomTarget {
       const newStart = isFrag ? (value as DocumentFragment).firstChild : value as Node;
       const newEnd = isFrag ? (value as DocumentFragment).lastChild : value as Node;
       parent.insertBefore(value as Node | DocumentFragment, element);
-      this.remove();
+      _.remove();
       if (newStart && newEnd) {
-        this.start = newStart;
-        this.end = newEnd;
+        _.start = newStart;
+        _.end = newEnd;
       } else {
         throw new RangeError();
       }
@@ -345,32 +356,34 @@ class PrivatePart extends DomTarget {
   }
 
   public updateTemplate(template: ITemplate) {
-    if (isTemplate(this.value) && template.key === (this.value as ITemplate).key) {
-      (this.value as ITemplate).update(template.values);
+    const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
+    if (isTemplate(_.value) && template.key === (_.value as ITemplate).key) {
+      (_.value as ITemplate).update(template.values);
     } else {
       const newStart = template.firstNode();
       const newEnd = template.lastNode();
-      template.insertBefore(this.firstNode());
-      this.remove();
-      this.start = newStart;
-      this.end = newEnd;
+      template.insertBefore(_.firstNode());
+      _.remove();
+      _.start = newStart;
+      _.end = newEnd;
     }
   }
 
   public updateAttribute(value: any) {
-    const element: Node = this.start as Node;
-    const name: string = isString(this.end) ? this.end as string : "";
+    const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
+    const element: Node = _.start as Node;
+    const name: string = isString(_.end) ? _.end as string : "";
     if (isFunction(value) || name in element) {
       (element as any)[name] = !value && value !== false ? "" : value
     } else if (value || value === false) {
-      if (this.isSVG) {
+      if (_.isSVG) {
         (element as HTMLElement).setAttributeNS(SVG_NS, name, value);
       } else {
         (element as HTMLElement).setAttribute(name, value);
       }
     }
     if (!value || value !== false) {
-      if (this.isSVG) {
+      if (_.isSVG) {
         (element as HTMLElement).removeAttributeNS(SVG_NS, name);
       } else {
         (element as HTMLElement).removeAttribute(name);
@@ -378,13 +391,14 @@ class PrivatePart extends DomTarget {
     }
   }
 
-  public set(value: PartValue) {
+  public update(value: PartValue) {
+    const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
     if (isDirectivePart(value)) {
-      (value as Directive)(this.proxy);
+      (value as Directive)(_.proxy);
       return;
     }
-    if (isString(this.end)) {
-      this.updateAttribute(value);
+    if (isString(_.end)) {
+      _.updateAttribute(value);
     } else {
       if (
         !isString(value) &&
@@ -395,20 +409,16 @@ class PrivatePart extends DomTarget {
       }
       if (isPromise(value)) {
         (value as Promise<PartValue>).then(promised => {
-          this.set(promised);
+          _.update(promised);
         });
       } else if (isTemplate(value)) {
-        this.updateTemplate(value as ITemplate);
+        _.updateTemplate(value as ITemplate);
       } else if (Array.isArray(value)) {
-        this.updateArray(value);
+        _.updateArray(value);
       } else {
-        this.updateNode(value as PrimitivePart);
+        _.updateNode(value as PrimitivePart);
       }
     }
-  };
-
-  public update(value: PartValue) {
-    this.set(value);
   }
 }
 
@@ -421,7 +431,7 @@ export function Part(
   const part = new PrivatePart(path, start, end, isSVG);
   const proxy = createAPIProxy(PartHide, PartRO, part);
   part.proxy = proxy;
-  iPartCache.set(proxy, part);
+  iDomTargetCache.set(proxy, part);
   Object.seal(part);
   return proxy;
 }
@@ -544,25 +554,20 @@ class PrivateTemplate extends DomTarget {
     
   }
   
-  public attachPart(part: IPart, target: Node) {
-    const p = iPartCache.get(part);
-    if (!p) {
-      throw new RangeError();
-    }
-    const cursor = followDOMPath(target, p.path);
-    if (!cursor) {
-      throw new RangeError();
-    }
-    p.attach(isNode(cursor) ? cursor as Node : (cursor as [Node, string]) [0]);
-  }
-
   public hydrate(target: Node): void | never {
+    const _ = iDomTargetCache.get(this as IDomTarget) as PrivateTemplate;
     if (this.fragment) {
       throw new Error(); // only hydrate newly created Templates...
     }
     this.update();
     try {
-      this.parts.forEach(part => this.attachPart(part, target));
+      this.parts.forEach(part => {
+        const p = iDomTargetCache.get(part as IDomTarget) as PrivatePart;
+        if (!p) {
+          throw new RangeError();
+        }
+        p.attach(target);
+      });
       const frag = this.fragment as DocumentFragment;
       if (frag) {
         while (frag.hasChildNodes) {
@@ -575,11 +580,12 @@ class PrivateTemplate extends DomTarget {
   };
 
   public render(target: Node) {
-    if (this.isAttached) {
+    const _: PrivateTemplate = iDomTargetCache.get(this as IDomTarget) as PrivateTemplate || this;
+    if (_.isAttached) {
       return;
     }
     if (target.hasChildNodes()) {
-      const hydrated = this.hydrate(target);
+      const hydrated = _.hydrate(target);
       const first = target.firstChild;
       if(!hydrated) {
         let cursor: Optional<Node | null> = target.lastChild;
@@ -588,52 +594,59 @@ class PrivateTemplate extends DomTarget {
           target.removeChild(cursor);
           cursor = cursor !== first ? next : undefined;
         }
-        this.appendTo(target);    
+        _.appendTo(target);    
       }
     } else {
-      this.update();
-      this.appendTo(target);
+      _.update();
+      _.appendTo(target);
     }
-    this.isAttached = true;
+    _.isAttached = true;
   }
 
   public dispose() {
-    this.parts.forEach(part => {
-      const p = iPartCache.get(part);
+    const _ = iDomTargetCache.get(this as IDomTarget) as PrivateTemplate || this;
+    _.parts.forEach(part => {
+      const p = iDomTargetCache.get(part);
       if (!p) {
         throw new RangeError();
       }
       p.dispose();
     });
-    if (this.disposers.length > 0) {
-      this.disposers.forEach(disposer => {
-        disposer(this.proxy);
+    if (_.disposers.length > 0) {
+      _.disposers.forEach(disposer => {
+        disposer(_.proxy);
       });
     }
   }
 
   public update(values?: PartValue[]) { 
-    if (!this.initialized) {
-      const t: HTMLTemplateElement = document.importNode(this.template, true);
-      this.fragment = t.content;
-      this.start = this.fragment.firstChild as Node;
-      this.end = this.fragment.lastChild as Node; 
-      this.parts.forEach(part => this.attachPart(part, this.fragment));
+    const _ = iDomTargetCache.get(this as IDomTarget) as PrivateTemplate || this;
+    if (!_.initialized) {
+      const t: HTMLTemplateElement = document.importNode(_.template, true);
+      _.fragment = t.content;
+      _.start = _.fragment.firstChild as Node;
+      _.end = _.fragment.lastChild as Node; 
+      _.parts.forEach(part => {
+        const p = iDomTargetCache.get(part) as PrivatePart;
+        if (!p) {
+          throw new RangeError();
+        }
+        p.attach(this.fragment);
+      });
     }
-    this.values = !values ? this.values : values;
-    if (this.values) {
-      this.parts.forEach((part, i) => {
-        part.update(this.values[i]);
+    _.values = !values ? _.values : values;
+    if (_.values) {
+      _.parts.forEach((part, i) => {
+        part.update(_.values[i]);
       });
     }
   }
 }
 
-const iTemplateCache = new Map<ITemplate, PrivateTemplate>();
 export function Template(key: string, tempEl: HTMLTemplateElement, parts: IPart[], values: PartValue[]) {
   const template = new PrivateTemplate(key, tempEl, parts, values);
   const proxy = createAPIProxy(TemplateHide, TemplateRO, template);
-  iTemplateCache.set(proxy, template);
+  iDomTargetCache.set(proxy, template);
   template.proxy = proxy;
   return proxy as ITemplate;
 }
@@ -827,7 +840,7 @@ export function render(
       renderedTemplates.set(target, template);
     }
   } else {
-    const t = iTemplateCache.get(template);
+    const t = iDomTargetCache.get(template) as PrivateTemplate;
     if (!t) {
       throw new RangeError();
     }
