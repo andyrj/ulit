@@ -833,7 +833,6 @@ export function render(
       instance.update(template.values);
     } else {
       template.update();
-      // console.log(template);
       template.insertBefore(instance.firstNode());
       instance.remove();
       renderedTemplates.set(target, template);

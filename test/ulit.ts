@@ -54,14 +54,14 @@ test("dynamic nodes dispersed in static nodes", t => {
   t.is((document.body.firstChild as HTMLElement).innerHTML, "in the middle it's dynamic!");
 });
 
-/*
 test("dynamic attributes", t => {
   const str = "test";
   const template = html`<div id=${str}>test</div>`;
-  template.update();
-  t.is(template.fragment.content.firstChild.id, str);
+  render(template)
+  t.is((document.body.firstChild as HTMLElement).id, str);
 });
 
+/*
 test("dynamic child interspersed with static nodes", t => {
   const node = document.createElement("div");
   node.innerHTML = "test";
