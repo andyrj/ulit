@@ -151,7 +151,7 @@ class DomTarget {
     const t = isNode(target) ? target as Node : (target as DomTarget).firstNode() as Node;
     const parent = t.parentNode;
     if (parent) {
-      parent.insertBefore(t, this.fragment);
+      parent.insertBefore(this.fragment, t);
     } else {
       throw new Error();
     }
@@ -535,13 +535,11 @@ const TemplateRO: string[] = DomTargetRO.concat([
 ]);
 const TemplateHide: string[] = [
   "hydrate",
-  "render",
-  "proxy"
+  "render"
 ];
 
 class PrivateTemplate extends DomTarget {
   public initialized: boolean = false;
-  public proxy: ITemplate;
   public disposers: IDomTargetDispose[] = [];
   constructor(
     public key: string,
@@ -551,7 +549,6 @@ class PrivateTemplate extends DomTarget {
   ) {
     super(defaultNode || getDefaultNode(), defaultNode);
     // TODO: finsih writing code to move from old functional setup...
-    
   }
   
   public hydrate(target: Node): void | never {
@@ -614,7 +611,7 @@ class PrivateTemplate extends DomTarget {
     });
     if (_.disposers.length > 0) {
       _.disposers.forEach(disposer => {
-        disposer(_.proxy);
+        disposer(this as IDomTarget);
       });
     }
   }
@@ -647,7 +644,7 @@ export function Template(key: string, tempEl: HTMLTemplateElement, parts: IPart[
   const template = new PrivateTemplate(key, tempEl, parts, values);
   const proxy = createAPIProxy(TemplateHide, TemplateRO, template);
   iDomTargetCache.set(proxy, template);
-  template.proxy = proxy;
+  // template.proxy = proxy;
   return proxy as ITemplate;
 }
 
@@ -835,7 +832,9 @@ export function render(
     if (instance.key === template.key) {
       instance.update(template.values);
     } else {
-      template.insertBefore(instance);
+      template.update();
+      // console.log(template);
+      template.insertBefore(instance.firstNode());
       instance.remove();
       renderedTemplates.set(target, template);
     }

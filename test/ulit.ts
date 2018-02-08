@@ -47,8 +47,7 @@ test("dynamic nodes dispersed in static nodes", t => {
 
   const template1 = html`<div>${str} is at start</div>`;
   render(template1);
-  t.is(document.body.innerHTML, "a");
-  // t.is((document.body.firstChild as HTMLElement).innerHTML, "dynamic is at start");
+  t.is((document.body.firstChild as HTMLElement).innerHTML, "dynamic is at start");
 
   const template2 = html`<div>in the middle it's ${str}!</div>`;
   render(template2);
