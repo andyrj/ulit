@@ -32,7 +32,7 @@ Improvements:
 npm install --save ulit
 ```
 
-#### Simple Example Code
+#### API Dump
 ```js
 // repeat is used for rendering keyed lists of dom nodes
 // until allows you to conditionally load a template that is replaced upon promise completion (code-splitting, fetch, etc...)
@@ -43,9 +43,11 @@ const hello = subject => html`<h1>hello ${subject}</h1>`;
 
 // render defaults to rendering to document.body if no other container is provided
 render(hello("world"), document.body);
+document.body.innerHTML === "<h1>hello world</h1>"; // true
 
 // calling render multiple times on the same container will update the current template in place if possible or replace it.
 render(hello("internet"));
+document.body.innerHTML === "<h1>hello internet</h1>"; // true
 
 // Build your own directive to extend ulit...
 // the example below defaultDirective is essentially what ulit does by default without a directive internally
@@ -54,6 +56,7 @@ const defaultDirective = value => part => {
 };
 
 render(html`<h1>${defaultDirective("pass through example...")}</h1>`);
+document.body.innerHTML === "<h1>pass through example...</h1>"; // true
 
 // Example Part API brain dump
 const partApiDirective = () => part => {
@@ -91,19 +94,34 @@ const nums = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 render(nums.map(num => {
   hello(num);
 }));
+document.body.innerHTML === "<h1>hello 0</h1><h1>hello 1</h1>..."; //true
 render(hello(nums));
+document.body.innerHTML === "<h1>hello 012345678910</h1>"; // true
 
 // Promises are valid PartValues, by default they will leave a HTML comment node where the part will update to whatever PartValue returned to resolve...
 render(hello(new Promise(resolve => {
   const doWork = setTimeout(resolve("async!"), 1000);
 })));
+// initially
+document.body.innerHTML === "<h1>hello <!--{{}}--></h1>"; // true
+// after 1 second
+document.body.innerHTML === "<h1>hello async!</h1>"; // true
 
 // until gives better support by allowing you to specify a default template while the promise resolves instead of a comment node
 render(hello(until(new Promise(resolve => {
   const doWork = setTimeout(resolve("async!"), 1000);
 },
-"loading..." 
+"loading..."
 )));
+// initially
+document.body.innerHTML === "<h1>hello loading...</h1>"; //true
+// after 1 second
+document.body.innerHTML === "<h1>hello async!</h1>"; // true
+
+// events
+const eventTemplate = html`<button oncick=${e => console.log(e)}>click me</button>`;
+document.body.innerHTML === "<button>click me</button>"; // true
+
 ```
 
 ## License
