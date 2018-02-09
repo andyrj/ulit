@@ -15,6 +15,7 @@ test.beforeEach(t => {
   a.window.btoa = btoa;
 });
 
+/*
 test("static templates", t => {
   const template = html`<div id="test">test</div>`;
   render(template);
@@ -57,38 +58,42 @@ test("dynamic nodes dispersed in static nodes", t => {
 test("dynamic attributes", t => {
   const str = "test";
   const template = html`<div id=${str}>test</div>`;
-  render(template)
-  t.is((document.body.firstChild as HTMLElement).id, str);
+  render(template);
+  t.is(document.body.innerHTML, `<div id="test">test</div>`);
 });
 
-/*
 test("dynamic child interspersed with static nodes", t => {
   const node = document.createElement("div");
   node.innerHTML = "test";
   const template = html`<div><br>before${node}<br>after</div>`;
-  template.update();
-  t.is(template.fragment.content.firstChild.outerHTML, "<div><br>before<div>test</div><br>after</div>");
+  render(template);
+  t.is(document.body.innerHTML, "<div><br>before<div>test</div><br>after</div>");
 });
+*/
 
 test("nested templates", t => {
   const nested = html`<div id="test">test</div>`;
   const template = html`<div>${nested}</div>`;
   render(template);
-  t.is(document.body.firstChild.firstChild.id, "test");
+  console.log(document.body.innerHTML); // TODO: walk render of nested template
+  t.is((document.body.firstChild.firstChild as HTMLElement).id, "test");
   t.is(document.body.firstChild.firstChild.firstChild.nodeValue, "test");
 
+  /*
   const template1 = html`<div>${html`<div id="test">test</div>`}</div>`;
-  template1.update();
-  t.is(template1.fragment.content.firstChild.firstChild.id, "test");
-  t.is(template1.fragment.content.firstChild.firstChild.firstChild.nodeValue, "test");
+  render(template1);
+  t.is((document.body.firstChild.firstChild as HTMLElement).id, "test");
+  t.is(document.body.firstChild.firstChild.firstChild.nodeValue, "test");
+  */
 });
 
+/*
 test("null should remove attribute", t => {
   const template = enable => html`<div enabled=${enable}>test</div>`;
   render(template(true));
-  t.is(document.body.firstChild.enabled, true);
+  t.is((document.body.firstChild as any).enabled, true);
   render(template(null));
-  t.is(document.body.firstChild.enabled, "");
+  t.is((document.body.firstChild as any).enabled, "");
   t.is(document.body.firstChild.attributes["enabled"], undefined);
 });
 

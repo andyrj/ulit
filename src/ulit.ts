@@ -240,6 +240,7 @@ function createAPIProxy(hide: string[], ro: string[], obj: any) {
 
 export interface IPart extends IDomTarget{
   readonly path: Array<number | string>;
+  readonly type: string;
   update: (value: PartValue) => void;
   readonly value: Optional<PartValue>;
 };
@@ -250,7 +251,6 @@ const PartRO: string[] = DomTargetRO.concat([
 ]);
 const PartHide: string[] = DomTargetHide.concat([
   "attach",
-  "proxy",
   "updateArray",
   "updateNode",
   "updateTemplate",
@@ -259,7 +259,7 @@ const PartHide: string[] = DomTargetHide.concat([
 
 class PrivatePart extends DomTarget {
   public value: PartValue;
-  public proxy: IPart;
+  public type = "part";
   constructor(
     public path: Array<string | number>,
     public start: Node | DomTarget,
@@ -267,6 +267,9 @@ class PrivatePart extends DomTarget {
     public isSVG: boolean = false
   ) {
     super(start, end);
+    this.path = path.slice(0);
+    Object.freeze(this.path);
+    Object.freeze(this.type);
     if (!isNode(start)) {
       throw new Error();
     }
@@ -276,7 +279,7 @@ class PrivatePart extends DomTarget {
   }
   public attach(node: Node) {
     const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
-    const target = followDOMPath(node, this.path);
+    const target = followDOMPath(node, _.path);
     if (!target) {
       throw new RangeError();
     }
@@ -311,13 +314,13 @@ class PrivatePart extends DomTarget {
   public dispose() {
     const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
     if (_.disposers.length > 0) {
-      _.disposers.forEach(disposer => disposer(_.proxy));
+      _.disposers.forEach(disposer => disposer(_ as IDomTarget));
     }
   }
 
   public updateArray(value: PartValue[]) {
     const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
-    repeat(value)(_.proxy);
+    repeat(value)(this as IPart);
   }
   
   public updateNode(value: PrimitivePart) {
@@ -371,30 +374,35 @@ class PrivatePart extends DomTarget {
 
   public updateAttribute(value: any) {
     const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
-    const element: Node = _.start as Node;
+    const element: HTMLElement = _.start as HTMLElement;
     const name: string = isString(_.end) ? _.end as string : "";
-    if (isFunction(value) || name in element) {
-      (element as any)[name] = !value && value !== false ? "" : value
-    } else if (value || value === false) {
-      if (_.isSVG) {
-        (element as HTMLElement).setAttributeNS(SVG_NS, name, value);
+    try {
+      (element as any)[name] = !value && value !== false ? "" : value;
+    } catch (_) {} // eslint-disable-line
+    if (!isFunction(value)) {
+      if (!value && value !== false) {
+        if (_.isSVG) {
+          element.removeAttributeNS(SVG_NS, name);
+        } else {
+          element.removeAttribute(name);
+        }
       } else {
-        (element as HTMLElement).setAttribute(name, value);
-      }
-    }
-    if (!value || value !== false) {
-      if (_.isSVG) {
-        (element as HTMLElement).removeAttributeNS(SVG_NS, name);
-      } else {
-        (element as HTMLElement).removeAttribute(name);
+        if (_.isSVG) {
+          element.setAttributeNS(SVG_NS, name, value);
+        } else {
+          element.setAttribute(name, value);
+        }
       }
     }
   }
 
   public update(value: PartValue) {
     const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
+    if (!value) {
+      value = _.value;
+    }
     if (isDirectivePart(value)) {
-      (value as Directive)(_.proxy);
+      (value as Directive)(this as IPart);
       return;
     }
     if (isString(_.end)) {
@@ -430,7 +438,6 @@ export function Part(
 ): IPart {
   const part = new PrivatePart(path, start, end, isSVG);
   const proxy = createAPIProxy(PartHide, PartRO, part);
-  part.proxy = proxy;
   iDomTargetCache.set(proxy, part);
   Object.seal(part);
   return proxy;
@@ -525,6 +532,7 @@ export interface ITemplate extends IDomTarget {
   dispose: () => void;
   readonly key: string;
   readonly parts: IPart[];
+  readonly type: string;
   update: (newValues?: PartValue[]) => void;
   readonly values: PartValue[];
 };
@@ -541,6 +549,7 @@ const TemplateHide: string[] = [
 class PrivateTemplate extends DomTarget {
   public initialized: boolean = false;
   public disposers: IDomTargetDispose[] = [];
+  public type = "template";
   constructor(
     public key: string,
     public template: HTMLTemplateElement,
@@ -548,32 +557,34 @@ class PrivateTemplate extends DomTarget {
     public values: PartValue[]
   ) {
     super(defaultNode || getDefaultNode(), defaultNode);
-    // TODO: finsih writing code to move from old functional setup...
+    Object.freeze(this.key);
+    Object.freeze(this.type);
   }
   
-  public hydrate(target: Node): void | never {
+  public hydrate(target: Node): boolean | never {
     const _ = iDomTargetCache.get(this as IDomTarget) as PrivateTemplate;
     if (this.fragment) {
       throw new Error(); // only hydrate newly created Templates...
     }
-    this.update();
+    _.update();
     try {
-      this.parts.forEach(part => {
+      _.parts.forEach(part => {
         const p = iDomTargetCache.get(part as IDomTarget) as PrivatePart;
         if (!p) {
           throw new RangeError();
         }
         p.attach(target);
       });
-      const frag = this.fragment as DocumentFragment;
+      const frag = _.fragment as DocumentFragment;
       if (frag) {
         while (frag.hasChildNodes) {
           frag.removeChild(frag.lastChild as Node);
         }
       }
     } catch(err) {
-      throw err;
+      return false;
     }
+    return true;
   };
 
   public render(target: Node) {
@@ -636,6 +647,9 @@ class PrivateTemplate extends DomTarget {
       _.parts.forEach((part, i) => {
         part.update(_.values[i]);
       });
+    }
+    if (!_.initialized) {
+      _.initialized = true;
     }
   }
 }
