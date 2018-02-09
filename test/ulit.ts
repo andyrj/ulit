@@ -15,7 +15,6 @@ test.beforeEach(t => {
   a.window.btoa = btoa;
 });
 
-/*
 test("static templates", t => {
   const template = html`<div id="test">test</div>`;
   render(template);
@@ -69,25 +68,20 @@ test("dynamic child interspersed with static nodes", t => {
   render(template);
   t.is(document.body.innerHTML, "<div><br>before<div>test</div><br>after</div>");
 });
-*/
 
 test("nested templates", t => {
   const nested = html`<div id="test">test</div>`;
   const template = html`<div>${nested}</div>`;
   render(template);
-  console.log(document.body.innerHTML); // TODO: walk render of nested template
   t.is((document.body.firstChild.firstChild as HTMLElement).id, "test");
   t.is(document.body.firstChild.firstChild.firstChild.nodeValue, "test");
 
-  /*
   const template1 = html`<div>${html`<div id="test">test</div>`}</div>`;
   render(template1);
   t.is((document.body.firstChild.firstChild as HTMLElement).id, "test");
   t.is(document.body.firstChild.firstChild.firstChild.nodeValue, "test");
-  */
 });
 
-/*
 test("null should remove attribute", t => {
   const template = enable => html`<div enabled=${enable}>test</div>`;
   render(template(true));
@@ -101,7 +95,7 @@ test("setting event handler should work", t => {
   const handler = e => {};
   const template = html`<div onclick=${handler}>test</div>`;
   render(template);
-  t.is(document.body.firstChild.onclick !== undefined, true);
+  t.is((document.body.firstChild as HTMLElement).onclick !== undefined, true);
 });
 
 test("nested templates should update in place", t => {
@@ -127,16 +121,6 @@ test("templates should be able to start and end with parts", t => {
   const template = html`${test} and ${test1}`;
   render(template);
   t.is(document.body.innerHTML === "test and test1", true);
-});
-
-test("invalid part paths should throw on init", t => {
-  const template = html`<div>${"test"}</div>`;
-  const orig = template.parts[0].path;
-  template.parts[0].path = [9, 9];
-  t.throws(() => {
-    template.update();
-  });
-  template.parts[0].path = orig;
 });
 
 test("fragments", t => {
@@ -192,4 +176,3 @@ test("arrays", t => {
   t.is(document.body.innerHTML, "<div>321</div>");
   console.log("-----");
 });
-*/

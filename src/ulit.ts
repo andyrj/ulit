@@ -363,6 +363,7 @@ class PrivatePart extends DomTarget {
     if (isTemplate(_.value) && template.key === (_.value as ITemplate).key) {
       (_.value as ITemplate).update(template.values);
     } else {
+      template.update();
       const newStart = template.firstNode();
       const newEnd = template.lastNode();
       template.insertBefore(_.firstNode());
@@ -563,7 +564,7 @@ class PrivateTemplate extends DomTarget {
   
   public hydrate(target: Node): boolean | never {
     const _ = iDomTargetCache.get(this as IDomTarget) as PrivateTemplate;
-    if (this.fragment) {
+    if (this.initialized) {
       throw new Error(); // only hydrate newly created Templates...
     }
     _.update();
@@ -639,7 +640,7 @@ class PrivateTemplate extends DomTarget {
         if (!p) {
           throw new RangeError();
         }
-        p.attach(this.fragment);
+        p.attach(_.fragment);
       });
     }
     _.values = !values ? _.values : values;
@@ -658,7 +659,6 @@ export function Template(key: string, tempEl: HTMLTemplateElement, parts: IPart[
   const template = new PrivateTemplate(key, tempEl, parts, values);
   const proxy = createAPIProxy(TemplateHide, TemplateRO, template);
   iDomTargetCache.set(proxy, template);
-  // template.proxy = proxy;
   return proxy as ITemplate;
 }
 
