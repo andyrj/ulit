@@ -104,23 +104,27 @@ render(hello(new Promise(resolve => {
 })));
 // initially
 document.body.innerHTML === "<h1>hello <!--{{}}--></h1>"; // true
-// after 1 second
-document.body.innerHTML === "<h1>hello async!</h1>"; // true
+setTimeout(() => document.body.innerHTML === "<h1>hello async!</h1>", 1001); // true
 
 // until gives better support by allowing you to specify a default template while the promise resolves instead of a comment node
-render(hello(until(new Promise(resolve => {
-  const doWork = setTimeout(resolve("async!"), 1000);
-},
-"loading..."
-)));
-// initially
+render(
+  hello(until(new Promise(resolve => {
+    const doWork = setTimeout(resolve("async!"), 1000);
+  },
+  "loading..."
+  )))
+);
 document.body.innerHTML === "<h1>hello loading...</h1>"; //true
-// after 1 second
-document.body.innerHTML === "<h1>hello async!</h1>"; // true
+setTimeout(() => document.body.innerHTML === "<h1>hello async!</h1>", 1001); // true
 
 // events
 const eventTemplate = html`<button onclick=${e => console.log(e)}>click me</button>`;
 document.body.innerHTML === "<button>click me</button>"; // true
+
+// nested templates
+const nested = hello(hello("nested"));
+render(nested);
+document.body.innerHTML === "<h1>hello <h1>hello nested</h1></h1>"; // true
 
 ```
 
