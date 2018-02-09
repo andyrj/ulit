@@ -22,10 +22,9 @@ Rough parity with lit-extended on features and general api setup.
 
 Improvements:
 * Transparent svg support - (no need for special svg tag function)
-* Simple depth first search walkDOM(fn) avoids using slow TreeWalker api (even if that's only a perf hit in the initial un-cached render()) client side, and will allow for smaller client versions of this library with many methods stripped out which are only required server side in an SSR'd app.
+* Simple depth first search walkDOM(fn) avoids using slow TreeWalker api (even if that's only a perf hit in the initial un-cached render()) client side.
 * SSR support via serializable part paths.  This uses followPath(Array<Number|String>), which handles most of the setup work can be pre-rendered down to static html that can be delivered to the client and hydrated.
 * By using "{{}}" for attributes and <!--{{}}--> for part placeholders, this library doesn't need to use regex, doesn't force quotes on attributes in templates and can be generally simpler.
-* Similar in bundle size to lit-html (probably smaller once the code is split into client/server implementations where server can be tree-shaken/dead code eliminated, from the client bundle).
 
 ## How can I use it?
 ### Install
@@ -35,18 +34,76 @@ npm install --save ulit
 
 #### Simple Example Code
 ```js
+// repeat is used for rendering keyed lists of dom nodes
+// until allows you to conditionally load a template that is replaced upon promise completion (code-splitting, fetch, etc...)
 import { html, render, repeat, until } from "ulit";
 
-// will improve quality of example, basically lit-html syntax, but with no need to worry about "on-", $ suffix, or special case svg`` function which we handle transparently to the user, and if a part is a function not set to an attribute starting with "on", we assume it's a directive instead of lit-html directive().
-const world = "world";
-render(html`<h1>hello ${world}!</h1>`);
+// "components" are just template functions
+const hello = subject => html`<h1>hello ${subject}</h1>`;
 
-// Build your own directive to extend ulit... 
-const dummyDirective = value => part => {
+// render defaults to rendering to document.body if no other container is provided
+render(hello("world"), document.body);
+
+// calling render multiple times on the same container will update the current template in place if possible or replace it.
+render(hello("internet"));
+
+// Build your own directive to extend ulit...
+// the example below defaultDirective is essentially what ulit does by default without a directive internally
+const defaultDirective = value => part => {
   part.update(value);
 };
-render(html`<h1>${dummyDirective("pass through example...")}</h1>`);
 
+render(html`<h1>${defaultDirective("pass through example...")}</h1>`);
+
+// Example Part API brain dump
+const partApiDirective = () => part => {
+  // update part with a new PartValue
+  part.update("test");
+
+  // parts have a dispose event so that you can clean up anything your directives create on dispose...
+  // parts are disposed when templates replace one another and have differing static parts, or when a part changes from a directive to another valid PartValue
+  const handler = part => {
+    // normally clean up whatever LUT/cache you have seems like Map<part, ...> is pretty useful inside directives
+  };
+  part.addDisposer(handler);
+  part.removeDisposer(handler);
+
+  // readonly/private typescript classes enforced at runtime in javascript via es6 proxy...
+  part.path; // readonly Array<string | number>, the path from containing templates root to this part
+  part.isAttached; // readonly boolean, denotes whether this part has been placed into the parent template fragment/parent dom
+  part.firstNode(); // Node that begins this part
+  part.lastNode(); // Node that ends this part...
+  
+  // Danger: dom manipulations below use carefully can do weird things like remove a part and then update the containing template which is undefined behavior...
+  const frag = document.createDocumentFragment();
+  const cursor = document.createComment("");
+  frag.appendChild(cursor);
+  //
+  // all dom mutations will remove current part from dom if attached like the browsers dom api does for elements.
+  part.appendTo(frag);
+  part.insertAfter(cursor); 
+  part.insertBefore(cursor);
+  part.remove(); // moves the part back into it's private container fragment, used internally by apendTo, insertAfter, insertBefore.
+};
+
+// Arrays/iterables are valid PartValue and render templates, this uses repeat() internally
+const nums = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+render(nums.map(num => {
+  hello(num);
+}));
+render(hello(nums));
+
+// Promises are valid PartValues, by default they will leave a HTML comment node where the part will update to whatever PartValue returned to resolve...
+render(hello(new Promise(resolve => {
+  const doWork = setTimeout(resolve("async!"), 1000);
+})));
+
+// until gives better support by allowing you to specify a default template while the promise resolves instead of a comment node
+render(hello(until(new Promise(resolve => {
+  const doWork = setTimeout(resolve("async!"), 1000);
+},
+"loading..." 
+)));
 ```
 
 ## License
