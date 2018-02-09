@@ -160,13 +160,13 @@ class DomTarget {
 
   public remove() {
     const _ = iDomTargetCache.get(this as IDomTarget) || this;
-    if (!this.isAttached) {
+    if (!_.isAttached) {
       return;
     }
-    let cursor: Optional<Node> = this.firstNode();
+    let cursor: Optional<Node> = _.firstNode();
     while (cursor !== undefined) {
       const next: Node = cursor.nextSibling as Node;
-      this.fragment.appendChild(cursor);
+      _.fragment.appendChild(cursor);
       cursor = (cursor === this.end || !next) ? undefined : next;
     }
     _.isAttached = false;
@@ -192,6 +192,9 @@ function isNumber(x: any): boolean {
 }
 
 function followEdge(target: DomTarget | Node, edge: "start" | "end"): Node {
+  if (!target) {
+    throw new RangeError();
+  }
   if (isNode(target)) {
     return target as Node;
   } else {
@@ -871,7 +874,6 @@ export function defaultTemplateFn(item: any): ITemplate {
 }
 
 const repeatCache = new Map<IPart, [Key[], Map<Key, ITemplate>]>();
-
 export function repeat(
   items: Array<{}>,
   keyFn: typeof defaultKeyFn = defaultKeyFn,
