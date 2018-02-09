@@ -119,7 +119,7 @@ document.body.innerHTML === "<h1>hello loading...</h1>"; //true
 document.body.innerHTML === "<h1>hello async!</h1>"; // true
 
 // events
-const eventTemplate = html`<button oncick=${e => console.log(e)}>click me</button>`;
+const eventTemplate = html`<button onclick=${e => console.log(e)}>click me</button>`;
 document.body.innerHTML === "<button>click me</button>"; // true
 
 ```
