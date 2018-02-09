@@ -62,7 +62,7 @@ const partApiDirective = () => part => {
 
   // parts have a dispose event so that you can clean up anything your directives create on dispose...
   // parts are disposed when templates replace one another and have differing static parts, or when a part changes from a directive to another valid PartValue
-  const handler = part => {
+  const handler = handlerPart => {
     // normally clean up whatever LUT/cache you have seems like Map<part, ...> is pretty useful inside directives
   };
   part.addDisposer(handler);
