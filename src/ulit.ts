@@ -406,7 +406,7 @@ class PrivatePart extends DomTarget {
       value = _.value;
     }
     if (isDirectivePart(value)) {
-      (value as Directive)(this as IPart);
+      (value as Directive)(_ as IPart);
       return;
     }
     if (isString(_.end)) {
