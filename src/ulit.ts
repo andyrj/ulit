@@ -323,7 +323,7 @@ class PrivatePart extends DomTarget {
 
   public updateArray(value: PartValue[]) {
     const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
-    repeat(value)(this as IPart);
+    repeat(value)(_ as IPart);
   }
   
   public updateNode(value: PrimitivePart) {
@@ -948,10 +948,10 @@ export function repeat(
           const oldIndex = oldCacheOrder.indexOf(key);
           oldCacheOrder.splice(oldIndex, 1);
           oldCacheOrder.splice(index, 0, key);
-          const frag = oldEntry.remove();
+          // const frag = oldEntry.remove();
           if (oldEntry.key === nextTemplate.key) {
             oldEntry.update(nextTemplate.values);
-            parent.insertBefore(frag, target);
+            // parent.insertBefore(frag, target);
           } else {
             nextTemplate.update();
             nextTemplate.insertBefore(target);

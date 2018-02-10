@@ -15,7 +15,7 @@
     "test"
   ],
   "scripts": {
-    "test": "tsc -p ava.tsconfig.json; ava; rm test/ulit.js*; rm src/ulit.js*;",
+    "test": "ava-ts",
     "test:html": "nyc report --reporter=html",
     "codacy": "nyc report --reporter=lcov && cat ./coverage/lcov.info | codacy-coverage",
     "build": "rm -rf dist/* && tsc && npm run minify",
@@ -41,13 +41,16 @@
   "homepage": "https://github.com/andyrj/ulit#readme",
   "dependencies": {},
   "devDependencies": {
+    "@types/jsdom": "^11.0.4",
     "atob": "^2.0.3",
     "ava": "^0.24.0",
+    "ava-ts": "^0.24.1",
     "btoa": "^1.1.2",
     "codacy-coverage": "^2.0.3",
     "jsdom": "^11.5.1",
     "nyc": "^11.3.0",
     "prettier": "^1.9.2",
+    "ts-node": "^4.1.0",
     "tslint": "^5.8.0",
     "tslint-config-prettier": "^1.6.0",
     "typedoc": "^0.9.0",

@@ -10,8 +10,11 @@
         "max-classes-per-file": false,
         "no-empty": false,
         "no-bitwise": false,
-        "no-null-keyword": true,
-        "interface-name": false
+        "no-null-keyword": false,
+        "interface-name": false,
+        "no-implicit-dependencies": false,
+        "no-debugger": false,
+        "no-string-literal": false
     },
     "rulesDirectory": [],
     "exclude": [
