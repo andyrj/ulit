@@ -74,20 +74,27 @@ function getFragment(): DocumentFragment {
   }
 }
 
+function getIDomTarget(target: IDomTarget): PrivatePart | PrivateTemplate {
+  const entry = iDomTargetCache.get(target) || target;
+  if (!entry) {
+    throw new RangeError();
+  }
+  return entry as PrivatePart | PrivateTemplate;
+}
+
 const iDomTargetCache = new Map<IDomTarget, PrivatePart | PrivateTemplate>();
 class DomTarget {
   public isAttached: boolean = false;
-  public fragment: DocumentFragment;
+  public fragment: Optional<DocumentFragment> = undefined;
   public isSVG: boolean = false;
   public disposers: IDomTargetDispose[] = [];
   constructor(
     public start: Node | DomTarget,
     public end: Node | DomTarget | string, 
-  ) {
-    this.fragment = getFragment();
-  }
+  ) {}
   
   public addDisposer(handler: IDomTargetDispose) {
+    const _ = getIDomTarget(this as IDomTarget);
     if (
       isFunction(handler) &&
       this.disposers.indexOf(handler) === -1
@@ -97,34 +104,40 @@ class DomTarget {
   }
 
   public removeDisposer(handler: IDomTargetDispose) {
-    const index = this.disposers.indexOf(handler);
+    const _ = getIDomTarget(this as IDomTarget);
+    const index = _.disposers.indexOf(handler);
       if (index > -1) {
-        this.disposers.splice(index, 1);
+        _.disposers.splice(index, 1);
       }
   }
 
   public firstNode(): Node {
-    return followEdge(this, "start");
+    const _ = getIDomTarget(this as IDomTarget);
+    return followEdge(_, "start");
   }
   public lastNode(): Node {
-    return followEdge(this, "end");
+    const _ = getIDomTarget(this as IDomTarget);
+    return followEdge(_, "end");
   }
 
   public appendTo(parent: Node) {
-    const _ = iDomTargetCache.get(this as IDomTarget) || this;
-    if (this.isAttached) {
-      this.remove();
+    const _ = getIDomTarget(this as IDomTarget);
+    if (_.isAttached) {
+      _.remove();
     }
-    parent.appendChild(this.fragment);
+    if (!_.fragment) {
+      _.fragment = getFragment();
+    }
+    parent.appendChild(_.fragment);
     _.isAttached = true;
   }
 
   public insertAfter(target: DomTarget | Node) {
-    const _ = iDomTargetCache.get(this as IDomTarget) || this;
-    if (this.isAttached) {
-      this.remove();
+    const _ = getIDomTarget(this as IDomTarget);
+    if (_.isAttached) {
+      _.remove();
     }
-    if (!this.fragment || !this.fragment.hasChildNodes()) {
+    if (!_.fragment || !_.fragment.hasChildNodes()) {
       return;
     }
     const t = isNode(target) ? target as Node : (target as DomTarget).lastNode() as Node;
@@ -134,16 +147,16 @@ class DomTarget {
       throw new Error();
     }
     if (!next) {
-      this.appendTo(parent);
+      _.appendTo(parent);
     } else if (next){
-      this.insertBefore(next);
+      _.insertBefore(next);
     }
     _.isAttached = true;
   }
   public insertBefore(target: DomTarget | Node) {
-    const _ = iDomTargetCache.get(this as IDomTarget) || this;
-    if (this.isAttached) {
-      this.remove();
+    const _ = getIDomTarget(this as IDomTarget);
+    if (_.isAttached) {
+      _.remove();
     }
     if (!this.fragment || !this.fragment.hasChildNodes()) {
       return;
@@ -159,9 +172,12 @@ class DomTarget {
   }
 
   public remove() {
-    const _ = iDomTargetCache.get(this as IDomTarget) || this;
+    const _ = getIDomTarget(this as IDomTarget);
     if (!_.isAttached) {
       return;
+    }
+    if (!_.fragment) {
+      _.fragment = getFragment();
     }
     let cursor: Optional<Node> = _.firstNode();
     while (cursor !== undefined) {
@@ -250,6 +266,7 @@ export interface IPart extends IDomTarget{
 
 const PartRO: string[] = DomTargetRO.concat([
   "path",
+  "type",
   "value"
 ]);
 const PartHide: string[] = DomTargetHide.concat([
@@ -281,7 +298,7 @@ class PrivatePart extends DomTarget {
     }
   }
   public attach(node: Node) {
-    const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
+    const _ = getIDomTarget(this as IDomTarget) as PrivatePart;
     const target = followDOMPath(node, _.path);
     if (!target) {
       throw new RangeError();
@@ -315,19 +332,19 @@ class PrivatePart extends DomTarget {
   }
 
   public dispose() {
-    const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
+    const _ = getIDomTarget(this as IDomTarget) as PrivatePart;
     if (_.disposers.length > 0) {
       _.disposers.forEach(disposer => disposer(_ as IDomTarget));
     }
   }
 
   public updateArray(value: PartValue[]) {
-    const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
+    const _ = getIDomTarget(this as IDomTarget) as PrivatePart;
     repeat(value)(_ as IPart);
   }
   
   public updateNode(value: PrimitivePart) {
-    const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
+    const _ = getIDomTarget(this as IDomTarget) as PrivatePart;
     const element = this.firstNode();
     const parent = element.parentNode;
     if (!parent) {
@@ -362,14 +379,15 @@ class PrivatePart extends DomTarget {
   }
 
   public updateTemplate(template: ITemplate) {
-    const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
+    const _ = getIDomTarget(this as IDomTarget) as PrivatePart;
+    const first = _.firstNode();
     if (isTemplate(_.value) && template.key === (_.value as ITemplate).key) {
       (_.value as ITemplate).update(template.values);
     } else {
       template.update();
       const newStart = template.firstNode();
       const newEnd = template.lastNode();
-      template.insertBefore(_.firstNode());
+      template.insertBefore(first);
       _.remove();
       _.start = newStart;
       _.end = newEnd;
@@ -377,7 +395,7 @@ class PrivatePart extends DomTarget {
   }
 
   public updateAttribute(value: any) {
-    const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
+    const _ = getIDomTarget(this as IDomTarget) as PrivatePart;
     const element: HTMLElement = _.start as HTMLElement;
     const name: string = isString(_.end) ? _.end as string : "";
     try {
@@ -401,7 +419,7 @@ class PrivatePart extends DomTarget {
   }
 
   public update(value: PartValue) {
-    const _ = iDomTargetCache.get(this as IDomTarget) as PrivatePart || this;
+    const _ = getIDomTarget(this as IDomTarget) as PrivatePart;
     if (!value) {
       value = _.value;
     }
@@ -541,9 +559,11 @@ export interface ITemplate extends IDomTarget {
   readonly values: PartValue[];
 };
 const TemplateRO: string[] = DomTargetRO.concat([
+  "initialized",
   "key",
   "parts",
-  "values"
+  "values",
+  "type"
 ]);
 const TemplateHide: string[] = [
   "hydrate",
@@ -566,14 +586,14 @@ class PrivateTemplate extends DomTarget {
   }
   
   public hydrate(target: Node): boolean | never {
-    const _ = iDomTargetCache.get(this as IDomTarget) as PrivateTemplate;
+    const _ = getIDomTarget(this as IDomTarget) as PrivateTemplate;
     if (this.initialized) {
       throw new Error(); // only hydrate newly created Templates...
     }
     _.update();
     try {
       _.parts.forEach(part => {
-        const p = iDomTargetCache.get(part as IDomTarget) as PrivatePart;
+        const p = getIDomTarget(part as IDomTarget) as PrivatePart;
         if (!p) {
           throw new RangeError();
         }
@@ -592,7 +612,7 @@ class PrivateTemplate extends DomTarget {
   };
 
   public render(target: Node) {
-    const _: PrivateTemplate = iDomTargetCache.get(this as IDomTarget) as PrivateTemplate || this;
+    const _: PrivateTemplate = getIDomTarget(this as IDomTarget) as PrivateTemplate;
     if (_.isAttached) {
       return;
     }
@@ -616,9 +636,9 @@ class PrivateTemplate extends DomTarget {
   }
 
   public dispose() {
-    const _ = iDomTargetCache.get(this as IDomTarget) as PrivateTemplate || this;
+    const _ = getIDomTarget(this as IDomTarget) as PrivateTemplate;
     _.parts.forEach(part => {
-      const p = iDomTargetCache.get(part);
+      const p = getIDomTarget(part);
       if (!p) {
         throw new RangeError();
       }
@@ -632,18 +652,21 @@ class PrivateTemplate extends DomTarget {
   }
 
   public update(values?: PartValue[]) { 
-    const _ = iDomTargetCache.get(this as IDomTarget) as PrivateTemplate || this;
+    const _ = getIDomTarget(this as IDomTarget) as PrivateTemplate;
+    if (!_.fragment) {
+      _.fragment = getFragment();
+    }
     if (!_.initialized) {
       const t: HTMLTemplateElement = document.importNode(_.template, true);
       _.fragment = t.content;
       _.start = _.fragment.firstChild as Node;
       _.end = _.fragment.lastChild as Node; 
       _.parts.forEach(part => {
-        const p = iDomTargetCache.get(part) as PrivatePart;
+        const p = getIDomTarget(part) as PrivatePart;
         if (!p) {
           throw new RangeError();
         }
-        p.attach(_.fragment);
+        p.attach(_.fragment as Node);
       });
     }
     _.values = !values ? _.values : values;
@@ -662,6 +685,7 @@ export function Template(key: string, tempEl: HTMLTemplateElement, parts: IPart[
   const template = new PrivateTemplate(key, tempEl, parts, values);
   const proxy = createAPIProxy(TemplateHide, TemplateRO, template);
   iDomTargetCache.set(proxy, template);
+  Object.seal(template);
   return proxy as ITemplate;
 }
 
@@ -855,7 +879,7 @@ export function render(
       renderedTemplates.set(target, template);
     }
   } else {
-    const t = iDomTargetCache.get(template) as PrivateTemplate;
+    const t = getIDomTarget(template) as PrivateTemplate;
     if (!t) {
       throw new RangeError();
     }

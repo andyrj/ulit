@@ -17,3 +17,6 @@ coverage
 # Dist
 *.gz
 dist/
+
+# Docs
+docs/

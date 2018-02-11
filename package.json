@@ -25,7 +25,6 @@
     "prepublish": "npm run minify",
     "docs": "typedoc --out ./docs/ --mode file ./src/ulit.ts",
     "lint": "tslint -c tslint.json 'src/**/*.ts'",
-    "lint:fix": "eslint --fix --ext .js src/",
     "format": "prettier --write 'src/**/*.ts'",
     "release": "npm run test && git commit -am $npm_package_version && git tag $npm_package_version && git push && git push --tags && npm publish"
   },
