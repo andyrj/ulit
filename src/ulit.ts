@@ -57,8 +57,9 @@ export interface IDomTarget {
   appendTo: (parent: Node) => void;
   insertAfter: (target: IDomTarget | Node) => void;
   insertBefore: (target: IDomTarget | Node) => void;
-  remove: () => void;
+  remove: () => DocumentFragment;
   removeDisposer: (handler: IDomTargetDispose) => void;
+  replaceWith: (next: Node | IDomTarget) => void;
 }
 
 const fragmentCache: DocumentFragment[] = [];
@@ -188,10 +189,10 @@ class DomTarget {
   }
 
   public remove() {
-    const _ = getIDomTarget(this as IDomTarget);
-    if (!_.isAttached) {
+    if (!this.isAttached) {
       return;
     }
+    const _ = getIDomTarget(this as IDomTarget);
     const fragment = getFragment();
     let cursor: Optional<Node> = _.firstNode();
     while (cursor !== undefined) {
@@ -201,6 +202,29 @@ class DomTarget {
     }
     _.isAttached = false;
     return fragment;
+  }
+
+  public replaceWith(next: Node | IDomTarget) {
+    if (!this.isAttached) {
+      return;
+    }
+    const _ = getIDomTarget(this as IDomTarget);
+    const first = _.firstNode();
+    const parent = first.parentNode;
+    if (!parent) {
+      throw new RangeError();
+    }
+    if (isNode(next)) {
+      parent.insertBefore(next as Node, first);
+      _.remove();
+    } else {
+      const n = getIDomTarget(next as IDomTarget);
+      n.insertBefore(first);
+      _.remove();
+      _.start = n.start;
+      _.end = n.end;
+      _.isAttached = n.isAttached;
+    }
   }
 }
 
@@ -398,12 +422,7 @@ class PrivatePart extends DomTarget {
       (_.value as ITemplate).update(template.values);
     } else {
       template.update();
-      const newStart = template.firstNode();
-      const newEnd = template.lastNode();
-      template.insertBefore(first);
-      _.remove();
-      _.start = newStart;
-      _.end = newEnd;
+      _.replaceWith(template);
       _.value = template;
     }
   }
@@ -581,8 +600,7 @@ const TemplateRO: string[] = DomTargetRO.concat([
   "type"
 ]);
 const TemplateHide: string[] = [
-  "hydrate",
-  "render"
+  "hydrate"
 ];
 
 class PrivateTemplate extends DomTarget {
@@ -625,30 +643,6 @@ class PrivateTemplate extends DomTarget {
     }
     return true;
   };
-
-  public render(target: Node) {
-    const _: PrivateTemplate = getIDomTarget(this as IDomTarget) as PrivateTemplate;
-    if (_.isAttached) {
-      return;
-    }
-    if (target.hasChildNodes()) {
-      const hydrated = _.hydrate(target);
-      const first = target.firstChild;
-      if(!hydrated) {
-        let cursor: Optional<Node | null> = target.lastChild;
-        while (cursor) {
-          const next: Optional<Node | null> = cursor.previousSibling;
-          target.removeChild(cursor);
-          cursor = cursor !== first ? next : undefined;
-        }
-        _.appendTo(target);    
-      }
-    } else {
-      _.update();
-      _.appendTo(target);
-    }
-    _.isAttached = true;
-  }
 
   public dispose() {
     const _ = getIDomTarget(this as IDomTarget) as PrivateTemplate;
@@ -901,7 +895,33 @@ export function render(
     if (!t) {
       throw new RangeError();
     }
-    t.render(target);
+    // TODO: work on cleaning this up below...
+    // t.render(target);
+    /* REMOVE: this should be from render() not PrivateTemplate.render()...
+    public render(target: Node) {
+      const _: PrivateTemplate = getIDomTarget(this as IDomTarget) as PrivateTemplate;
+      if (_.isAttached) {
+        return;
+      }
+      if (target.hasChildNodes()) {
+        const hydrated = _.hydrate(target);
+        const first = target.firstChild;
+        if(!hydrated) {
+          let cursor: Optional<Node | null> = target.lastChild;
+          while (cursor) {
+            const next: Optional<Node | null> = cursor.previousSibling;
+            target.removeChild(cursor);
+            cursor = cursor !== first ? next : undefined;
+          }
+          _.appendTo(target);    
+        }
+      } else {
+        _.update();
+        _.appendTo(target);
+      }
+      _.isAttached = true;
+    }
+    */
     renderedTemplates.set(target, template);
   }
 }
