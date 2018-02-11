@@ -674,9 +674,6 @@ class PrivateTemplate extends DomTarget {
     if (!_.initialized) {
       const t: HTMLTemplateElement = document.importNode(_.template, true);
       _.fragment = t.content;
-      // TODO: fix init here...  
-      // _.start = _.fragment.firstChild as Node;
-      // _.end = _.fragment.lastChild as Node; 
       if (!_.fragment.firstChild || !_.fragment.lastChild) {
         throw new RangeError();
       }
