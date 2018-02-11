@@ -176,16 +176,15 @@ class DomTarget {
     if (!_.isAttached) {
       return;
     }
-    if (!_.fragment) {
-      _.fragment = getFragment();
-    }
+    const fragment = getFragment();
     let cursor: Optional<Node> = _.firstNode();
     while (cursor !== undefined) {
       const next: Node = cursor.nextSibling as Node;
-      _.fragment.appendChild(cursor);
+      fragment.appendChild(cursor);
       cursor = (cursor === this.end || !next) ? undefined : next;
     }
     _.isAttached = false;
+    return fragment;
   }
 }
 
