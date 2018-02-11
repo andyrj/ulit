@@ -595,7 +595,7 @@ class PrivateTemplate extends DomTarget {
     public parts: IPart[],
     public values: PartValue[]
   ) {
-    super(defaultNode || getDefaultNode(), defaultNode);
+    super();
     Object.freeze(this.key);
     Object.freeze(this.type);
   }
