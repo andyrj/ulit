@@ -277,7 +277,7 @@ const PartHide: string[] = DomTargetHide.concat([
 ]);
 
 class PrivatePart extends DomTarget {
-  public value: PartValue;
+  public value: Optional<PartValue> = undefined;
   public type = "part";
   constructor(
     public path: Array<string | number>,
@@ -291,9 +291,6 @@ class PrivatePart extends DomTarget {
     Object.freeze(this.type);
     if (!isNode(start)) {
       throw new Error();
-    }
-    if (isString(end)) { 
-      this.value = isString(end) ? "" : start as Node;
     }
   }
   public attach(node: Node) {
@@ -390,6 +387,7 @@ class PrivatePart extends DomTarget {
       _.remove();
       _.start = newStart;
       _.end = newEnd;
+      _.value = template;
     }
   }
 
@@ -419,7 +417,7 @@ class PrivatePart extends DomTarget {
 
   public update(value: PartValue) {
     const _ = getIDomTarget(this as IDomTarget) as PrivatePart;
-    if (!value) {
+    if (!value && _.value) {
       value = _.value;
     }
     if (isDirectivePart(value)) {
