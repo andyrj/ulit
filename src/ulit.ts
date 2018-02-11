@@ -74,6 +74,13 @@ function getFragment(): DocumentFragment {
   }
 }
 
+function recoverFragment(fragment: DocumentFragment) {
+  while(fragment.hasChildNodes()) {
+    fragment.removeChild(fragment.lastChild as Node);
+  }
+  fragmentCache.push(fragment);
+}
+
 function getIDomTarget(target: IDomTarget): PrivatePart | PrivateTemplate {
   const entry = iDomTargetCache.get(target) || target;
   if (!entry) {
@@ -89,8 +96,8 @@ class DomTarget {
   public isSVG: boolean = false;
   public disposers: IDomTargetDispose[] = [];
   constructor(
-    public start: Node | DomTarget,
-    public end: Node | DomTarget | string, 
+    public start: Node | IDomTarget,
+    public end: Node | IDomTarget | string, 
   ) {}
   
   public addDisposer(handler: IDomTargetDispose) {
@@ -281,8 +288,8 @@ class PrivatePart extends DomTarget {
   public type = "part";
   constructor(
     public path: Array<string | number>,
-    public start: Node | DomTarget,
-    public end: Node | DomTarget | string,
+    public start: Node | IDomTarget,
+    public end: Node | IDomTarget | string,
     public isSVG: boolean = false
   ) {
     super(start, end);
@@ -356,8 +363,8 @@ class PrivatePart extends DomTarget {
         _.start = newEl;
         _.end = newEl;
       }
-      if (element.nodeValue !== value) {
-        (element as Text).nodeValue = strVal;
+      if (element.textContent !== value) {
+        (element as Text).textContent = strVal;
       }
     } else {
       const isFrag = (value as Node).nodeType === DOCUMENT_FRAGMENT;
@@ -372,6 +379,7 @@ class PrivatePart extends DomTarget {
         throw new RangeError();
       }
     }
+    _.value = value;
   }
 
   public updateTemplate(template: ITemplate) {
@@ -413,6 +421,7 @@ class PrivatePart extends DomTarget {
         }
       }
     }
+    _.value = value;
   }
 
   public update(value: PartValue) {
@@ -656,8 +665,14 @@ class PrivateTemplate extends DomTarget {
     if (!_.initialized) {
       const t: HTMLTemplateElement = document.importNode(_.template, true);
       _.fragment = t.content;
-      _.start = _.fragment.firstChild as Node;
-      _.end = _.fragment.lastChild as Node; 
+      // TODO: fix init here...  
+      // _.start = _.fragment.firstChild as Node;
+      // _.end = _.fragment.lastChild as Node; 
+      if (!_.fragment.firstChild || !_.fragment.lastChild) {
+        throw new RangeError();
+      }
+      _.start = isComment(_.fragment.firstChild as Node) ? _.fragment.firstChild : _.parts[0] as IDomTarget;
+      _.end = isComment(_.fragment.lastChild as Node) ? _.fragment.lastChild : _.parts[_.parts.length - 1] as IDomTarget; 
       _.parts.forEach(part => {
         const p = getIDomTarget(part) as PrivatePart;
         if (!p) {
@@ -857,7 +872,7 @@ export function html(
   return Template(staticMarkUp, template, parts, exprs);
 }
 
-const renderedTemplates = new Map<Node, ITemplate>();
+const renderedTemplates = new WeakMap<Node, ITemplate>();
 export function render(
   template: ITemplate,
   target?: Node
