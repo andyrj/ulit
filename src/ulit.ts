@@ -95,10 +95,19 @@ class DomTarget {
   public fragment: Optional<DocumentFragment> = undefined;
   public isSVG: boolean = false;
   public disposers: IDomTargetDispose[] = [];
+  public start: Optional<Node | IDomTarget> = undefined;
+  public end:Optional<Node | IDomTarget | string> = undefined;
   constructor(
-    public start: Node | IDomTarget,
-    public end: Node | IDomTarget | string, 
-  ) {}
+    start?: Node | IDomTarget,
+    end?: Node | IDomTarget | string, 
+  ) {
+    if (start) {
+      this.start = start;
+    }
+    if (end) {
+      this.end = end;
+    }
+  }
   
   public addDisposer(handler: IDomTargetDispose) {
     const _ = getIDomTarget(this as IDomTarget);
