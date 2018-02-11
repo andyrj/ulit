@@ -114,9 +114,9 @@ class DomTarget {
     const _ = getIDomTarget(this as IDomTarget);
     if (
       isFunction(handler) &&
-      this.disposers.indexOf(handler) === -1
+      _.disposers.indexOf(handler) === -1
     ) {
-      this.disposers.push(handler);
+      _.disposers.push(handler);
     }
   }
 
@@ -417,7 +417,6 @@ class PrivatePart extends DomTarget {
 
   public updateTemplate(template: ITemplate) {
     const _ = getIDomTarget(this as IDomTarget) as PrivatePart;
-    const first = _.firstNode();
     if (isTemplate(_.value) && template.key === (_.value as ITemplate).key) {
       (_.value as ITemplate).update(template.values);
     } else {
@@ -575,14 +574,6 @@ function isPromise(x: any): boolean {
 function isTemplate(x: any): boolean {
   return x && x.type && x.type === "template";
 }
-
-let defaultNode: Node;
-function getDefaultNode() {
-  if (!defaultNode) {
-    defaultNode = document.createComment(PART_MARKER);
-  } 
-  return defaultNode;
-};
 
 export interface ITemplate extends IDomTarget {
   dispose: () => void;
