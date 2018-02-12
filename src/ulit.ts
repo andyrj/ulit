@@ -129,15 +129,16 @@ class DomTarget {
   }
 
   public firstNode(): Node {
-    const _ = getIDomTarget(this as IDomTarget);
-    return followEdge(_, "start");
+    return followEdge(this as IDomTarget, "start");
   }
   public lastNode(): Node {
-    const _ = getIDomTarget(this as IDomTarget);
-    return followEdge(_, "end");
+    return followEdge(this as IDomTarget, "end");
   }
 
   public appendTo(parent: Node) {
+    if (!parent) {
+      throw new Error();
+    }
     const _ = getIDomTarget(this as IDomTarget);
     if (_.isAttached) {
       _.remove();
@@ -150,6 +151,9 @@ class DomTarget {
   }
 
   public insertAfter(target: DomTarget | Node) {
+    if (!target) {
+      throw new Error();
+    }
     const _ = getIDomTarget(this as IDomTarget);
     if (_.isAttached) {
       _.remove();
@@ -171,12 +175,15 @@ class DomTarget {
     _.isAttached = true;
   }
   public insertBefore(target: DomTarget | Node) {
+    if (!target) {
+      throw new Error();
+    }
     const _ = getIDomTarget(this as IDomTarget);
     if (_.isAttached) {
       _.remove();
     }
-    if (!this.fragment || !this.fragment.hasChildNodes()) {
-      return;
+    if (!this.fragment) {
+      throw new RangeError();
     }
     const t = isNode(target) ? target as Node : (target as DomTarget).firstNode() as Node;
     const parent = t.parentNode;
@@ -205,10 +212,14 @@ class DomTarget {
   }
 
   public replaceWith(next: Node | IDomTarget) {
+    if (!next) {
+      throw new Error();
+    }
     if (!this.isAttached) {
       return;
     }
     const _ = getIDomTarget(this as IDomTarget);
+    // TODO: fix this logic...
     const first = _.firstNode();
     const parent = first.parentNode;
     if (!parent) {
@@ -220,6 +231,7 @@ class DomTarget {
     } else {
       const n = getIDomTarget(next as IDomTarget);
       n.insertBefore(first);
+      // TODO: is this enough to replace the Part/Template...?
       _.remove();
       _.start = n.start;
       _.end = n.end;
@@ -246,26 +258,25 @@ function isNumber(x: any): boolean {
   return typeof x === "number";
 }
 
-function followEdge(target: DomTarget | Node, edge: "start" | "end"): Node {
+function followEdge(target: IDomTarget | Node, edge: "start" | "end"): Node | never {
   if (!target) {
     throw new RangeError();
   }
   if (isNode(target)) {
     return target as Node;
+  }
+  const _ = getIDomTarget(target as IDomTarget);
+  const cond = edge === "start";
+  const next = cond
+    ? (target as DomTarget).start
+    : (target as DomTarget).end;
+  if (isPart(next) || isTemplate(next)) {
+    return followEdge(next as IDomTarget, edge);
+  } else if (isNode(next)) {
+    return next as Node;
   } else {
-    const cond = edge === "start";
-    const next = cond
-      ? (target as DomTarget).start
-      : (target as DomTarget).end;
-    if (isPart(next) || isTemplate(next)) {
-      return followEdge(next as DomTarget, edge);
-    } else if (isNode(next)) {
-      return next as Node;
-    } else if (isString(next)) {
-      return (target as DomTarget).start as Node;
-    } else {
-      throw new RangeError();
-    }
+    // has to be a string here...
+    return (target as DomTarget).start as Node;
   }
 }
 
@@ -429,7 +440,10 @@ class PrivatePart extends DomTarget {
   public updateAttribute(value: any) {
     const _ = getIDomTarget(this as IDomTarget) as PrivatePart;
     const element: HTMLElement = _.start as HTMLElement;
-    const name: string = isString(_.end) ? _.end as string : "";
+    const name: Optional<string> = isString(_.end) ? _.end as string : undefined;
+    if (!name) {
+      throw new RangeError();
+    }
     try {
       (element as any)[name] = !value && value !== false ? "" : value;
     } catch (_) {} // eslint-disable-line
@@ -457,17 +471,13 @@ class PrivatePart extends DomTarget {
       value = _.value;
     }
     if (isDirectivePart(value)) {
-      (value as Directive)(_ as IPart);
+      (value as Directive)(this as IPart);
       return;
     }
     if (isString(_.end)) {
       _.updateAttribute(value);
     } else {
-      if (
-        !isString(value) &&
-        !Array.isArray(value) &&
-        isFunction((value as any)[Symbol.iterator])
-      ) {
+      if (isIterable(value)) {
         value = Array.from(value as any);
       }
       if (isPromise(value)) {
@@ -547,6 +557,12 @@ function followDOMPath(
   }
 }
 
+function isIterable(x: any) {
+  return !isString(x) &&
+        !Array.isArray(x) &&
+        isFunction((x as any)[Symbol.iterator]);
+}
+
 function isDirectivePart(x: any) {
   return isFunction(x) && x.length === 1;
 }
@@ -607,6 +623,7 @@ class PrivateTemplate extends DomTarget {
     super();
     Object.freeze(this.key);
     Object.freeze(this.type);
+    // TODO: fix init, set start and end to something valid here...
   }
   
   public hydrate(target: Node): boolean | never {
@@ -623,10 +640,10 @@ class PrivateTemplate extends DomTarget {
         }
         p.attach(target);
       });
-      const frag = _.fragment as DocumentFragment;
-      if (frag) {
-        while (frag.hasChildNodes) {
-          frag.removeChild(frag.lastChild as Node);
+      const fragment = _.fragment as DocumentFragment;
+      if (fragment) {
+        while (fragment.hasChildNodes) {
+          fragment.removeChild(fragment.lastChild as Node);
         }
       }
     } catch(err) {
@@ -662,8 +679,10 @@ class PrivateTemplate extends DomTarget {
       if (!_.fragment.firstChild || !_.fragment.lastChild) {
         throw new RangeError();
       }
+      // TODO: debug from here why my lazy init of fragment is causing undefined.firstNode() on line #912/179
       _.start = isComment(_.fragment.firstChild as Node) ? _.fragment.firstChild : _.parts[0] as IDomTarget;
       _.end = isComment(_.fragment.lastChild as Node) ? _.fragment.lastChild : _.parts[_.parts.length - 1] as IDomTarget; 
+      // _.isAttached = true;
       _.parts.forEach(part => {
         const p = getIDomTarget(part) as PrivatePart;
         if (!p) {
@@ -684,12 +703,22 @@ class PrivateTemplate extends DomTarget {
   }
 }
 
-export function Template(key: string, tempEl: HTMLTemplateElement, parts: IPart[], values: PartValue[]) {
-  const template = new PrivateTemplate(key, tempEl, parts, values);
-  const proxy = createAPIProxy(TemplateHide, TemplateRO, template);
-  iDomTargetCache.set(proxy, template);
-  Object.seal(template);
-  return proxy as ITemplate;
+type ITemplateFactoryFn = (values?: PartValue[]) => ITemplate;
+const templateFactoryCache = new Map<string, ITemplateFactoryFn>();
+function TemplateFactory(key: string, element: HTMLTemplateElement, parts: IPart[], values: PartValue[]): ITemplateFactoryFn {
+  const result = templateFactoryCache.get(key);
+  if (!result) {
+    const fn = (newValues?: PartValue[]) => {
+      const template = new PrivateTemplate(key, element, parts, newValues || values);
+      const proxy = createAPIProxy(TemplateHide, TemplateRO, template);
+      iDomTargetCache.set(proxy, template);
+      Object.seal(template);
+      return proxy as ITemplate;
+    };
+    templateFactoryCache.set(key, fn);
+    return fn;
+  }
+  return result; 
 }
 
 function hashCode(str: string): number {
@@ -736,18 +765,18 @@ function checkForSerialized(
   if (!el) {
     return;
   }
-  const frag = (el.cloneNode(true) as HTMLTemplateElement).content;
-  if (!frag) {
+  const fragment = (el.cloneNode(true) as HTMLTemplateElement).content;
+  if (!fragment) {
     return;
   }
-  const first = frag.firstChild;
+  const first = fragment.firstChild;
   if (!first) {
     return;
   }
-  const isFirstSerial = isFirstChildSerial(frag);
+  const isFirstSerial = isFirstChildSerial(fragment);
   let deserialized: IDeserializedTemplate | null | undefined;
   if (isFirstSerial) {
-    const fc = frag.removeChild(first);
+    const fc = fragment.removeChild(first);
     const parts = parseSerializedParts(fc.nodeValue) as IPart[];
     const template = el as HTMLTemplateElement;
     if (parts && template) {
@@ -851,69 +880,74 @@ export function html(
   const staticMarkUp = strs.toString();
   const id = idCache.get(staticMarkUp) || hashCode(staticMarkUp);
   const cacheEntry = serialCache.get(id);
-  const des = cacheEntry ? cacheEntry : checkForSerialized(id) as IDeserializedTemplate;
-  let template = des && des.template;
-  const parts = (des && des.parts) || [];
+  const deserialized = cacheEntry
+    ? cacheEntry
+    : checkForSerialized(id) as IDeserializedTemplate;
+  let template = deserialized && deserialized.template;
+  const parts = (deserialized && deserialized.parts) || [];
   if (!template) {
     template = document.createElement("template");
     template.innerHTML = strs.join(PART_MARKER);
     walkDOM(template.content, undefined, templateSetup(parts));
     serialCache.set(id, { template, parts });
   }
-  return Template(staticMarkUp, template, parts, exprs);
+  return TemplateFactory(staticMarkUp, template, parts, exprs)();
 }
 
 const renderedTemplates = new WeakMap<Node, ITemplate>();
 export function render(
-  template: ITemplate,
+  template: ITemplate | PartValue[] | PartValue,
   target?: Node
 ) {
+  if (isPart(template)) {
+    template = [template];
+  }
+  if (isIterable(template)) {
+    
+  }
+  if (Array.isArray(template)) {
+    template = html`${template.map(
+      entry => isTemplate(entry) ? entry : defaultTemplateFn(entry)
+    )}`;
+  }
+  if (!isTemplate(template)) {
+    throw new RangeError();
+  }
   if (!target) {
     target = document.body;
   }
   const instance = renderedTemplates.get(target);
   if (instance) {
-    if (instance.key === template.key) {
-      instance.update(template.values);
+    if (instance.key === (template as ITemplate).key) {
+      instance.update((template as ITemplate).values);
     } else {
-      template.update();
-      template.insertBefore(instance.firstNode());
-      instance.remove();
-      renderedTemplates.set(target, template);
+      (template as ITemplate).update();
+      instance.replaceWith(template as ITemplate);
+      renderedTemplates.set(target, template as ITemplate);
     }
   } else {
-    const t = getIDomTarget(template) as PrivateTemplate;
+    const t = getIDomTarget(template as ITemplate) as PrivateTemplate;
     if (!t) {
       throw new RangeError();
     }
-    // TODO: work on cleaning this up below...
-    // t.render(target);
-    /* REMOVE: this should be from render() not PrivateTemplate.render()...
-    public render(target: Node) {
-      const _: PrivateTemplate = getIDomTarget(this as IDomTarget) as PrivateTemplate;
-      if (_.isAttached) {
-        return;
-      }
-      if (target.hasChildNodes()) {
-        const hydrated = _.hydrate(target);
+    if (target.hasChildNodes()) {
+      const hydrated = t.hydrate(target);
+      if (!hydrated) {
         const first = target.firstChild;
-        if(!hydrated) {
-          let cursor: Optional<Node | null> = target.lastChild;
+        let cursor: Optional<Node | null> = target.lastChild;
           while (cursor) {
             const next: Optional<Node | null> = cursor.previousSibling;
             target.removeChild(cursor);
             cursor = cursor !== first ? next : undefined;
           }
-          _.appendTo(target);    
-        }
-      } else {
-        _.update();
-        _.appendTo(target);
+          t.appendTo(target);
       }
-      _.isAttached = true;
+    } else {
+      t.update();
+      t.appendTo(target);
     }
-    */
-    renderedTemplates.set(target, template);
+    t.isAttached = true;
+    renderedTemplates.set(target, template as ITemplate);  
   }
 }
 

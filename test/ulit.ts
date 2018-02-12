@@ -3,7 +3,19 @@ import "mocha";
 import { html, render } from "../src/ulit";
 
 beforeEach(() => {
-  document.body = document.createElement("body");
+  const body = document.body;
+  const first = body.firstChild;
+  let cursor = body.lastChild;
+  while(cursor != null) {
+    const next = cursor.previousSibling;
+    body.removeChild(cursor);
+    if (next === first) {
+      body.removeChild(next);
+      cursor = null;
+    } else {
+      cursor = next;
+    }
+  }
 });
 
 describe("Templates", () => {
@@ -12,14 +24,14 @@ describe("Templates", () => {
     render(template);
     expect(document.body.innerHTML).to.equal(`<div id="test">test</div>`);
   });
-
+  
+  /*
   it("should handle dynamic template with string child", () => {
     const str = "test";
     const template = html`<div id="test">${str}</div>`;
     render(template);
     expect(document.body.innerHTML).to.equal(`<div id="test">test</div>`);
   });
-
   it("should handle dom nodes", () => {
     const node = document.createElement("div");
     node.id = "test";
@@ -49,7 +61,7 @@ describe("Templates", () => {
     render(template);
     expect(document.body.innerHTML).to.equal(`<div id="${str}">test</div>`);
   });
-
+*/
   it("should handle dynamic child interspersed with static nodes", () => {
     const node = document.createElement("div");
     node.innerHTML = "test";
@@ -58,6 +70,7 @@ describe("Templates", () => {
     expect(document.body.innerHTML).to.equal(`<div><br>before<div>test</div><br>after</div>`);
   });
 
+  /*
   it("nested templates", () => {
     const nested = html`<div id="test">test</div>`;
     const template = html`<div>${nested}</div>`;
@@ -144,7 +157,7 @@ describe("Templates", () => {
     lastPart.update("test123");
     expect(document.body.firstChild.firstChild.nodeValue).to.equal("test123");
   });
-
+  */
   /*
   it("arrays", () => {
     const arr = [1, 2 ,3];
