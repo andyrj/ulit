@@ -1,13 +1,219 @@
 const SVG_NS = "https://www.w3.org/2000/svg";
-const PART_START="{{";
-const PART_END="}}";
-const PART_MARKER=`${PART_START}${PART_END}`;
-const SERIAL_PART_START=`${PART_START}parts:`;
+const PART_START = "{{";
+const PART_END = "}}";
+const TEMPLATE_ID_START = "ulit-";
+const PART_MARKER = `${PART_START}${PART_END}`;
+const SERIAL_PART_START = `${PART_START}parts:`;
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 const DOCUMENT_FRAGMENT = 11;
+
+// FIND YOUR OWN ABSTRACTION...
+export type Optional<T> = T | undefined | null;
+export type Key = symbol | number | string;
+export type Directive = (part: Part) => void;
+export type PrimitivePart = 
+  | string
+  | number
+  | Node
+  | DocumentFragment
+export type PartValue =
+  | PrimitivePart
+  | IPartPromise
+  | Directive
+  | IPartArray
+  | Template;
+export interface IPartPromise extends Promise<PartValue> {};
+export interface IPartArray extends Array<PartValue> {};
+
+export class DomTarget {
+  public start: Optional<Node | DomTarget> = undefined;
+  public end: Optional<Node | DomTarget | string> = undefined;
+  public isSVG: boolean = false;
+  constructor(start?: Node | DomTarget, end?: Node | DomTarget | string) {
+    if (start) {
+      this.start = start;
+    }
+    if (end) {
+      this.end = end;
+    }
+  }
+  public firstNode() {}
+  public lastNode() {}
+}
+
+export class Template extends DomTarget {
+  public parent: Optional<DomTarget> = undefined;
+  public fragment: Optional<DocumentFragment> = undefined;
+  constructor(public id: number, public templateElement: HTMLTemplateElement, public values: PartValue[]) {
+    super();
+  }
+  public update(values?: PartValue[]) {}
+}
+
+export class Part extends DomTarget {
+  public parent: Optional<DomTarget> = undefined;
+  constructor(public path: Array<string | number>, start: Node, end: Node | string) {
+    super(start, end);
+  }
+  public update(value?: PartValue) {}
+}
+
+const idCache = new Map<string, number>();
+function getId(str: string): number {
+  if (idCache.has(str)) {
+    return idCache.get(str) as number;
+  }
+  let id = 0;
+  if (str.length > 0) {
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      id = (id << 5) - id + char;
+      id = id & id;
+    }
+  }
+  idCache.set(str, id);
+  return id;
+}
+
+export type ITemplateGenerator = () => Template;
+const templateGeneratorCache = new Map<number, ITemplateGenerator>();
+interface ISerialCacheEntry {
+  template: HTMLTemplateElement;
+  parts: Part[];
+}
 const serialCache = new Map<number, ISerialCacheEntry>();
+export function html(strs: string[], ...exprs: PartValue[]): ITemplateGenerator {
+  const id = getId(strs.toString());
+  const generator = templateGeneratorCache.get(id);
+  if (generator) {
+    return generator;
+  }
+  // TODO: build templateEl
+  const cacheEntry = serialCache.get(id);
+  const deserialized = cacheEntry
+    ? cacheEntry
+    : checkForSerialized(id);
+  let template: Optional<HTMLTemplateElement> = undefined;
+  let parts: Optional<Part[]> = undefined;
+  if (deserialized) {
+    template = deserialized.template;
+    parts = deserialized.parts;
+  }
+  if (!template || !parts) {
+    template = document.createElement("template");
+    template.innerHTML = strs.join(PART_MARKER);
+    walkDOM(template.content, undefined, templateSetup(parts));
+    serialCache.set(id, { template, parts });
+  }
+  const newGenerator = () => {
+    return new Template(id, template, exprs);
+  }
+  templateGeneratorCache.set(id, newGenerator);
+  return newGenerator;
+}
+
+const renderedCache = new WeakMap<Node, Template>();
+export function render(generator: ITemplateGenerator, container?: Node) {
+
+}
+
+type WalkFn = (
+  Parent: Node,
+  element: Node | null | undefined,
+  path: Array<string | number>
+) => boolean;
+
+function walkDOM(
+  parent: HTMLElement | DocumentFragment,
+  element: Node | null | undefined,
+  fn: WalkFn,
+  path: Array<number | string> = []
+) {
+  let condition = true;
+  if (element) {
+    condition = fn(parent, element, path);
+  } else {
+    element = parent;
+  }
+  if (!condition || !element || element.childNodes.length === 0) {
+    throw new RangeError();
+  }
+  [].forEach.call(element.childNodes, (child: Node, index: number) => {
+    path.push(index);
+    walkDOM(element as HTMLElement, child, fn, path);
+    path.pop();
+  });
+}
+
+function isNodeSVGChild(node: Node): boolean {
+  let result = false;
+  let current: Optional<Node> = node;
+  while (current) {
+    if (current.nodeName === "SVG") {
+      result = true;
+      current = undefined;
+    } else if(current.nodeName === "FOREIGNOBJECT") {
+      result = false;
+      current = undefined;
+    } else {
+      current = current.parentNode;
+    }
+  }
+  return result;
+}
+
+function isFirstChildSerial(parent: DocumentFragment): boolean {
+  const child = parent.firstChild;
+  return (child &&
+    child.nodeType === COMMENT_NODE &&
+    child.nodeValue &&
+    child.nodeValue.startsWith(SERIAL_PART_START)) as boolean;
+}
+
+function parseSerializedParts(
+  value: string | null | undefined
+): Array<Part | null | undefined> {
+  if (!value) {
+    return [];
+  } else {
+    return JSON.parse(value.split(SERIAL_PART_START)[1].slice(0, -2));
+  }
+}
+
+function checkForSerialized(
+  id: number
+): Optional<ISerialCacheEntry> {
+  const el = document.getElementById(TEMPLATE_ID_START+id) as HTMLTemplateElement;
+  if (!el) {
+    return;
+  }
+  const fragment = (el.cloneNode(true) as HTMLTemplateElement).content;
+  if (!fragment) {
+    return;
+  }
+  const first = fragment.firstChild;
+  if (!first) {
+    return;
+  }
+  const isFirstSerial = isFirstChildSerial(fragment);
+  let deserialized: ISerialCacheEntry | null | undefined;
+  if (isFirstSerial) {
+    const fc = fragment.removeChild(first);
+    const parts = parseSerializedParts(fc.nodeValue) as Part[];
+    const template = el as HTMLTemplateElement;
+    if (parts && template) {
+      deserialized = { template, parts };
+    }
+  }
+  if (deserialized) {
+    return deserialized;
+  }
+  return;
+}
+
+/*
 const idCache = new Map<string, number>();
 
 type WalkFn = (
@@ -1075,3 +1281,4 @@ export function until(
     promise.then(value => part.update(value));
   };
 }
+*/

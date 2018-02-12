@@ -14,7 +14,8 @@
         "interface-name": false,
         "no-implicit-dependencies": false,
         "no-debugger": false,
-        "no-string-literal": false
+        "no-string-literal": false,
+        "no-unnecessary-initializer": false
     },
     "rulesDirectory": [],
     "exclude": [

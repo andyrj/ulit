@@ -15,7 +15,7 @@
     "test"
   ],
   "scripts": {
-    "test": "cross-env TS_NODE_COMPILER_OPTIONS='{ \"module\": \"commonjs\" }' mocha -r ts-node/register -r jsdom-global/register test/**/*.ts",
+    "test": "cross-env TS_NODE_COMPILER_OPTIONS='{ \"module\": \"commonjs\" }' mocha --reporter=tap -r ts-node/register -r jsdom-global/register test/**/*.ts",
     "test:html": "nyc report --reporter=html",
     "codacy": "nyc report --reporter=lcov && cat ./coverage/lcov.info | codacy-coverage",
     "build": "rm -rf dist/* && tsc && npm run minify",

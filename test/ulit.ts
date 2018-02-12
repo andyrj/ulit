@@ -61,7 +61,7 @@ describe("Templates", () => {
     render(template);
     expect(document.body.innerHTML).to.equal(`<div id="${str}">test</div>`);
   });
-*/
+
   it("should handle dynamic child interspersed with static nodes", () => {
     const node = document.createElement("div");
     node.innerHTML = "test";
@@ -69,8 +69,7 @@ describe("Templates", () => {
     render(template);
     expect(document.body.innerHTML).to.equal(`<div><br>before<div>test</div><br>after</div>`);
   });
-
-  /*
+  
   it("nested templates", () => {
     const nested = html`<div id="test">test</div>`;
     const template = html`<div>${nested}</div>`;
