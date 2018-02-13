@@ -18,18 +18,15 @@ const DOCUMENT_FRAGMENT = 11;
 export type Optional<T> = T | undefined | null;
 export type Key = symbol | number | string;
 export type Directive = (part: Part) => void;
-export type PrimitivePart = 
-  | string
-  | Node
-  | DocumentFragment
+export type PrimitivePart = string | Node | DocumentFragment;
 export type PartValue =
   | PrimitivePart
   | IPartPromise
   | Directive
   | IPartArray
   | ITemplateGenerator;
-export interface IPartPromise extends Promise<PartValue> {};
-export interface IPartArray extends Array<PartValue> {};
+export interface IPartPromise extends Promise<PartValue> {}
+export interface IPartArray extends Array<PartValue> {}
 export type IDisposer = () => void;
 export class Disposable {
   public readonly disposed: boolean = false;
@@ -42,7 +39,7 @@ export class Disposable {
     this.disposers.push(handler);
   }
   public dispose() {
-    while(this.disposers.length > 0) {
+    while (this.disposers.length > 0) {
       (this.disposers.pop() as IDisposer)();
     }
   }
@@ -72,20 +69,20 @@ function isNumber(x: any): x is number {
 }
 
 function isNode(x: any): x is Node {
-  return x as Node && (x as Node).nodeType > 0;
+  return (x as Node) && (x as Node).nodeType > 0;
 }
 
 function isIterable(x: any): x is Iterable<any> {
-  return !isString(x) &&
-        !Array.isArray(x) &&
-        isFunction((x as any)[Symbol.iterator]);
+  return (
+    !isString(x) && !Array.isArray(x) && isFunction((x as any)[Symbol.iterator])
+  );
 }
 
 function isDirectivePart(x: any): x is Directive {
   return isFunction(x) && x.length === 1;
 }
 
-function isDocumentFragment(x: any) : x is DocumentFragment {
+function isDocumentFragment(x: any): x is DocumentFragment {
   return isNode(x) && (x as Node).nodeType === DOCUMENT_FRAGMENT;
 }
 
@@ -141,7 +138,7 @@ function getFragment(): DocumentFragment {
 }
 
 function recoverFragment(fragment: DocumentFragment) {
-  while(fragment.hasChildNodes()) {
+  while (fragment.hasChildNodes()) {
     fragment.removeChild(fragment.lastChild as Node);
   }
   fragmentCache.push(fragment);
@@ -165,13 +162,17 @@ export class DomTarget extends Disposable {
     }
   }
   public firstNode(): Node {
-    return isNode(this.start) ? this.start : (this.start as DomTarget).firstNode();
+    return isNode(this.start)
+      ? this.start
+      : (this.start as DomTarget).firstNode();
   }
   public lastNode(): Node {
     if (isNode(this.end)) {
       return this.end;
-    } else if(isString(this.end)){
-      return isNode(this.start) ? this.start : (this.start as DomTarget).lastNode();
+    } else if (isString(this.end)) {
+      return isNode(this.start)
+        ? this.start
+        : (this.start as DomTarget).lastNode();
     }
     return (this.end as DomTarget).lastNode();
   }
@@ -181,7 +182,7 @@ export class DomTarget extends Disposable {
     while (cursor !== undefined) {
       const next: Node = cursor.nextSibling as Node;
       fragment.appendChild(cursor);
-      cursor = (cursor === this.end || !next) ? undefined : next;
+      cursor = cursor === this.end || !next ? undefined : next;
     }
     return fragment;
   }
@@ -191,7 +192,11 @@ export class Template extends DomTarget {
   public static kind = TEMPLATE;
   public fragment: Optional<DocumentFragment> = undefined;
   public parts: Part[] = [];
-  constructor(public id: number, public templateElement: HTMLTemplateElement, public values: PartValue[]) {
+  constructor(
+    public id: number,
+    public templateElement: HTMLTemplateElement,
+    public values: PartValue[]
+  ) {
     super();
   }
 
@@ -212,7 +217,7 @@ export class Template extends DomTarget {
           fragment.removeChild(fragment.lastChild as Node);
         }
       }
-    } catch(err) {
+    } catch (err) {
       return false;
     }
     return true;
@@ -221,13 +226,20 @@ export class Template extends DomTarget {
   public update(values?: PartValue[]) {
     if (!this.fragment) {
       this.fragment = getFragment();
-      const t: HTMLTemplateElement = document.importNode(this.templateElement, true);
+      const t: HTMLTemplateElement = document.importNode(
+        this.templateElement,
+        true
+      );
       this.fragment = t.content;
       if (!this.fragment.firstChild || !this.fragment.lastChild) {
         throw new RangeError();
       }
-      this.start = isComment(this.fragment.firstChild as Node) ? this.fragment.firstChild : this.parts[0];
-      this.end = isComment(this.fragment.lastChild as Node) ? this.fragment.lastChild : this.parts[this.parts.length - 1]; 
+      this.start = isComment(this.fragment.firstChild as Node)
+        ? this.fragment.firstChild
+        : this.parts[0];
+      this.end = isComment(this.fragment.lastChild as Node)
+        ? this.fragment.lastChild
+        : this.parts[this.parts.length - 1];
       this.parts.forEach(part => {
         part.attachTo(this);
       });
@@ -246,11 +258,7 @@ function followPath(
   target: Optional<Node | Template>,
   pointer: Array<string | number>
 ): Optional<Node | NodeAttribute> {
-  if (
-    pointer.length === 0 ||
-    !target ||
-    isPartComment(target)
-  ) {
+  if (pointer.length === 0 || !target || isPartComment(target)) {
     return target as Node | undefined;
   }
   const node = isTemplate(target) ? target.firstNode() : target;
@@ -327,7 +335,7 @@ export class Part extends DomTarget {
   public updateArray(value: PartValue[]) {
     repeat(value)(this);
   }
-  
+
   public updateNode(value: PrimitivePart) {
     const element = this.firstNode();
     const parent = element.parentNode;
@@ -350,8 +358,8 @@ export class Part extends DomTarget {
       }
     } else {
       const isFrag = isDocumentFragment(value);
-      const newStart = isFrag ? value.firstChild : value as Node;
-      const newEnd = isFrag ? value.lastChild : value as Node;
+      const newStart = isFrag ? value.firstChild : (value as Node);
+      const newEnd = isFrag ? value.lastChild : (value as Node);
       parent.insertBefore(value, element);
       this.remove();
       if (newStart && newEnd) {
@@ -379,7 +387,7 @@ export class Part extends DomTarget {
       throw new RangeError();
     }
     const element: HTMLElement = this.start as HTMLElement;
-    const name: Optional<string> = this.attribute; 
+    const name: Optional<string> = this.attribute;
     if (!name) {
       throw new RangeError();
     }
@@ -473,26 +481,27 @@ function createTemplateGenerator(
       serialCache.set(id, { template, parts });
     }
     return new Template(id, template as HTMLTemplateElement, exprs);
-  }
+  };
   (generator as ITemplateGenerator).kind = TEMPLATE_GENERATOR;
   (generator as ITemplateGenerator).id = id;
   return generator as ITemplateGenerator;
-};
+}
 interface ISerialCacheEntry {
   template: HTMLTemplateElement;
   parts: Part[];
 }
 const serialCache = new Map<number, ISerialCacheEntry>();
-export function html(strs: string[], ...exprs: PartValue[]): ITemplateGenerator {
+export function html(
+  strs: string[],
+  ...exprs: PartValue[]
+): ITemplateGenerator {
   const id = getId(strs.toString());
   const generator = templateGeneratorCache.get(id);
   if (generator) {
     return generator;
   }
   const cacheEntry = serialCache.get(id);
-  const deserialized = cacheEntry
-    ? cacheEntry
-    : checkForSerialized(id);
+  const deserialized = cacheEntry ? cacheEntry : checkForSerialized(id);
   let template: Optional<HTMLTemplateElement> = undefined;
   let parts: Part[] = [];
   if (deserialized) {
@@ -502,14 +511,24 @@ export function html(strs: string[], ...exprs: PartValue[]): ITemplateGenerator 
   if (!isTemplateElement(template)) {
     throw new Error();
   }
-  const newGenerator = createTemplateGenerator(strs, exprs, id, template, parts);
+  const newGenerator = createTemplateGenerator(
+    strs,
+    exprs,
+    id,
+    template,
+    parts
+  );
   newGenerator.kind = TEMPLATE_GENERATOR;
   templateGeneratorCache.set(id, newGenerator);
   return newGenerator;
 }
 
 // const renderedCache = new WeakMap<Node, Template>();
-export function render(generator: ITemplateGenerator | ITemplateGenerator[], container?: Node, element?: Node) {
+export function render(
+  generator: ITemplateGenerator | ITemplateGenerator[],
+  container?: Node,
+  element?: Node
+) {
   // TODO: Templates on initial update should hydrate,
   // either the Template.fragment or the container.target render(TemplateGen, ParentNode, ChildNode?);
   // Could add custom hook for people to define their own default directives ordering...  ulit(options).html`...`
@@ -523,7 +542,7 @@ export function render(generator: ITemplateGenerator | ITemplateGenerator[], con
 //     template = [template];
 //   }
 //   if (isIterable(template)) {
-    
+
 //   }
 //   if (Array.isArray(template)) {
 //     template = html`${template.map(
@@ -567,7 +586,7 @@ export function render(generator: ITemplateGenerator | ITemplateGenerator[], con
 //       t.appendTo(target);
 //     }
 //     t.isAttached = true;
-//     renderedTemplates.set(target, template as ITemplate);  
+//     renderedTemplates.set(target, template as ITemplate);
 //   }
 // }
 
@@ -624,7 +643,9 @@ function templateSetup(parts: Part[]): WalkFn {
             const adjustedPath = walkPath.slice(0);
             const len = adjustedPath.length - 1;
             (adjustedPath[len] as number) += cursor;
-            parts.push(new Part(adjustedPath, newPartComment, newPartComment, isSVG));
+            parts.push(
+              new Part(adjustedPath, newPartComment, newPartComment, isSVG)
+            );
             cursor++;
           }
         });
@@ -636,7 +657,9 @@ function templateSetup(parts: Part[]): WalkFn {
     } else if (nodeType === ELEMENT_NODE) {
       [].forEach.call(element.attributes, (attr: Attr) => {
         if (attr.nodeValue === PART_MARKER) {
-          parts.push(new Part(walkPath.concat(attr.nodeName), element, attr, isSVG));
+          parts.push(
+            new Part(walkPath.concat(attr.nodeName), element, attr, isSVG)
+          );
         }
       });
     }
@@ -651,7 +674,7 @@ function isNodeSVGChild(node: Node): boolean {
     if (current.nodeName === SVG) {
       result = true;
       current = undefined;
-    } else if(current.nodeName === FOREIGN_OBJECT) {
+    } else if (current.nodeName === FOREIGN_OBJECT) {
       result = false;
       current = undefined;
     } else {
@@ -669,9 +692,7 @@ function isFirstChildSerial(parent: DocumentFragment): boolean {
     child.nodeValue.startsWith(SERIAL_PART_START)) as boolean;
 }
 
-function parseSerializedParts(
-  value?: string
-): Part[] {
+function parseSerializedParts(value?: string): Part[] {
   if (!value) {
     return [];
   } else {
@@ -679,10 +700,10 @@ function parseSerializedParts(
   }
 }
 
-function checkForSerialized(
-  id: number
-): Optional<ISerialCacheEntry> {
-  const el = document.getElementById(TEMPLATE_ID_START+id) as HTMLTemplateElement;
+function checkForSerialized(id: number): Optional<ISerialCacheEntry> {
+  const el = document.getElementById(
+    TEMPLATE_ID_START + id
+  ) as HTMLTemplateElement;
   if (!el) {
     return;
   }
@@ -744,7 +765,10 @@ export function repeat(
       return templateFn(item);
     }) as Template[];
     const keys = items.map((item, index) => keyFn(item, index));
-    const [oldCacheOrder, oldCacheMap] = repeatCache.get(part) || [[], new Map<Key, Template>()];
+    const [oldCacheOrder, oldCacheMap] = repeatCache.get(part) || [
+      [],
+      new Map<Key, Template>()
+    ];
     const newCache = [keys, new Map<Key, Template>()];
     const newCacheMap = newCache[1] as Map<Key, Template>;
     // build LUT for new keys/templates
@@ -809,7 +833,7 @@ export function repeat(
         }
         return;
       }
-      // add template to 
+      // add template to
       const cursor = oldCacheOrder[index];
       oldEntry = oldCacheMap.get(cursor);
       const firstNode = part.firstNode();
