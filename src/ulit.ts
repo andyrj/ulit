@@ -183,10 +183,10 @@ export class Template extends DomTarget {
     }
     super.dispose();
   }
-  public hydrate(template: Template) {
+  public hydrate() {
     this.update();
     try {
-      this.parts.forEach(part => part.attachTo(template));
+      this.parts.forEach(part => part.attachTo(this));
       const fragment = this.fragment;
       if (isDocumentFragment(fragment)) {
         while (fragment.hasChildNodes) {
@@ -494,72 +494,38 @@ export function html(
   templateGeneratorCache.set(id, newGenerator);
   return newGenerator;
 }
-// const renderedCache = new WeakMap<Node, Template>();
+const renderedCache = new WeakMap<Node, Template>();
 export function render(
-  generator: ITemplateGenerator | ITemplateGenerator[],
-  container?: Node,
-  element?: Node
+  generator: ITemplateGenerator | ITemplateGenerator[] | Iterable<ITemplateGenerator>,
+  container: Node = document.body
 ) {
-  // TODO: Templates on initial update should hydrate,
-  // either the Template.fragment or the container.target render(TemplateGen, ParentNode, ChildNode?);
-  // Could add custom hook for people to define their own default directives ordering...  ulit(options).html`...`
+  const instance = renderedCache.get(container);
+  if (isIterable(generator)) {
+    generator = Array.from(generator as any);
+  }
+  if (Array.isArray(generator)) {
+    generator = defaultTemplateFn(generator);
+  }
+  if (!isTemplateGenerator(generator)) {
+    throw new Error();
+  }
+  if (instance) {
+    if (instance.id === generator.id) {
+      // update current template
+    } else {
+      // replace instance with generator(), be sure to dispose of instance...
+    }
+  } else {
+    // take over all children of container and render into container...
+    if (container.hasChildNodes()) {
+      // hydrate
+    } else {
+      // appendChild
+    }
+  }
 }
-// export function render(
-//   template: ITemplate | PartValue[] | PartValue,
-//   target?: Node
-// ) {
-//   if (isPart(template)) {
-//     template = [template];
-//   }
-//   if (isIterable(template)) {
-//   }
-//   if (Array.isArray(template)) {
-//     template = html`${template.map(
-//       entry => isTemplate(entry) ? entry : defaultTemplateFn(entry)
-//     )}`;
-//   }
-//   if (!isTemplate(template)) {
-//     throw new RangeError();
-//   }
-//   if (!target) {
-//     target = document.body;
-//   }
-//   const instance = renderedTemplates.get(target);
-//   if (instance) {
-//     if (instance.key === (template as ITemplate).key) {
-//       instance.update((template as ITemplate).values);
-//     } else {
-//       (template as ITemplate).update();
-//       instance.replaceWith(template as ITemplate);
-//       renderedTemplates.set(target, template as ITemplate);
-//     }
-//   } else {
-//     const t = getIDomTarget(template as ITemplate) as PrivateTemplate;
-//     if (!t) {
-//       throw new RangeError();
-//     }
-//     if (target.hasChildNodes()) {
-//       const hydrated = t.hydrate(target);
-//       if (!hydrated) {
-//         const first = target.firstChild;
-//         let cursor: Optional<Node | null> = target.lastChild;
-//           while (cursor) {
-//             const next: Optional<Node | null> = cursor.previousSibling;
-//             target.removeChild(cursor);
-//             cursor = cursor !== first ? next : undefined;
-//           }
-//           t.appendTo(target);
-//       }
-//     } else {
-//       t.update();
-//       t.appendTo(target);
-//     }
-//     t.isAttached = true;
-//     renderedTemplates.set(target, template as ITemplate);
-//   }
-// }
 type WalkFn = (
-  Parent: Node,
+  parent: Node,
   element: Node | null | undefined,
   path: Array<string | number>
 ) => boolean;
