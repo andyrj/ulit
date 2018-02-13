@@ -26,7 +26,7 @@ export type PartValue =
   | IPartPromise
   | Directive
   | IPartArray
-  | Template;
+  | ITemplateGenerator;
 export interface IPartPromise extends Promise<PartValue> {};
 export interface IPartArray extends Array<PartValue> {};
 export type IDisposer = () => void;
@@ -283,7 +283,9 @@ export class Part extends DomTarget {
     }
   }
 
-  public updateTemplate(template: Template) {
+  public updateTemplate(generator: ITemplateGenerator) {
+    // TODO: re-write below, referse if and else conditions... change to use ITemplateGenerator to get template...
+    /*
     if (isTemplate(this.value) && template.id === (this.value as Template).id) {
       (this.value as Template).update(template.values);
     } else {
@@ -292,6 +294,7 @@ export class Part extends DomTarget {
       // _.replaceWith(template);
       // _.value = template;
     }
+    */
   }
 
   public updateAttribute(value: any) {
@@ -332,7 +335,7 @@ export class Part extends DomTarget {
       (value as Directive)(this as Part);
       return;
     }
-    if (isString(this.end)) {
+    if (this.attribute !== EMPTY_STRING && isString(this.attribute)) {
       this.updateAttribute(value);
     } else {
       if (isIterable(value)) {
@@ -407,7 +410,7 @@ export function html(strs: string[], ...exprs: PartValue[]): ITemplateGenerator 
 }
 
 const renderedCache = new WeakMap<Node, Template>();
-export function render(generator: ITemplateGenerator, container?: Node, element?: Node) {
+export function render(generator: ITemplateGenerator | ITemplateGenerator[], container?: Node, element?: Node) {
   // TODO: Templates on initial update should hydrate,
   // either the Template.fragment or the container.target render(TemplateGen, ParentNode, ChildNode?);
   // Could add custom hook for people to define their own default directives ordering...  ulit(options).html`...`
