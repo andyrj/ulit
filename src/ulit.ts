@@ -62,6 +62,10 @@ function isString(x: any): x is string {
   return typeof x === "string";
 }
 
+function isText(x: any): x is Text {
+  return x && isNode(x) && !!x.textContent;
+}
+
 function isNumber(x: any): x is number {
   return typeof x === "number";
 }
@@ -89,7 +93,7 @@ function isComment(x: any): x is Comment {
 }
 
 function isPart(x: any): x is Part {
-  return x && x.type === PART;
+  return x && x.kind === PART;
 }
 
 function isAttributePart(x: any) {
@@ -107,7 +111,7 @@ function isEventPart(x: any) {
 }
 
 function isPartComment(x: any): boolean {
-  return isComment(x) && x.nodeValue === PART_MARKER;
+  return isComment(x) && x.textContent === PART_MARKER;
 }
 
 function isPromise(x: any): x is Promise<any> {
@@ -115,7 +119,7 @@ function isPromise(x: any): x is Promise<any> {
 }
 
 function isTemplate(x: any): x is Template {
-  return x && x.type && x.type === TEMPLATE;
+  return x && x.kind === TEMPLATE;
 }
 
 const fragmentCache: DocumentFragment[] = [];
@@ -152,13 +156,13 @@ export class DomTarget extends Disposable {
     }
   }
   public firstNode(): Node {
-    return isNode(this.start) ? this.start as Node : (this.start as DomTarget).firstNode();
+    return isNode(this.start) ? this.start : (this.start as DomTarget).firstNode();
   }
   public lastNode(): Node {
     if (isNode(this.end)) {
-      return this.end as Node;
+      return this.end;
     } else if(isString(this.end)){
-      return isNode(this.start) ? this.start as Node : (this.start as DomTarget).lastNode();
+      return isNode(this.start) ? this.start : (this.start as DomTarget).lastNode();
     }
     return (this.end as DomTarget).lastNode();
   }
@@ -175,11 +179,18 @@ export class DomTarget extends Disposable {
 }
 
 export class Template extends DomTarget {
-  public static type: string = TEMPLATE;
+  public static kind = TEMPLATE;
   public fragment: Optional<DocumentFragment> = undefined;
   public parent: Optional<DomTarget> = undefined;
   constructor(public id: number, public templateElement: HTMLTemplateElement, public values: PartValue[]) {
     super();
+  }
+
+  public dispose() {
+    if (isDocumentFragment(this.fragment)) {
+      recoverFragment(this.fragment);
+    }
+    super.dispose();
   }
 
   public hydrate() {
@@ -265,20 +276,20 @@ function followPath(
   ) {
     return target as Node | undefined;
   }
-  const node = isTemplate(target) ? (target as Template).firstNode() : target as Node;
+  const node = isTemplate(target) ? target.firstNode() : target;
   const cPath = pointer.slice(0);
   const current = cPath.shift() as string;
   const num = isString(current) ? parseInt(current, 10) : current;
   if (isString(current)) {
-    return [node as Node, current as string];
+    return [node as Node, current];
   } else {
     if (
       node &&
       node.childNodes &&
       node.childNodes.length > num &&
-      (node.childNodes as any)[num]
+      (node.childNodes as NodeList)[num]
     ) {
-      const el = node.childNodes[num as number];
+      const el = node.childNodes[num];
       return followPath(el, cPath);
     } else {
       throw new RangeError();
@@ -287,7 +298,7 @@ function followPath(
 }
 
 export class Part extends DomTarget {
-  public static type: string = PART;
+  public static kind = PART;
   public isAttached: boolean = false;
   public parent: Optional<Template> = undefined;
   public readonly path: Array<string | number>;
@@ -298,7 +309,7 @@ export class Part extends DomTarget {
     end: Node | string,
     isSVG: boolean = false
   ) {
-    super(start, isString(end) ? undefined : end as Node, isSVG, isString(end) ? end as string : EMPTY_STRING);
+    super(start, isString(end) ? undefined : end, isSVG, isString(end) ? end : EMPTY_STRING);
     Object.freeze(path);
     this.path = path;
   }
@@ -341,22 +352,23 @@ export class Part extends DomTarget {
     if (!parent) {
       throw new RangeError();
     }
-    const valueIsNumber = isNumber(value);
-    if (valueIsNumber || isString(value)) {
-      const strVal = valueIsNumber ? value as string : value.toString();
+    if (isNumber(value)) {
+      value = value.toString();
+    }
+    if (isString(value)) {
       if (element.nodeType !== TEXT_NODE) {
-        const newEl = document.createTextNode(strVal);
+        const newEl = document.createTextNode(value);
         parent.insertBefore(newEl, element);
         this.remove();
         this.start = newEl;
         this.end = newEl;
       }
-      if (element.textContent !== value) {
-        (element as Text).textContent = strVal;
+      if (isText(element) && element.textContent !== value) {
+        element.textContent = value;
       }
     } else {
-      const isFrag = (value as Node).nodeType === DOCUMENT_FRAGMENT;
-      const newStart = isFrag ? (value as DocumentFragment).firstChild : value as Node;
+      const isFrag = isDocumentFragment(value as Node);
+      const newStart = isFrag ? value.firstChild : value as Node;
       const newEnd = isFrag ? (value as DocumentFragment).lastChild : value as Node;
       parent.insertBefore(value as Node | DocumentFragment, element);
       this.remove();
