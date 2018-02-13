@@ -16,7 +16,8 @@
         "no-debugger": false,
         "no-string-literal": false,
         "no-unnecessary-initializer": false,
-        "only-arrow-functions": false
+        "only-arrow-functions": false,
+        "ban-types": false
     },
     "rulesDirectory": [],
     "exclude": [

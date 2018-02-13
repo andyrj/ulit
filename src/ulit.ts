@@ -54,49 +54,67 @@ export class Disposable {
   }
 }
 
-function isFunction(x: any): boolean {
+function isFunction(x: any): x is Function {
   return typeof x === "function";
 }
 
-function isString(x: any): boolean {
+function isString(x: any): x is string {
   return typeof x === "string";
 }
 
-function isNumber(x: any): boolean {
+function isNumber(x: any): x is number {
   return typeof x === "number";
 }
 
-function isNode(x: any): boolean {
+function isNode(x: any): x is Node {
   return x as Node && (x as Node).nodeType > 0;
 }
 
-function isIterable(x: any) {
+function isIterable(x: any): x is Iterable<any> {
   return !isString(x) &&
         !Array.isArray(x) &&
         isFunction((x as any)[Symbol.iterator]);
 }
 
-function isDirectivePart(x: any) {
+function isDirectivePart(x: any): x is Directive {
   return isFunction(x) && x.length === 1;
 }
 
-function isDocumentFragment(x: any): boolean {
+function isDocumentFragment(x: any) : x is DocumentFragment {
   return isNode(x) && (x as Node).nodeType === DOCUMENT_FRAGMENT;
 }
 
-function isComment(x: any) {
+function isComment(x: any): x is Comment {
   return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
+}
+
+function isPart(x: any): x is Part {
+  return x && x.type === PART;
+}
+
+function isAttributePart(x: any) {
+  if (isPart(x) && x.attribute !== EMPTY_STRING && isNode(x.start)) {
+    return true;
+  }
+  return false;
+}
+
+function isEventPart(x: any) {
+  if (isAttributePart(x) && (x.attribute as string).startsWith("on")) {
+    return true;
+  }
+  return false;
 }
 
 function isPartComment(x: any): boolean {
   return isComment(x) && x.nodeValue === PART_MARKER;
 }
 
-function isPromise(x: any): boolean {
+function isPromise(x: any): x is Promise<any> {
   return x && isFunction(x.then);
 }
 
-function isTemplate(x: any): boolean {
+function isTemplate(x: any): x is Template {
   return x && x.type && x.type === TEMPLATE;
 }
 
@@ -122,7 +140,7 @@ export class DomTarget extends Disposable {
   constructor(
     start?: Node | DomTarget,
     end?: Node | DomTarget,
-    public readonly isSVG: boolean = false,
+    public isSVG: boolean = false,
     public attribute: string = EMPTY_STRING
   ) {
     super();
@@ -163,9 +181,76 @@ export class Template extends DomTarget {
   constructor(public id: number, public templateElement: HTMLTemplateElement, public values: PartValue[]) {
     super();
   }
+
+  public hydrate() {
+
+  }
+
+  // TODO: remove old commented out implementation below...
+  // public hydrate(target: Node): boolean | never {
+  //   const _ = getIDomTarget(this as IDomTarget) as PrivateTemplate;
+  //   if (this.initialized) {
+  //     throw new Error(); // only hydrate newly created Templates...
+  //   }
+  //   _.update();
+  //   try {
+  //     _.parts.forEach(part => {
+  //       const p = getIDomTarget(part as IDomTarget) as PrivatePart;
+  //       if (!p) {
+  //         throw new RangeError();
+  //       }
+  //       p.attach(target);
+  //     });
+  //     const fragment = _.fragment as DocumentFragment;
+  //     if (fragment) {
+  //       while (fragment.hasChildNodes) {
+  //         fragment.removeChild(fragment.lastChild as Node);
+  //       }
+  //     }
+  //   } catch(err) {
+  //     return false;
+  //   }
+  //   return true;
+  // };
+
   public update(values?: PartValue[]) {
 
   }
+
+  // TODO: remove old commented out implementation below...
+  // public update(values?: PartValue[]) { 
+  //   const _ = getIDomTarget(this as IDomTarget) as PrivateTemplate;
+  //   if (!_.fragment) {
+  //     _.fragment = getFragment();
+  //   }
+  //   if (!_.initialized) {
+  //     const t: HTMLTemplateElement = document.importNode(_.template, true);
+  //     _.fragment = t.content;
+  //     if (!_.fragment.firstChild || !_.fragment.lastChild) {
+  //       throw new RangeError();
+  //     }
+  //     // TODO: debug from here why my lazy init of fragment is causing undefined.firstNode() on line #912/179
+  //     _.start = isComment(_.fragment.firstChild as Node) ? _.fragment.firstChild : _.parts[0] as IDomTarget;
+  //     _.end = isComment(_.fragment.lastChild as Node) ? _.fragment.lastChild : _.parts[_.parts.length - 1] as IDomTarget; 
+  //     // _.isAttached = true;
+  //     _.parts.forEach(part => {
+  //       const p = getIDomTarget(part) as PrivatePart;
+  //       if (!p) {
+  //         throw new RangeError();
+  //       }
+  //       p.attach(_.fragment as Node);
+  //     });
+  //   }
+  //   _.values = !values ? _.values : values;
+  //   if (_.values) {
+  //     _.parts.forEach((part, i) => {
+  //       part.update(_.values[i]);
+  //     });
+  //   }
+  //   if (!_.initialized) {
+  //     _.initialized = true;
+  //   }
+  // }
 }
 
 type NodeAttribute = [Node, string];
@@ -220,7 +305,6 @@ export class Part extends DomTarget {
   public attachTo(container: Template) {
     this.parent = container;
     const target = followPath(container, this.path);
-    // TODO: finish attachTo logic...
     if (!target) {
       throw new RangeError();
     }
@@ -235,6 +319,8 @@ export class Part extends DomTarget {
     } else {
       throw new RangeError();
     }
+    this.isSVG = isNodeSVGChild(this.start);
+    this.isAttached = true;
   }
   public update(value?: PartValue) {
     if (this.isAttached) {
@@ -415,6 +501,62 @@ export function render(generator: ITemplateGenerator | ITemplateGenerator[], con
   // either the Template.fragment or the container.target render(TemplateGen, ParentNode, ChildNode?);
   // Could add custom hook for people to define their own default directives ordering...  ulit(options).html`...`
 }
+// TODO: remove the below old render() implementation...
+// export function render(
+//   template: ITemplate | PartValue[] | PartValue,
+//   target?: Node
+// ) {
+//   if (isPart(template)) {
+//     template = [template];
+//   }
+//   if (isIterable(template)) {
+    
+//   }
+//   if (Array.isArray(template)) {
+//     template = html`${template.map(
+//       entry => isTemplate(entry) ? entry : defaultTemplateFn(entry)
+//     )}`;
+//   }
+//   if (!isTemplate(template)) {
+//     throw new RangeError();
+//   }
+//   if (!target) {
+//     target = document.body;
+//   }
+//   const instance = renderedTemplates.get(target);
+//   if (instance) {
+//     if (instance.key === (template as ITemplate).key) {
+//       instance.update((template as ITemplate).values);
+//     } else {
+//       (template as ITemplate).update();
+//       instance.replaceWith(template as ITemplate);
+//       renderedTemplates.set(target, template as ITemplate);
+//     }
+//   } else {
+//     const t = getIDomTarget(template as ITemplate) as PrivateTemplate;
+//     if (!t) {
+//       throw new RangeError();
+//     }
+//     if (target.hasChildNodes()) {
+//       const hydrated = t.hydrate(target);
+//       if (!hydrated) {
+//         const first = target.firstChild;
+//         let cursor: Optional<Node | null> = target.lastChild;
+//           while (cursor) {
+//             const next: Optional<Node | null> = cursor.previousSibling;
+//             target.removeChild(cursor);
+//             cursor = cursor !== first ? next : undefined;
+//           }
+//           t.appendTo(target);
+//       }
+//     } else {
+//       t.update();
+//       t.appendTo(target);
+//     }
+//     t.isAttached = true;
+//     renderedTemplates.set(target, template as ITemplate);  
+//   }
+// }
 
 type WalkFn = (
   Parent: Node,
@@ -1186,23 +1328,6 @@ export function Part(
   Object.seal(part);
   return proxy;
 }
-
-// function isAttributePart(part: IPart): boolean {
-//   const start = part.start;
-//   const end = part.end;
-//   if (isString(end) && isNode(start)) {
-//     return true;
-//   }
-//   return false;
-// }
-
-// function isEventPart(part: IPart): boolean {
-//   const end = part.end;
-//   if (isAttributePart(part) && (end as string).startsWith("on")) {
-//     return true;
-//   }
-//   return false;
-// }
 
 type NodeAttribute = [Node, string];
 function followDOMPath(
