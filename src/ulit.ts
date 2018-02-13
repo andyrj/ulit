@@ -286,7 +286,12 @@ export class Part extends DomTarget {
     end: Node | string,
     isSVG: boolean = false
   ) {
-    super(start, isString(end) ? undefined : end, isSVG, isString(end) ? end : EMPTY_STRING);
+    super(
+      start,
+      isString(end) ? undefined : end,
+      isSVG,
+      isString(end) ? end : EMPTY_STRING
+    );
     Object.freeze(path);
     this.path = path;
   }
