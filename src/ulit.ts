@@ -6,8 +6,8 @@ const PART_START = "{{";
 const PART = "PART";
 const PART_END = "}}";
 const TEMPLATE = "TEMPLATE";
-const TEMPLATE_GENERATOR = "TEMPLATE_GENERATOR";
-const TEMPLATE_ID_START = "ULIT-";
+const TEMPLATE_GENERATOR = "TEMPLATEGENERATOR";
+const TEMPLATE_ID_START = "ULIT";
 const PART_MARKER = `${PART_START}${PART_END}`;
 const SERIAL_PART_START = `${PART_START}${PART}S:`;
 const ELEMENT_NODE = 1;
@@ -111,7 +111,7 @@ function isComment(x: any): x is Comment {
 //   return false;
 // }
 
-function isPartComment(x: any): boolean {
+function isPartComment(x: any): x is Comment {
   return isComment(x) && x.textContent === PART_MARKER;
 }
 
@@ -344,10 +344,10 @@ export class Part extends DomTarget {
         element.textContent = value;
       }
     } else {
-      const isFrag = isDocumentFragment(value as Node);
+      const isFrag = isDocumentFragment(value);
       const newStart = isFrag ? value.firstChild : value as Node;
-      const newEnd = isFrag ? (value as DocumentFragment).lastChild : value as Node;
-      parent.insertBefore(value as Node | DocumentFragment, element);
+      const newEnd = isFrag ? value.lastChild : value as Node;
+      parent.insertBefore(value, element);
       this.remove();
       if (newStart && newEnd) {
         this.start = newStart;
@@ -399,7 +399,6 @@ export class Part extends DomTarget {
   }
 
   private set(value?: PartValue) {
-    // TODO: write a new set implementation for coerced templates as only type of Part?
     if (!value && this.value) {
       value = this.value;
     }
