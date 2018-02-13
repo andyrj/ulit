@@ -1,9 +1,11 @@
 const SVG_NS = "https://www.w3.org/2000/svg";
 const PART_START = "{{";
+const PART = "part";
 const PART_END = "}}";
+const TEMPLATE = "template";
 const TEMPLATE_ID_START = "ulit-";
 const PART_MARKER = `${PART_START}${PART_END}`;
-const SERIAL_PART_START = `${PART_START}parts:`;
+const SERIAL_PART_START = `${PART_START}${PART}s:`;
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
@@ -15,7 +17,6 @@ export type Key = symbol | number | string;
 export type Directive = (part: Part) => void;
 export type PrimitivePart = 
   | string
-  | number
   | Node
   | DocumentFragment
 export type PartValue =
@@ -26,12 +27,48 @@ export type PartValue =
   | Template;
 export interface IPartPromise extends Promise<PartValue> {};
 export interface IPartArray extends Array<PartValue> {};
+export type IDisposer = () => void;
+export class Disposable {
+  public readonly disposed: boolean = false;
+  private disposers: IDisposer[];
+  constructor() {}
+  public addDisposer(handler: IDisposer) {
+    if (this.disposers.indexOf(handler) > -1) {
+      return;
+    }
+    this.disposers.push(handler);
+  }
+  public dispose() {
+    while(this.disposers.length > 0) {
+      (this.disposers.pop() as IDisposer)();
+    }
+  }
+  public removeDisposer(handler: IDisposer) {
+    const index = this.disposers.indexOf(handler);
+    if (index === -1) {
+      return;
+    }
+    this.disposers.splice(index, 1);
+  }
+}
 
-export class DomTarget {
+function isString(x: any): boolean {
+  return typeof x === "function";
+}
+
+function isNode(x: any): boolean {
+  return x as Node && (x as Node).nodeType > 0;
+}
+
+export class DomTarget extends Disposable {
   public start: Optional<Node | DomTarget> = undefined;
   public end: Optional<Node | DomTarget | string> = undefined;
-  public isSVG: boolean = false;
-  constructor(start?: Node | DomTarget, end?: Node | DomTarget | string) {
+  constructor(
+    start?: Node | DomTarget,
+    end?: Node | DomTarget | string,
+    public readonly isSVG: boolean = false,
+  ) {
+    super();
     if (start) {
       this.start = start;
     }
@@ -39,13 +76,23 @@ export class DomTarget {
       this.end = end;
     }
   }
-  public firstNode() {}
-  public lastNode() {}
+  public firstNode(): Node {
+    return isNode(this.start) ? this.start as Node : (this.start as DomTarget).firstNode();
+  }
+  public lastNode(): Node {
+    if (isNode(this.end)) {
+      return this.end as Node;
+    } else if(isString(this.end)){
+      return isNode(this.start) ? this.start as Node : (this.start as DomTarget).lastNode();
+    }
+    return (this.end as DomTarget).lastNode();
+  }
 }
 
 export class Template extends DomTarget {
-  public parent: Optional<DomTarget> = undefined;
+  public static type: string = TEMPLATE;
   public fragment: Optional<DocumentFragment> = undefined;
+  public parent: Optional<DomTarget> = undefined;
   constructor(public id: number, public templateElement: HTMLTemplateElement, public values: PartValue[]) {
     super();
   }
@@ -53,12 +100,24 @@ export class Template extends DomTarget {
 }
 
 export class Part extends DomTarget {
-  public parent: Optional<DomTarget> = undefined;
-  constructor(public path: Array<string | number>, start: Node, end: Node | string) {
-    super(start, end);
+  public static type: string = PART;
+  public parent: Template;
+  constructor(
+    public readonly path: Array<string | number>,
+    start: Node,
+    end: Node | string,
+    isSVG: boolean = false
+  ) {
+    super(start, end, isSVG);
   }
-  public update(value?: PartValue) {}
+  public attachTo(template: Template) {
+
+  }
+  public update(newValue?: PartValue) {
+
+  }
 }
+
 
 const idCache = new Map<string, number>();
 function getId(str: string): number {
@@ -90,32 +149,31 @@ export function html(strs: string[], ...exprs: PartValue[]): ITemplateGenerator 
   if (generator) {
     return generator;
   }
-  // TODO: build templateEl
   const cacheEntry = serialCache.get(id);
   const deserialized = cacheEntry
     ? cacheEntry
     : checkForSerialized(id);
   let template: Optional<HTMLTemplateElement> = undefined;
-  let parts: Optional<Part[]> = undefined;
+  let parts: Part[] = [];
   if (deserialized) {
     template = deserialized.template;
     parts = deserialized.parts;
   }
-  if (!template || !parts) {
-    template = document.createElement("template");
-    template.innerHTML = strs.join(PART_MARKER);
-    walkDOM(template.content, undefined, templateSetup(parts));
-    serialCache.set(id, { template, parts });
-  }
   const newGenerator = () => {
-    return new Template(id, template, exprs);
+    if (!template) {
+      template = document.createElement("template");
+      template.innerHTML = strs.join(PART_MARKER);
+      walkDOM(template.content, undefined, templateSetup(parts as Part[]));
+      serialCache.set(id, { template, parts: parts || [] });
+    }
+    return new Template(id, template as HTMLTemplateElement, exprs);
   }
   templateGeneratorCache.set(id, newGenerator);
   return newGenerator;
 }
 
 const renderedCache = new WeakMap<Node, Template>();
-export function render(generator: ITemplateGenerator, container?: Node) {
+export function render(generator: ITemplateGenerator, container?: Node, element?: Node) {
 
 }
 
@@ -145,6 +203,51 @@ function walkDOM(
     walkDOM(element as HTMLElement, child, fn, path);
     path.pop();
   });
+}
+
+function templateSetup(parts: Part[]): WalkFn {
+  return (parent, element, walkPath) => {
+    if (!element) {
+      throw new RangeError();
+    }
+    const nodeType = element && element.nodeType;
+    const isSVG = isNodeSVGChild(element);
+    if (nodeType === TEXT_NODE) {
+      const text = element && element.nodeValue;
+      const split = text && text.split(PART_MARKER);
+      const end = split ? split.length - 1 : undefined;
+      const nodes: Node[] = [];
+      let cursor = 0;
+      if (split && split.length > 0 && end) {
+        split.forEach((node, i) => {
+          if (node !== "") {
+            nodes.push(document.createTextNode(node));
+            cursor++;
+          }
+          if (i < end) {
+            const newPartComment = document.createComment(PART_MARKER);
+            nodes.push(newPartComment);
+            const adjustedPath = walkPath.slice(0);
+            const len = adjustedPath.length - 1;
+            (adjustedPath[len] as number) += cursor;
+            parts.push(new Part(adjustedPath, newPartComment, newPartComment, isSVG));
+            cursor++;
+          }
+        });
+        nodes.forEach(node => {
+          parent.insertBefore(node, element as Node);
+        });
+        parent.removeChild(element);
+      }
+    } else if (nodeType === ELEMENT_NODE) {
+      [].forEach.call(element.attributes, (attr: Attr) => {
+        if (attr.nodeValue === PART_MARKER) {
+          parts.push(new Part(walkPath.concat(attr.nodeName), element, attr, isSVG));
+        }
+      });
+    }
+    return true;
+  };
 }
 
 function isNodeSVGChild(node: Node): boolean {
