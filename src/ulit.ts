@@ -346,9 +346,15 @@ export class Part extends DomTarget {
       (this.value as Template).update(template.values);
     } else {
       template.update();
-      // TODO: re-write below without helper methods...
-      // _.replaceWith(template);
-      // _.value = template;
+      const fragment = template.fragment;
+      const cursor = this.firstNode();
+      const parent = cursor.parentNode;
+      if (!parent) {
+        throw new Error();
+      }
+      this.start = template.firstNode();
+      this.end = template.lastNode();
+      parent.insertBefore(fragment as DocumentFragment, cursor);
     }
   }
   public updateAttribute(value: any) {
