@@ -440,7 +440,7 @@ function createTemplateGenerator(
   strs: string[],
   exprs: PartValue[],
   id: number,
-  template: HTMLTemplateElement,
+  template: Optional<HTMLTemplateElement>,
   parts: Part[]
 ): ITemplateGenerator {
   const generator = () => {
@@ -450,6 +450,18 @@ function createTemplateGenerator(
         throw new Error();
       }
       template.innerHTML = strs.join(PART_MARKER);
+      // TODO: track down why this is happening...
+      // RangeError
+      // at walkDOM (src/ulit.ts:575:11)
+      // at forEach.call (src/ulit.ts:579:5)
+      // at Proxy.forEach (<anonymous>)
+      // at walkDOM (src/ulit.ts:577:14)
+      // at forEach.call (src/ulit.ts:579:5)
+      // at Proxy.forEach (<anonymous>)
+      // at walkDOM (src/ulit.ts:577:14)
+      // at generator (src/ulit.ts:454:7)
+      // at Object.render (src/ulit.ts:514:20)
+      // at Context.it (test/ulit.ts:24:5)
       walkDOM(template.content, undefined, templateSetup(parts as Part[]));
       serialCache.set(id, { template, parts });
     }
@@ -480,9 +492,6 @@ export function html(
   if (deserialized) {
     template = deserialized.template;
     parts = deserialized.parts;
-  }
-  if (!isTemplateElement(template)) {
-    throw new Error();
   }
   const newGenerator = createTemplateGenerator(
     strs,
@@ -566,6 +575,7 @@ function walkDOM(
   fn: WalkFn,
   path: Array<number | string> = []
 ) {
+  console.log(parent, element, path);
   let condition = true;
   if (element) {
     condition = fn(parent, element, path);
