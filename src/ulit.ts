@@ -358,9 +358,7 @@ export class Part extends DomTarget {
     }
   }
 
-  public updateTemplate(generator: ITemplateGenerator) {
-    // TODO: re-write below, referse if and else conditions... change to use ITemplateGenerator to get template...
-    /*
+  public updateTemplate(template: Template) {
     if (isTemplate(this.value) && template.id === (this.value as Template).id) {
       (this.value as Template).update(template.values);
     } else {
@@ -369,7 +367,6 @@ export class Part extends DomTarget {
       // _.replaceWith(template);
       // _.value = template;
     }
-    */
   }
 
   public updateAttribute(value: any) {
@@ -421,7 +418,7 @@ export class Part extends DomTarget {
           this.set(promised);
         });
       } else if (isTemplateGenerator(value)) {
-        this.updateTemplate(value);
+        this.updateTemplate(value());
       } else if (Array.isArray(value)) {
         this.updateArray(value);
       } else {
@@ -450,6 +447,7 @@ function getId(str: string): number {
 
 export interface ITemplateGenerator {
   (): Template;
+  id: number;
   kind: string;
 }
 const templateGeneratorCache = new Map<number, ITemplateGenerator>();
@@ -473,6 +471,7 @@ function createTemplateGenerator(
     return new Template(id, template as HTMLTemplateElement, exprs);
   }
   (generator as ITemplateGenerator).kind = TEMPLATE_GENERATOR;
+  (generator as ITemplateGenerator).id = id;
   return generator as ITemplateGenerator;
 };
 interface ISerialCacheEntry {
