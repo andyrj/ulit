@@ -393,12 +393,12 @@ function isFirstChildSerial(parent: DocumentFragment): boolean {
 }
 
 function parseSerializedParts(
-  value: string | null | undefined
-): Array<Part | null | undefined> {
+  value?: string
+): Part[] {
   if (!value) {
     return [];
   } else {
-    return JSON.parse(value.split(SERIAL_PART_START)[1].slice(0, -2));
+    return JSON.parse(value.split(SERIAL_PART_START)[1].slice(0, -2)) as Part[];
   }
 }
 
@@ -421,7 +421,7 @@ function checkForSerialized(
   let deserialized: ISerialCacheEntry | null | undefined;
   if (isFirstSerial) {
     const fc = fragment.removeChild(first);
-    const parts = parseSerializedParts(fc.nodeValue) as Part[];
+    const parts = parseSerializedParts(fc.nodeValue || undefined);
     const template = el as HTMLTemplateElement;
     if (parts && template) {
       deserialized = { template, parts };
