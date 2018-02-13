@@ -14,11 +14,10 @@ const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 const DOCUMENT_FRAGMENT = 11;
-
 export type Optional<T> = T | undefined | null;
 export type Key = symbol | number | string;
 export type Directive = (part: Part) => void;
-export type PrimitivePart = string | Node | DocumentFragment;
+export type PrimitivePart = number | string | Node | DocumentFragment;
 export type PartValue =
   | PrimitivePart
   | IPartPromise
@@ -51,83 +50,65 @@ export class Disposable {
     this.disposers.splice(index, 1);
   }
 }
-
 function isFunction(x: any): x is Function {
   return typeof x === "function";
 }
-
 function isString(x: any): x is string {
   return typeof x === "string";
 }
-
 function isText(x: any): x is Text {
   return x && isNode(x) && !!x.textContent;
 }
-
 function isNumber(x: any): x is number {
   return typeof x === "number";
 }
-
 function isNode(x: any): x is Node {
   return (x as Node) && (x as Node).nodeType > 0;
 }
-
 function isIterable(x: any): x is Iterable<any> {
   return (
     !isString(x) && !Array.isArray(x) && isFunction((x as any)[Symbol.iterator])
   );
 }
-
 function isDirectivePart(x: any): x is Directive {
   return isFunction(x) && x.length === 1;
 }
-
 function isDocumentFragment(x: any): x is DocumentFragment {
   return isNode(x) && (x as Node).nodeType === DOCUMENT_FRAGMENT;
 }
-
 function isComment(x: any): x is Comment {
   return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
 }
-
 // function isPart(x: any): x is Part {
 //   return x && x.kind === PART;
 // }
-
 // function isAttributePart(x: any) {
 //   if (isPart(x) && x.attribute !== EMPTY_STRING && isNode(x.start)) {
 //     return true;
 //   }
 //   return false;
 // }
-
 // function isEventPart(x: any) {
 //   if (isAttributePart(x) && (x.attribute as string).startsWith("on")) {
 //     return true;
 //   }
 //   return false;
 // }
-
 function isPartComment(x: any): x is Comment {
   return isComment(x) && x.textContent === PART_MARKER;
 }
-
 function isPromise(x: any): x is Promise<any> {
   return x && isFunction(x.then);
 }
-
 function isTemplate(x: any): x is Template {
   return x && x.kind === TEMPLATE;
 }
-
 function isTemplateElement(x: any): x is HTMLTemplateElement {
   return x && isNode(x) && x.nodeName === TEMPLATE;
 }
-
 function isTemplateGenerator(x: any): x is ITemplateGenerator {
   return x && x.kind === TEMPLATE_GENERATOR;
 }
-
 const fragmentCache: DocumentFragment[] = [];
 function getFragment(): DocumentFragment {
   if (fragmentCache.length === 0) {
@@ -136,14 +117,12 @@ function getFragment(): DocumentFragment {
     return fragmentCache.pop() as DocumentFragment;
   }
 }
-
 function recoverFragment(fragment: DocumentFragment) {
   while (fragment.hasChildNodes()) {
     fragment.removeChild(fragment.lastChild as Node);
   }
   fragmentCache.push(fragment);
 }
-
 export class DomTarget extends Disposable {
   public start: Optional<Node | DomTarget> = undefined;
   public end: Optional<Node | DomTarget> = undefined;
@@ -187,7 +166,6 @@ export class DomTarget extends Disposable {
     return fragment;
   }
 }
-
 export class Template extends DomTarget {
   public static kind = TEMPLATE;
   public fragment: Optional<DocumentFragment> = undefined;
@@ -199,14 +177,12 @@ export class Template extends DomTarget {
   ) {
     super();
   }
-
   public dispose() {
     if (isDocumentFragment(this.fragment)) {
       recoverFragment(this.fragment);
     }
     super.dispose();
   }
-
   public hydrate(template: Template) {
     this.update();
     try {
@@ -222,7 +198,6 @@ export class Template extends DomTarget {
     }
     return true;
   }
-
   public update(values?: PartValue[]) {
     if (!this.fragment) {
       this.fragment = getFragment();
@@ -252,7 +227,6 @@ export class Template extends DomTarget {
     }
   }
 }
-
 type NodeAttribute = [Node, string];
 function followPath(
   target: Optional<Node | Template>,
@@ -281,7 +255,6 @@ function followPath(
     }
   }
 }
-
 export class Part extends DomTarget {
   public static kind = PART;
   public isAttached: boolean = false;
@@ -331,11 +304,9 @@ export class Part extends DomTarget {
     }
     this.value = value;
   }
-
   public updateArray(value: PartValue[]) {
     repeat(value)(this);
   }
-
   public updateNode(value: PrimitivePart) {
     const element = this.firstNode();
     const parent = element.parentNode;
@@ -370,7 +341,6 @@ export class Part extends DomTarget {
       }
     }
   }
-
   public updateTemplate(template: Template) {
     if (isTemplate(this.value) && template.id === (this.value as Template).id) {
       (this.value as Template).update(template.values);
@@ -381,7 +351,6 @@ export class Part extends DomTarget {
       // _.value = template;
     }
   }
-
   public updateAttribute(value: any) {
     if (this.attribute === EMPTY_STRING || !isString(this.attribute)) {
       throw new RangeError();
@@ -410,7 +379,6 @@ export class Part extends DomTarget {
       }
     }
   }
-
   private set(value?: PartValue) {
     if (!value && this.value) {
       value = this.value;
@@ -439,7 +407,6 @@ export class Part extends DomTarget {
     }
   }
 }
-
 const idCache = new Map<string, number>();
 function getId(str: string): number {
   if (idCache.has(str)) {
@@ -456,7 +423,6 @@ function getId(str: string): number {
   idCache.set(str, id);
   return id;
 }
-
 export interface ITemplateGenerator {
   (): Template;
   id: number;
@@ -522,7 +488,6 @@ export function html(
   templateGeneratorCache.set(id, newGenerator);
   return newGenerator;
 }
-
 // const renderedCache = new WeakMap<Node, Template>();
 export function render(
   generator: ITemplateGenerator | ITemplateGenerator[],
@@ -533,7 +498,6 @@ export function render(
   // either the Template.fragment or the container.target render(TemplateGen, ParentNode, ChildNode?);
   // Could add custom hook for people to define their own default directives ordering...  ulit(options).html`...`
 }
-// TODO: remove the below old render() implementation...
 // export function render(
 //   template: ITemplate | PartValue[] | PartValue,
 //   target?: Node
@@ -542,7 +506,6 @@ export function render(
 //     template = [template];
 //   }
 //   if (isIterable(template)) {
-
 //   }
 //   if (Array.isArray(template)) {
 //     template = html`${template.map(
@@ -589,13 +552,11 @@ export function render(
 //     renderedTemplates.set(target, template as ITemplate);
 //   }
 // }
-
 type WalkFn = (
   Parent: Node,
   element: Node | null | undefined,
   path: Array<string | number>
 ) => boolean;
-
 function walkDOM(
   parent: HTMLElement | DocumentFragment,
   element: Node | null | undefined,
@@ -617,7 +578,6 @@ function walkDOM(
     path.pop();
   });
 }
-
 function templateSetup(parts: Part[]): WalkFn {
   return (parent, element, walkPath) => {
     if (!element) {
@@ -666,7 +626,6 @@ function templateSetup(parts: Part[]): WalkFn {
     return true;
   };
 }
-
 function isNodeSVGChild(node: Node): boolean {
   let result = false;
   let current: Optional<Node> = node;
@@ -683,7 +642,6 @@ function isNodeSVGChild(node: Node): boolean {
   }
   return result;
 }
-
 function isFirstChildSerial(parent: DocumentFragment): boolean {
   const child = parent.firstChild;
   return (child &&
@@ -730,18 +688,15 @@ function checkForSerialized(id: number): Optional<ISerialCacheEntry> {
   }
   return;
 }
-
 export type KeyFn = (item: any, index?: number) => Key;
 function defaultKeyFn(index: number): Key {
   return index;
 }
-
 export type TemplateFn = (item: {}) => ITemplateGenerator;
 function defaultTemplateFn(item: {}): ITemplateGenerator {
   // @ts-ignore
   return html`${item}`;
 }
-
 const repeatCache = new Map<Part, [Key[], Map<Key, Template>]>();
 export function repeat(
   items: Array<{}>,
@@ -757,7 +712,6 @@ export function repeat(
     // const isSVG = part.isSVG;
     // might need for hydrate...
     // const attacher = partAttachers.get(part);
-
     const templates = items.map(item => {
       if (isTemplate(item)) {
         return item;
@@ -854,7 +808,6 @@ export function repeat(
     });
   };
 }
-
 export function until(
   promise: Promise<PartValue>,
   defaultContent: PartValue
