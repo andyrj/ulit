@@ -183,10 +183,10 @@ export class Template extends DomTarget {
     }
     super.dispose();
   }
-  public hydrate() {
+  public hydrate(target: Node) {
     this.update();
     try {
-      this.parts.forEach(part => part.attachTo(this));
+      this.parts.forEach(part => part.attachTo(target));
       const fragment = this.fragment;
       if (isDocumentFragment(fragment)) {
         while (fragment.hasChildNodes) {
@@ -258,7 +258,6 @@ function followPath(
 export class Part extends DomTarget {
   public static kind = PART;
   public isAttached: boolean = false;
-  public parent: Optional<Template> = undefined;
   public readonly path: Array<string | number>;
   public value: Optional<PartValue> = undefined;
   constructor(
@@ -276,9 +275,11 @@ export class Part extends DomTarget {
     Object.freeze(path);
     this.path = path;
   }
-  public attachTo(container: Template) {
-    this.parent = container;
-    const target = followPath(container, this.path);
+  public attachTo(container: Node | Template) {
+    const target = followPath(
+      isTemplate(container) ? container.firstNode() : container,
+      this.path
+    );
     if (!target) {
       throw new RangeError();
     }
@@ -496,7 +497,10 @@ export function html(
 }
 const renderedCache = new WeakMap<Node, Template>();
 export function render(
-  generator: ITemplateGenerator | ITemplateGenerator[] | Iterable<ITemplateGenerator>,
+  generator:
+    | ITemplateGenerator
+    | ITemplateGenerator[]
+    | Iterable<ITemplateGenerator>,
   container: Node = document.body
 ) {
   const instance = renderedCache.get(container);
@@ -509,16 +513,25 @@ export function render(
   if (!isTemplateGenerator(generator)) {
     throw new Error();
   }
+  const template = generator();
   if (instance) {
     if (instance.id === generator.id) {
-      // update current template
+      instance.update(template.values);
     } else {
-      // replace instance with generator(), be sure to dispose of instance...
+      // replace instance with template, be sure to dispose of instance...
+      template.update();
+      const first = instance.firstNode();
+      const parent = first.parentNode;
+      if (!parent) {
+        throw new Error();
+      }
+      parent.insertBefore(template.fragment as DocumentFragment, first);
     }
   } else {
     // take over all children of container and render into container...
     if (container.hasChildNodes()) {
       // hydrate
+      const hydrated = template.hydrate(container);
     } else {
       // appendChild
     }
