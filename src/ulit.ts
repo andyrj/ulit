@@ -289,7 +289,8 @@ export function html(strs: string[], ...exprs: PartValue[]): ITemplateGenerator 
 
 const renderedCache = new WeakMap<Node, Template>();
 export function render(generator: ITemplateGenerator, container?: Node, element?: Node) {
-
+  // TODO: Templates on initial update should hydrate,
+  // either the Template.fragment or the container.target render(TemplateGen, ParentNode, ChildNode?);
 }
 
 type WalkFn = (
@@ -436,10 +437,10 @@ function defaultKeyFn(index: number): Key {
   return index;
 }
 
-export type TemplateFn = (item: {}) => Template;
-function defaultTemplateFn(item: {}): Template {
+export type TemplateFn = (item: {}) => ITemplateGenerator;
+function defaultTemplateFn(item: {}): ITemplateGenerator {
   // @ts-ignore
-  return html`${item}`();
+  return html`${item}`;
 }
 
 const repeatCache = new Map<Part, [Key[], Map<Key, Template>]>();
