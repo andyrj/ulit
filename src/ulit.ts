@@ -123,6 +123,10 @@ function isTemplate(x: any): x is Template {
   return x && x.kind === TEMPLATE;
 }
 
+function isTemplateElement(x: any): x is HTMLTemplateElement {
+  return x && isNode(x) && x.nodeName === TEMPLATE;
+}
+
 function isTemplateGenerator(x: any): x is ITemplateGenerator {
   return x && x.kind === TEMPLATE_GENERATOR;
 }
@@ -524,8 +528,10 @@ export function html(strs: string[], ...exprs: PartValue[]): ITemplateGenerator 
     template = deserialized.template;
     parts = deserialized.parts;
   }
-  
-
+  if (!isTemplateElement(template)) {
+    throw new Error();
+  }
+  const newGenerator = createTemplateGenerator(strs, exprs, id, template, parts);
   newGenerator.kind = TEMPLATE_GENERATOR;
   templateGeneratorCache.set(id, newGenerator);
   return newGenerator;
