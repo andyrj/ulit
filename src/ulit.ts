@@ -89,7 +89,7 @@ function isComment(x: any) {
   return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
 }
 
-function isPartComment(x: any | null | undefined): boolean {
+function isPartComment(x: any): boolean {
   return isComment(x) && x.nodeValue === PART_MARKER;
 }
 
@@ -418,7 +418,7 @@ function checkForSerialized(
     return;
   }
   const isFirstSerial = isFirstChildSerial(fragment);
-  let deserialized: ISerialCacheEntry | null | undefined;
+  let deserialized: Optional<ISerialCacheEntry> = undefined;
   if (isFirstSerial) {
     const fc = fragment.removeChild(first);
     const parts = parseSerializedParts(fc.nodeValue || undefined);
