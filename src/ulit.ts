@@ -279,7 +279,7 @@ export function html(strs: string[], ...exprs: PartValue[]): ITemplateGenerator 
       template = document.createElement(TEMPLATE);
       template.innerHTML = strs.join(PART_MARKER);
       walkDOM(template.content, undefined, templateSetup(parts as Part[]));
-      serialCache.set(id, { template, parts: parts || [] });
+      serialCache.set(id, { template, parts });
     }
     return new Template(id, template as HTMLTemplateElement, exprs);
   }
@@ -291,6 +291,7 @@ const renderedCache = new WeakMap<Node, Template>();
 export function render(generator: ITemplateGenerator, container?: Node, element?: Node) {
   // TODO: Templates on initial update should hydrate,
   // either the Template.fragment or the container.target render(TemplateGen, ParentNode, ChildNode?);
+  // Could add custom hook for people to define their own default directives ordering...  ulit(options).html`...`
 }
 
 type WalkFn = (
