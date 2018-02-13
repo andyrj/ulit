@@ -1,4 +1,7 @@
 const SVG_NS = "https://www.w3.org/2000/svg";
+const SVG = "SVG";
+const FOREIGN_OBJECT = "FOREIGNOBJECT";
+const EMPTY_STRING = "";
 const PART_START = "{{";
 const PART = "part";
 const PART_END = "}}";
@@ -30,7 +33,7 @@ export interface IPartArray extends Array<PartValue> {};
 export type IDisposer = () => void;
 export class Disposable {
   public readonly disposed: boolean = false;
-  private disposers: IDisposer[];
+  private disposers: IDisposer[] = [];
   constructor() {}
   public addDisposer(handler: IDisposer) {
     if (this.disposers.indexOf(handler) > -1) {
@@ -52,21 +55,76 @@ export class Disposable {
   }
 }
 
-function isString(x: any): boolean {
+function isFunction(x: any): boolean {
   return typeof x === "function";
+}
+
+function isString(x: any): boolean {
+  return typeof x === "string";
+}
+
+function isNumber(x: any): boolean {
+  return typeof x === "number";
 }
 
 function isNode(x: any): boolean {
   return x as Node && (x as Node).nodeType > 0;
 }
 
+function isIterable(x: any) {
+  return !isString(x) &&
+        !Array.isArray(x) &&
+        isFunction((x as any)[Symbol.iterator]);
+}
+
+function isDirectivePart(x: any) {
+  return isFunction(x) && x.length === 1;
+}
+
+function isDocumentFragment(x: any): boolean {
+  return isNode(x) && (x as Node).nodeType === DOCUMENT_FRAGMENT;
+}
+
+function isComment(x: any) {
+  return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
+}
+
+function isPartComment(x: any | null | undefined): boolean {
+  return isComment(x) && x.nodeValue === PART_MARKER;
+}
+
+function isPromise(x: any): boolean {
+  return x && isFunction(x.then);
+}
+
+function isTemplate(x: any): boolean {
+  return x && x.type && x.type === TEMPLATE;
+}
+
+const fragmentCache: DocumentFragment[] = [];
+function getFragment(): DocumentFragment {
+  if (fragmentCache.length === 0) {
+    return document.createDocumentFragment();
+  } else {
+    return fragmentCache.pop() as DocumentFragment;
+  }
+}
+
+function recoverFragment(fragment: DocumentFragment) {
+  while(fragment.hasChildNodes()) {
+    fragment.removeChild(fragment.lastChild as Node);
+  }
+  fragmentCache.push(fragment);
+}
+
 export class DomTarget extends Disposable {
   public start: Optional<Node | DomTarget> = undefined;
-  public end: Optional<Node | DomTarget | string> = undefined;
+  public end: Optional<Node | DomTarget> = undefined;
   constructor(
     start?: Node | DomTarget,
-    end?: Node | DomTarget | string,
+    end?: Node | DomTarget,
     public readonly isSVG: boolean = false,
+    public attribute: string = EMPTY_STRING
   ) {
     super();
     if (start) {
@@ -87,6 +145,16 @@ export class DomTarget extends Disposable {
     }
     return (this.end as DomTarget).lastNode();
   }
+  public remove(): Optional<DocumentFragment> {
+    const fragment = getFragment();
+    let cursor: Optional<Node> = this.firstNode();
+    while (cursor !== undefined) {
+      const next: Node = cursor.nextSibling as Node;
+      fragment.appendChild(cursor);
+      cursor = (cursor === this.end || !next) ? undefined : next;
+    }
+    return fragment;
+  }
 }
 
 export class Template extends DomTarget {
@@ -99,25 +167,72 @@ export class Template extends DomTarget {
   public update(values?: PartValue[]) {}
 }
 
+type NodeAttribute = [Node, string];
+function followPath(
+  target: Optional<Node | Template>,
+  pointer: Array<string | number>
+): Optional<Node | NodeAttribute> {
+  if (
+    pointer.length === 0 ||
+    !target ||
+    isPartComment(target)
+  ) {
+    return target as Node | undefined;
+  }
+  const node = isTemplate(target) ? (target as Template).firstNode() : target as Node;
+  const cPath = pointer.slice(0);
+  const current = cPath.shift() as string;
+  const num = isString(current) ? parseInt(current, 10) : current;
+  if (isString(current)) {
+    return [node as Node, current as string];
+  } else {
+    if (
+      node &&
+      node.childNodes &&
+      node.childNodes.length > num &&
+      (node.childNodes as any)[num]
+    ) {
+      const el = node.childNodes[num as number];
+      return followPath(el, cPath);
+    } else {
+      throw new RangeError();
+    }
+  }
+}
+
 export class Part extends DomTarget {
   public static type: string = PART;
-  public parent: Template;
+  public isAttached: boolean = false;
+  public parent: Optional<Template> = undefined;
+  public readonly path: Array<string | number>;
+  public value: Optional<PartValue> = undefined;
   constructor(
-    public readonly path: Array<string | number>,
+    path: Array<string | number>,
     start: Node,
     end: Node | string,
     isSVG: boolean = false
   ) {
-    super(start, end, isSVG);
+    super(start, isString(end) ? undefined : end as Node, isSVG, isString(end) ? end as string : EMPTY_STRING);
+    Object.freeze(path);
+    this.path = path;
   }
-  public attachTo(template: Template) {
-
+  public attachTo(container: Template) {
+    this.parent = container;
+    const target = followPath(container, this.path);
+    // TODO: finish attachTo logic...
   }
-  public update(newValue?: PartValue) {
-
+  public update(value?: PartValue) {
+    if (this.isAttached) {
+      if (value !== this.value) {
+        this.set(value);
+      }
+    }
+    this.value = value;
+  }
+  private set(value?: PartValue) {
+    // TODO: write a new set implementation for coerced templates as only type of Part....
   }
 }
-
 
 const idCache = new Map<string, number>();
 function getId(str: string): number {
@@ -161,7 +276,7 @@ export function html(strs: string[], ...exprs: PartValue[]): ITemplateGenerator 
   }
   const newGenerator = () => {
     if (!template) {
-      template = document.createElement("template");
+      template = document.createElement(TEMPLATE);
       template.innerHTML = strs.join(PART_MARKER);
       walkDOM(template.content, undefined, templateSetup(parts as Part[]));
       serialCache.set(id, { template, parts: parts || [] });
@@ -254,10 +369,10 @@ function isNodeSVGChild(node: Node): boolean {
   let result = false;
   let current: Optional<Node> = node;
   while (current) {
-    if (current.nodeName === "SVG") {
+    if (current.nodeName === SVG) {
       result = true;
       current = undefined;
-    } else if(current.nodeName === "FOREIGNOBJECT") {
+    } else if(current.nodeName === FOREIGN_OBJECT) {
       result = false;
       current = undefined;
     } else {
@@ -314,6 +429,137 @@ function checkForSerialized(
     return deserialized;
   }
   return;
+}
+
+export type KeyFn = (item: any, index?: number) => Key;
+function defaultKeyFn(index: number): Key {
+  return index;
+}
+
+export type TemplateFn = (item: {}) => Template;
+function defaultTemplateFn(item: {}): Template {
+  // @ts-ignore
+  return html`${item}`();
+}
+
+const repeatCache = new Map<Part, [Key[], Map<Key, Template>]>();
+export function repeat(
+  items: Array<{}>,
+  keyFn: KeyFn = defaultKeyFn,
+  templateFn: TemplateFn = defaultTemplateFn
+): Directive {
+  return (part: Part) => {
+    let target = part.firstNode();
+    const parent = target.parentNode;
+    if (!parent) {
+      throw new RangeError();
+    }
+    // const isSVG = part.isSVG;
+    // might need for hydrate...
+    // const attacher = partAttachers.get(part);
+
+    const templates = items.map(item => {
+      if (isTemplate(item)) {
+        return item;
+      }
+      return templateFn(item);
+    }) as Template[];
+    const keys = items.map((item, index) => keyFn(item, index));
+    const [oldCacheOrder, oldCacheMap] = repeatCache.get(part) || [[], new Map<Key, Template>()];
+    const newCache = [keys, new Map<Key, Template>()];
+    const newCacheMap = newCache[1] as Map<Key, Template>;
+    // build LUT for new keys/templates
+    keys.forEach((key, index) => {
+      newCacheMap.set(key, templates[index]);
+    });
+    // remove keys no longer in keys/list
+    const removeKeys: number[] = [];
+    oldCacheOrder.forEach((key, index) => {
+      const newEntry = newCacheMap.get(key);
+      const oldEntry = oldCacheMap.get(key);
+      if (oldEntry && !newEntry) {
+        oldEntry.remove();
+        oldCacheMap.delete(key);
+        removeKeys.push(index);
+      }
+    });
+    // can't mutate oldCacheOrder while in forEach
+    while (true) {
+      const index = removeKeys.pop();
+      if (index && index > -1) {
+        oldCacheOrder.splice(index, 1);
+        continue;
+      }
+      break;
+    }
+    // move/update and add
+    keys.forEach((key, index) => {
+      let oldEntry = oldCacheMap.get(key);
+      const nextTemplate = templates[index];
+      if (oldEntry) {
+        if (key === oldCacheOrder[index]) {
+          // update in place
+          if (oldEntry.id === nextTemplate.id) {
+            oldEntry.update(nextTemplate.values);
+          } else {
+            //  maybe at some point think about diffing between templates?
+            nextTemplate.update();
+            // TODO: rewrite without helper methods...
+            // nextTemplate.insertBefore(oldEntry);
+            oldEntry.remove();
+            oldCacheMap.set(key, nextTemplate);
+          }
+        } else {
+          const targetEntry = oldCacheMap.get(oldCacheOrder[index]);
+          if (!targetEntry) {
+            throw new RangeError();
+          }
+          target = targetEntry.firstNode();
+          const oldIndex = oldCacheOrder.indexOf(key);
+          oldCacheOrder.splice(oldIndex, 1);
+          oldCacheOrder.splice(index, 0, key);
+          // const frag = oldEntry.remove();
+          if (oldEntry.id === nextTemplate.id) {
+            oldEntry.update(nextTemplate.values);
+            // parent.insertBefore(frag, target);
+          } else {
+            nextTemplate.update();
+            // TODO: rewrite without the dom helper methods...
+            // nextTemplate.insertBefore(target);
+          }
+        }
+        return;
+      }
+      // add template to 
+      const cursor = oldCacheOrder[index];
+      oldEntry = oldCacheMap.get(cursor);
+      const firstNode = part.firstNode();
+      if (index === 0 && isPartComment(firstNode) && !cursor && !oldEntry) {
+        // TODO: rewrite without dom helpers...
+        // nextTemplate.insertBefore(firstNode);
+        parent.removeChild(firstNode);
+        oldCacheOrder.push(key);
+      } else {
+        if (!oldEntry) {
+          throw new RangeError();
+        }
+        // TODO: rewrite without dom helpers...
+        // nextTemplate.insertBefore(oldEntry);
+        oldCacheOrder.splice(index, 0, key);
+      }
+      oldCacheMap.set(key, nextTemplate);
+    });
+  };
+}
+
+export function until(
+  promise: Promise<PartValue>,
+  defaultContent: PartValue
+): Directive {
+  return (part: Part) => {
+    part.update(defaultContent);
+    promise.then(value => part.update(value));
+  };
 }
 
 /*
