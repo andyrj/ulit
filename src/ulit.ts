@@ -532,9 +532,27 @@ export function render(
     if (container.hasChildNodes()) {
       // hydrate
       const hydrated = template.hydrate(container);
+      if (hydrated) {
+        return;
+      } else {
+        const first = container.firstChild as Node;
+        let cursor: Optional<Node> = container.lastChild as Node;
+        const parent = cursor.parentNode;
+        if (!parent) {
+          throw new Error();
+        }
+        while(cursor) {
+          const prev: Optional<Node> = cursor.previousSibling;
+          const next: Optional<Node> = prev === first ? null : prev;
+          parent.removeChild(cursor);
+          cursor = next;
+        }
+      }
     } else {
-      // appendChild
+      template.update();
     }
+    // append to container
+    container.appendChild(template.fragment as DocumentFragment);
   }
 }
 type WalkFn = (
