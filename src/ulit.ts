@@ -3,18 +3,17 @@ const SVG = "SVG";
 const FOREIGN_OBJECT = "FOREIGNOBJECT";
 const EMPTY_STRING = "";
 const PART_START = "{{";
-const PART = "part";
+const PART = "PART";
 const PART_END = "}}";
-const TEMPLATE = "template";
-const TEMPLATE_ID_START = "ulit-";
+const TEMPLATE = "TEMPLATE";
+const TEMPLATE_ID_START = "ULIT-";
 const PART_MARKER = `${PART_START}${PART_END}`;
-const SERIAL_PART_START = `${PART_START}${PART}s:`;
+const SERIAL_PART_START = `${PART_START}${PART}S:`;
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 const DOCUMENT_FRAGMENT = 11;
 
-// FIND YOUR OWN ABSTRACTION...
 export type Optional<T> = T | undefined | null;
 export type Key = symbol | number | string;
 export type Directive = (part: Part) => void;
@@ -164,7 +163,9 @@ export class Template extends DomTarget {
   constructor(public id: number, public templateElement: HTMLTemplateElement, public values: PartValue[]) {
     super();
   }
-  public update(values?: PartValue[]) {}
+  public update(values?: PartValue[]) {
+
+  }
 }
 
 type NodeAttribute = [Node, string];
@@ -220,6 +221,20 @@ export class Part extends DomTarget {
     this.parent = container;
     const target = followPath(container, this.path);
     // TODO: finish attachTo logic...
+    if (!target) {
+      throw new RangeError();
+    }
+    if (Array.isArray(target)) {
+      this.start = target[0];
+      this.end = undefined;
+      this.attribute = target[1];
+    } else if (isPartComment(target)) {
+      this.start = target;
+      this.end = target;
+      this.attribute = EMPTY_STRING;
+    } else {
+      throw new RangeError();
+    }
   }
   public update(value?: PartValue) {
     if (this.isAttached) {
@@ -229,8 +244,112 @@ export class Part extends DomTarget {
     }
     this.value = value;
   }
+
+  public updateArray(value: PartValue[]) {
+    repeat(value)(this);
+  }
+  
+  public updateNode(value: PrimitivePart) {
+    const element = this.firstNode();
+    const parent = element.parentNode;
+    if (!parent) {
+      throw new RangeError();
+    }
+    const valueIsNumber = isNumber(value);
+    if (valueIsNumber || isString(value)) {
+      const strVal = valueIsNumber ? value as string : value.toString();
+      if (element.nodeType !== TEXT_NODE) {
+        const newEl = document.createTextNode(strVal);
+        parent.insertBefore(newEl, element);
+        this.remove();
+        this.start = newEl;
+        this.end = newEl;
+      }
+      if (element.textContent !== value) {
+        (element as Text).textContent = strVal;
+      }
+    } else {
+      const isFrag = (value as Node).nodeType === DOCUMENT_FRAGMENT;
+      const newStart = isFrag ? (value as DocumentFragment).firstChild : value as Node;
+      const newEnd = isFrag ? (value as DocumentFragment).lastChild : value as Node;
+      parent.insertBefore(value as Node | DocumentFragment, element);
+      this.remove();
+      if (newStart && newEnd) {
+        this.start = newStart;
+        this.end = newEnd;
+      } else {
+        throw new RangeError();
+      }
+    }
+  }
+
+  public updateTemplate(template: Template) {
+    if (isTemplate(this.value) && template.id === (this.value as Template).id) {
+      (this.value as Template).update(template.values);
+    } else {
+      template.update();
+      // TODO: re-write below without helper methods...
+      // _.replaceWith(template);
+      // _.value = template;
+    }
+  }
+
+  public updateAttribute(value: any) {
+    if (this.attribute === EMPTY_STRING || !isString(this.attribute)) {
+      throw new RangeError();
+    }
+    const element: HTMLElement = this.start as HTMLElement;
+    const name: Optional<string> = this.attribute; 
+    if (!name) {
+      throw new RangeError();
+    }
+    try {
+      (element as any)[name] = !value && value !== false ? EMPTY_STRING : value;
+    } catch (_) {} // eslint-disable-line
+    if (!isFunction(value)) {
+      if (!value && value !== false) {
+        if (this.isSVG) {
+          element.removeAttributeNS(SVG_NS, name);
+        } else {
+          element.removeAttribute(name);
+        }
+      } else {
+        if (this.isSVG) {
+          element.setAttributeNS(SVG_NS, name, value);
+        } else {
+          element.setAttribute(name, value);
+        }
+      }
+    }
+  }
+
   private set(value?: PartValue) {
-    // TODO: write a new set implementation for coerced templates as only type of Part....
+    // TODO: write a new set implementation for coerced templates as only type of Part?
+    if (!value && this.value) {
+      value = this.value;
+    }
+    if (isDirectivePart(value)) {
+      (value as Directive)(this as Part);
+      return;
+    }
+    if (isString(this.end)) {
+      this.updateAttribute(value);
+    } else {
+      if (isIterable(value)) {
+        value = Array.from(value as any);
+      }
+      if (isPromise(value)) {
+        (value as Promise<PartValue>).then(promised => {
+          this.set(promised);
+        });
+      } else if (isTemplate(value)) {
+        this.updateTemplate(value as Template);
+      } else if (Array.isArray(value)) {
+        this.updateArray(value);
+      } else {
+        this.updateNode(value as PrimitivePart);
+      }
+    }
   }
 }
 
@@ -276,7 +395,7 @@ export function html(strs: string[], ...exprs: PartValue[]): ITemplateGenerator 
   }
   const newGenerator = () => {
     if (!template) {
-      template = document.createElement(TEMPLATE);
+      template = document.createElement(TEMPLATE) as HTMLTemplateElement;
       template.innerHTML = strs.join(PART_MARKER);
       walkDOM(template.content, undefined, templateSetup(parts as Part[]));
       serialCache.set(id, { template, parts });
