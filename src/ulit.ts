@@ -6,6 +6,7 @@ const PART_START = "{{";
 const PART = "PART";
 const PART_END = "}}";
 const TEMPLATE = "TEMPLATE";
+const TEMPLATE_GENERATOR = "TEMPLATE_GENERATOR";
 const TEMPLATE_ID_START = "ULIT-";
 const PART_MARKER = `${PART_START}${PART_END}`;
 const SERIAL_PART_START = `${PART_START}${PART}S:`;
@@ -120,6 +121,10 @@ function isPromise(x: any): x is Promise<any> {
 
 function isTemplate(x: any): x is Template {
   return x && x.kind === TEMPLATE;
+}
+
+function isTemplateGenerator(x: any): x is ITemplateGenerator {
+  return x && x.kind === TEMPLATE_GENERATOR;
 }
 
 const fragmentCache: DocumentFragment[] = [];
@@ -443,8 +448,8 @@ export class Part extends DomTarget {
         (value as Promise<PartValue>).then(promised => {
           this.set(promised);
         });
-      } else if (isTemplate(value)) {
-        this.updateTemplate(value as Template);
+      } else if (isTemplateGenerator(value)) {
+        this.updateTemplate(value);
       } else if (Array.isArray(value)) {
         this.updateArray(value);
       } else {
@@ -471,8 +476,33 @@ function getId(str: string): number {
   return id;
 }
 
-export type ITemplateGenerator = () => Template;
+export interface ITemplateGenerator {
+  (): Template;
+  kind: string;
+}
 const templateGeneratorCache = new Map<number, ITemplateGenerator>();
+function createTemplateGenerator(
+  strs: string[],
+  exprs: PartValue[],
+  id: number,
+  template: HTMLTemplateElement,
+  parts: Part[]
+): ITemplateGenerator {
+  const generator = () => {
+    if (!template) {
+      template = document.createElement(TEMPLATE) as HTMLTemplateElement;
+      if (template == null) {
+        throw new Error();
+      }
+      template.innerHTML = strs.join(PART_MARKER);
+      walkDOM(template.content, undefined, templateSetup(parts as Part[]));
+      serialCache.set(id, { template, parts });
+    }
+    return new Template(id, template as HTMLTemplateElement, exprs);
+  }
+  (generator as ITemplateGenerator).kind = TEMPLATE_GENERATOR;
+  return generator as ITemplateGenerator;
+};
 interface ISerialCacheEntry {
   template: HTMLTemplateElement;
   parts: Part[];
@@ -494,15 +524,9 @@ export function html(strs: string[], ...exprs: PartValue[]): ITemplateGenerator 
     template = deserialized.template;
     parts = deserialized.parts;
   }
-  const newGenerator = () => {
-    if (!template) {
-      template = document.createElement(TEMPLATE) as HTMLTemplateElement;
-      template.innerHTML = strs.join(PART_MARKER);
-      walkDOM(template.content, undefined, templateSetup(parts as Part[]));
-      serialCache.set(id, { template, parts });
-    }
-    return new Template(id, template as HTMLTemplateElement, exprs);
-  }
+  
+
+  newGenerator.kind = TEMPLATE_GENERATOR;
   templateGeneratorCache.set(id, newGenerator);
   return newGenerator;
 }
