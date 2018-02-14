@@ -450,18 +450,6 @@ function createTemplateGenerator(
         throw new Error();
       }
       template.innerHTML = strs.join(PART_MARKER);
-      // TODO: track down why this is happening...
-      // RangeError
-      // at walkDOM (src/ulit.ts:575:11)
-      // at forEach.call (src/ulit.ts:579:5)
-      // at Proxy.forEach (<anonymous>)
-      // at walkDOM (src/ulit.ts:577:14)
-      // at forEach.call (src/ulit.ts:579:5)
-      // at Proxy.forEach (<anonymous>)
-      // at walkDOM (src/ulit.ts:577:14)
-      // at generator (src/ulit.ts:454:7)
-      // at Object.render (src/ulit.ts:514:20)
-      // at Context.it (test/ulit.ts:24:5)
       walkDOM(template.content, undefined, templateSetup(parts as Part[]));
       serialCache.set(id, { template, parts });
     }
@@ -513,12 +501,13 @@ export function render(
   container: Node = document.body
 ) {
   const instance = renderedCache.get(container);
-  if (isIterable(generator)) {
-    generator = Array.from(generator as any);
-  }
-  if (Array.isArray(generator)) {
-    generator = defaultTemplateFn(generator);
-  }
+  // TODO: fix below code... add PartValue[] and Iterable<PartValue>
+  // if (isIterable(generator)) {
+  //   generator = Array.from(generator as any);
+  // }
+  // if (Array.isArray(generator)) {
+  //   generator = defaultTemplateFn(generator);
+  // }
   if (!isTemplateGenerator(generator)) {
     throw new Error();
   }
@@ -575,14 +564,13 @@ function walkDOM(
   fn: WalkFn,
   path: Array<number | string> = []
 ) {
-  console.log(parent, element, path);
   let condition = true;
   if (element) {
     condition = fn(parent, element, path);
   } else {
     element = parent;
   }
-  if (!condition || !element || element.childNodes.length === 0) {
+  if (!condition || !element) {
     throw new RangeError();
   }
   [].forEach.call(element.childNodes, (child: Node, index: number) => {
