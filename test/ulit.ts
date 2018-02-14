@@ -22,8 +22,6 @@ describe("Templates", () => {
   it("should handle static templates", () => {
     // @ts-ignore
     const template = html`<div id="test">test</div>`;
-    // const instance = template();
-    // instance.update();
     render(template);
     expect(document.body.innerHTML).to.equal(`<div id="test">test</div>`);
   });
