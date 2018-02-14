@@ -216,13 +216,39 @@ export class DomTarget extends Disposable {
   }
 }
 
+function createTemplateGenerator(
+  strs: string[],
+  exprs: PartValue[],
+  id: number,
+  template: Optional<HTMLTemplateElement>,
+  parts: Part[]
+): ITemplateGenerator {
+  const generator = () => {
+    if (!template) {
+      template = document.createElement(TEMPLATE) as HTMLTemplateElement;
+      if (template == null) {
+        throw new Error();
+      }
+      template.innerHTML = strs.join(PART_MARKER);
+      walkDOM(template.content, undefined, templateSetup(parts as Part[]));
+      serialCache.set(id, { template, parts });
+    }
+    const newTemplate = new Template(id, template as HTMLTemplateElement, parts.slice(0), exprs);
+    newTemplate.update();
+    return newTemplate;
+  };
+  (generator as ITemplateGenerator).kind = TEMPLATE_GENERATOR;
+  (generator as ITemplateGenerator).id = id;
+  return generator as ITemplateGenerator;
+}
+
 export class Template extends DomTarget {
   public static kind = TEMPLATE;
   public fragment: Optional<DocumentFragment> = undefined;
-  public parts: Part[] = [];
   constructor(
     public id: number,
     public templateElement: HTMLTemplateElement,
+    public parts: Part[],
     public values: PartValue[]
   ) {
     super();
@@ -490,30 +516,6 @@ function getId(str: string): number {
   }
   idCache.set(str, id);
   return id;
-}
-
-function createTemplateGenerator(
-  strs: string[],
-  exprs: PartValue[],
-  id: number,
-  template: Optional<HTMLTemplateElement>,
-  parts: Part[]
-): ITemplateGenerator {
-  const generator = () => {
-    if (!template) {
-      template = document.createElement(TEMPLATE) as HTMLTemplateElement;
-      if (template == null) {
-        throw new Error();
-      }
-      template.innerHTML = strs.join(PART_MARKER);
-      walkDOM(template.content, undefined, templateSetup(parts as Part[]));
-      serialCache.set(id, { template, parts });
-    }
-    return new Template(id, template as HTMLTemplateElement, exprs);
-  };
-  (generator as ITemplateGenerator).kind = TEMPLATE_GENERATOR;
-  (generator as ITemplateGenerator).id = id;
-  return generator as ITemplateGenerator;
 }
 
 export function html(
