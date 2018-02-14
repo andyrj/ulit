@@ -15,6 +15,13 @@ const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 const DOCUMENT_FRAGMENT = 11;
 
+const serialCache = new Map<number, ISerialCacheEntry>();
+const idCache = new Map<string, number>();
+const renderedCache = new WeakMap<Node, Template>();
+const templateGeneratorCache = new Map<number, ITemplateGenerator>();
+const repeatCache = new Map<Part, [Key[], Map<Key, Template>]>();
+const fragmentCache: DocumentFragment[] = [];
+
 export type Optional<T> = T | undefined | null;
 export type Key = symbol | number | string;
 export type Directive = (part: Part) => void;
@@ -43,6 +50,8 @@ export type WalkFn = (
   element: Node | null | undefined,
   path: Array<string | number>
 ) => boolean;
+export type KeyFn = (item: any, index?: number) => Key;
+export type TemplateFn = (item: {}) => ITemplateGenerator;
 
 export class Disposable {
   public readonly disposed: boolean = false;
@@ -145,7 +154,6 @@ function isTemplateGenerator(x: any): x is ITemplateGenerator {
   return x && x.kind === TEMPLATE_GENERATOR;
 }
 
-const fragmentCache: DocumentFragment[] = [];
 function getFragment(): DocumentFragment {
   if (fragmentCache.length === 0) {
     return document.createDocumentFragment();
@@ -300,6 +308,7 @@ function followPath(
     }
   }
 }
+
 export class Part extends DomTarget {
   public static kind = PART;
   public isAttached: boolean = false;
@@ -467,7 +476,6 @@ export class Part extends DomTarget {
   }
 }
 
-const idCache = new Map<string, number>();
 function getId(str: string): number {
   if (idCache.has(str)) {
     return idCache.get(str) as number;
@@ -484,7 +492,6 @@ function getId(str: string): number {
   return id;
 }
 
-const templateGeneratorCache = new Map<number, ITemplateGenerator>();
 function createTemplateGenerator(
   strs: string[],
   exprs: PartValue[],
@@ -509,7 +516,6 @@ function createTemplateGenerator(
   return generator as ITemplateGenerator;
 }
 
-const serialCache = new Map<number, ISerialCacheEntry>();
 export function html(
   strs: string[],
   ...exprs: PartValue[]
@@ -539,7 +545,6 @@ export function html(
   return newGenerator;
 }
 
-const renderedCache = new WeakMap<Node, Template>();
 export function render(
   generator:
     | ITemplateGenerator
@@ -736,18 +741,15 @@ function checkForSerialized(id: number): Optional<ISerialCacheEntry> {
   return;
 }
 
-export type KeyFn = (item: any, index?: number) => Key;
 function defaultKeyFn(index: number): Key {
   return index;
 }
 
-export type TemplateFn = (item: {}) => ITemplateGenerator;
 function defaultTemplateFn(item: {}): ITemplateGenerator {
   // @ts-ignore
   return html`${item}`;
 }
 
-const repeatCache = new Map<Part, [Key[], Map<Key, Template>]>();
 export function repeat(
   items: Array<{}>,
   keyFn: KeyFn = defaultKeyFn,
