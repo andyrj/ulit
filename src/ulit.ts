@@ -233,9 +233,7 @@ function createTemplateGenerator(
       walkDOM(template.content, undefined, templateSetup(parts as Part[]));
       serialCache.set(id, { template, parts });
     }
-    const newTemplate = new Template(id, template as HTMLTemplateElement, parts.slice(0), exprs);
-    newTemplate.update();
-    return newTemplate;
+    return new Template(id, template as HTMLTemplateElement, parts.slice(0), exprs);
   };
   (generator as ITemplateGenerator).kind = TEMPLATE_GENERATOR;
   (generator as ITemplateGenerator).id = id;
