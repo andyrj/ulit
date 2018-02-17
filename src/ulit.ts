@@ -39,7 +39,6 @@ type NodeAttribute = [Node, string];
 export interface ITemplateGenerator {
   (): Template;
   id: number;
-  kind: string;
 }
 interface ISerialCacheEntry {
   template: HTMLTemplateElement;
@@ -57,20 +56,20 @@ export class Disposable {
   public readonly disposed: boolean = false;
   private disposers: IDisposer[] = [];
   constructor() {}
-  
+
   public addDisposer(handler: IDisposer) {
     if (this.disposers.indexOf(handler) > -1) {
       return;
     }
     this.disposers.push(handler);
   }
-  
+
   public dispose() {
     while (this.disposers.length > 0) {
       (this.disposers.pop() as IDisposer)();
     }
   }
-  
+
   public removeDisposer(handler: IDisposer) {
     const index = this.disposers.indexOf(handler);
     if (index === -1) {
@@ -233,7 +232,12 @@ function createTemplateGenerator(
       walkDOM(template.content, undefined, templateSetup(parts as Part[]));
       serialCache.set(id, { template, parts });
     }
-    return new Template(id, template as HTMLTemplateElement, parts.slice(0), exprs);
+    return new Template(
+      id,
+      template as HTMLTemplateElement,
+      parts.slice(0),
+      exprs
+    );
   };
   // (generator as ITemplateGenerator).kind = TEMPLATE_GENERATOR;
   (generator as ITemplateGenerator).id = id;
@@ -352,7 +356,9 @@ export class Part extends DomTarget {
 
   public attachTo(container: DocumentFragment | Template) {
     const target = followPath(
-      isTemplate(container) ? container.firstNode() : container.firstChild as Node,
+      isTemplate(container)
+        ? container.firstNode()
+        : (container.firstChild as Node),
       this.path
     );
     if (!target) {
@@ -536,32 +542,31 @@ export function html(
     template,
     parts
   );
-  newGenerator.kind = TEMPLATE_GENERATOR;
+  // newGenerator.kind = TEMPLATE_GENERATOR;
   templateGeneratorCache.set(id, newGenerator);
   return newGenerator;
 }
 
 export function render(
-  generator:
+  view:
     | ITemplateGenerator
     | ITemplateGenerator[]
-    | Iterable<ITemplateGenerator>,
-  container: Node = document.body
+    | Iterable<ITemplateGenerator>
+    | PartValue
+    | PartValue[]
+    | Iterable<PartValue>,
+  container: Node | DocumentFragment | Comment = document.body
 ) {
   const instance = renderedCache.get(container);
-  // TODO: fix below code... add PartValue[] and Iterable<PartValue>
-  // if (isIterable(generator)) {
-  //   generator = Array.from(generator as any);
-  // }
-  // if (Array.isArray(generator)) {
-  //   generator = defaultTemplateFn(generator);
-  // }
-  if (!isTemplateGenerator(generator)) {
-    throw new Error();
+  if (!isTemplateGenerator(view)) {
+    view = defaultTemplateFn(view);
+    if (!isTemplateGenerator(view)) {
+      throw new Error();
+    }
   }
-  const template = generator();
+  const template = view();
   if (instance) {
-    if (instance.id === generator.id) {
+    if (instance.id === view.id) {
       instance.update(template.values);
     } else {
       // replace instance with template, be sure to dispose of instance...
@@ -587,7 +592,7 @@ export function render(
         if (!parent) {
           throw new Error();
         }
-        while(cursor) {
+        while (cursor) {
           const prev: Optional<Node> = cursor.previousSibling;
           const next: Optional<Node> = prev === first ? null : prev;
           parent.removeChild(cursor);
