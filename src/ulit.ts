@@ -319,17 +319,11 @@ function followPath(
   if (isString(current)) {
     return [node as Node, current];
   } else {
-    if (
-      node &&
-      node.childNodes &&
-      node.childNodes.length > num &&
-      (node.childNodes as NodeList)[num]
-    ) {
-      const el = node.childNodes[num];
-      return followPath(el, cPath);
-    } else {
-      throw new RangeError();
+    const el = node.childNodes[num];
+    if (!el) {
+      throw new Error();
     }
+    return followPath(el, cPath);
   }
 }
 
