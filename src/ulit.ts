@@ -119,7 +119,7 @@ function isComment(x: any): x is Comment {
 }
 
 // function isPart(x: any): x is Part {
-//   return x && x.kind === PART;
+//   return x instanceof Part;
 // }
 
 // function isAttributePart(x: any) {
@@ -143,7 +143,7 @@ function isPromise(x: any): x is Promise<any> {
   return x && isFunction(x.then);
 }
 function isTemplate(x: any): x is Template {
-  return x && x.kind === TEMPLATE;
+  return x instanceof Template;
 }
 
 // function isTemplateElement(x: any): x is HTMLTemplateElement {
@@ -151,7 +151,7 @@ function isTemplate(x: any): x is Template {
 // }
 
 function isTemplateGenerator(x: any): x is ITemplateGenerator {
-  return x && x.kind === TEMPLATE_GENERATOR;
+  return isFunction(x) && x.id;
 }
 
 function getFragment(): DocumentFragment {
@@ -235,13 +235,12 @@ function createTemplateGenerator(
     }
     return new Template(id, template as HTMLTemplateElement, parts.slice(0), exprs);
   };
-  (generator as ITemplateGenerator).kind = TEMPLATE_GENERATOR;
+  // (generator as ITemplateGenerator).kind = TEMPLATE_GENERATOR;
   (generator as ITemplateGenerator).id = id;
   return generator as ITemplateGenerator;
 }
 
 export class Template extends DomTarget {
-  public static kind = TEMPLATE;
   public fragment: Optional<DocumentFragment> = undefined;
   constructor(
     public id: number,
@@ -259,7 +258,7 @@ export class Template extends DomTarget {
     super.dispose();
   }
 
-  public hydrate(target: Node) {
+  public hydrate(target: Template | DocumentFragment) {
     this.update();
     try {
       this.parts.forEach(part => part.attachTo(target));
@@ -306,29 +305,32 @@ export class Template extends DomTarget {
 }
 
 function followPath(
-  target: Optional<Node | Template>,
+  target: Node,
   pointer: Array<string | number>
-): Optional<Node | NodeAttribute> {
-  if (pointer.length === 0 || !target || isPartComment(target)) {
-    return target as Node | undefined;
+): Node | NodeAttribute | never {
+  if (!target) {
+    throw new RangeError();
   }
-  const node = isTemplate(target) ? target.firstNode() : target;
   const cPath = pointer.slice(0);
-  const current = cPath.shift() as string;
-  const num = isString(current) ? parseInt(current, 10) : current;
-  if (isString(current)) {
-    return [node as Node, current];
-  } else {
-    const el = node.childNodes[num];
-    if (!el) {
-      throw new Error();
+  const current = cPath.shift() as string | number;
+  if (isNumber(current)) {
+    if (cPath.length === 0) {
+      return target.childNodes[current];
+    } else {
+      return followPath(target.childNodes[current], cPath);
     }
-    return followPath(el, cPath);
+  } else if (isString(current)) {
+    if (cPath.length === 0) {
+      return [target, current];
+    } else {
+      throw new RangeError();
+    }
+  } else {
+    throw new Error();
   }
 }
 
 export class Part extends DomTarget {
-  public static kind = PART;
   public isAttached: boolean = false;
   public readonly path: Array<string | number>;
   public value: Optional<PartValue> = undefined;
@@ -348,9 +350,9 @@ export class Part extends DomTarget {
     this.path = path;
   }
 
-  public attachTo(container: Node | Template) {
+  public attachTo(container: DocumentFragment | Template) {
     const target = followPath(
-      isTemplate(container) ? container.firstNode() : container,
+      isTemplate(container) ? container.firstNode() : container.firstChild as Node,
       this.path
     );
     if (!target) {
