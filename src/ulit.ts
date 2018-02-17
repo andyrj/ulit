@@ -295,7 +295,9 @@ export class Template extends DomTarget {
       this.end = isComment(this.fragment.lastChild as Node)
         ? this.fragment.lastChild
         : this.parts[this.parts.length - 1];
-      this.parts.forEach(part => {
+      this.parts.forEach(function(part){
+        // TODO: figure out why "this" below points to undefined????... but the call above has the correct reference...
+        // @ts-ignore
         part.attachTo(this);
       });
     }
