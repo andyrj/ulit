@@ -122,9 +122,9 @@ function isTemplate(x: any): x is ITemplate {
   return isFunction(x) && x.id !== undefined;
 }
 
-// function isTemplateElement(x: any): x is HTMLTemplateElement {
-//   return x && isNode(x) && x.nodeName === TEMPLATE;
-// }
+function isTemplateElement(x: any): x is HTMLTemplateElement {
+  return x && isNode(x) && x.nodeName === TEMPLATE;
+}
 
 function isTemplateGenerator(x: any): x is ITemplateGenerator {
   return isFunction(x) && x.id;
@@ -310,9 +310,28 @@ function updateArray(part: IPart, value: Optional<PartValue[]>) {
 }
 
 function updateTemplate(part: IPart, value: ITemplateGenerator) {
-  // TODO: implement
-  // if part.value.id === value.id update in place
-  // else insert new template above part and remove current...
+  const first = part.firstNode();
+  const parent = first.parentNode;
+  if (!parent) {
+    fail();
+  }
+  const instance = renderedCache.get(part);
+  if (instance && instance.id === value.id) {
+    instance(value.exprs);
+    return;
+  }
+  const template = value();
+  if (isTemplateElement(template.element)) {
+    const fragment = template.element.content;
+    const newStart = template.firstNode();
+    const newEnd = template.lastNode();
+    (parent as Node).insertBefore(fragment, first);
+    part.start = newStart;
+    part.end = newEnd;
+    renderedCache.set(part, template);
+  } else {
+    fail();
+  }
 }
 
 function updateNode(part: IPart, value: Optional<PartValue>) {
@@ -631,7 +650,7 @@ export function defaultTemplateFn(item: PartValue): ITemplateGenerator {
   return html`${item}`;
 }
 
-const renderedCache = new WeakMap<Node, ITemplate>();
+const renderedCache = new WeakMap<Node | IDomTarget, ITemplate>();
 export function render(
   view: PartValue | PartValue[] | Iterable<PartValue>,
   container?: Optional<Node>
