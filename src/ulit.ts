@@ -8,7 +8,7 @@ const DIRECTIVE = "directive";
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
-// const DOCUMENT_FRAGMENT = 11;
+const DOCUMENT_FRAGMENT = 11;
 export type Optional<T> = T | undefined | null;
 export type Key = symbol | string | number;
 export interface IDomTarget {
@@ -65,13 +65,17 @@ function isNode(x: any): x is Node {
   return (x as Node) && (x as Node).nodeType > 0;
 }
 
+function isElementNode(x: any): x is HTMLElement {
+  return isNode(x) && (x as Node).nodeType === ELEMENT_NODE;
+}
+
 function isDirective(x: any): x is IDirective {
   return isFunction(x) && x.kind === DIRECTIVE;
 }
 
-// function isDocumentFragment(x: any): x is DocumentFragment {
-//   return isNode(x) && (x as Node).nodeType === DOCUMENT_FRAGMENT;
-// }
+function isDocumentFragment(x: any): x is DocumentFragment {
+  return isNode(x) && (x as Node).nodeType === DOCUMENT_FRAGMENT;
+}
 
 function isComment(x: any): x is Comment {
   return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
@@ -85,9 +89,9 @@ function isString(x: any): x is string {
   return typeof x === "string";
 }
 
-// function isText(x: any): x is Text {
-//   return x && isNode(x) && !!x.textContent;
-// }
+function isText(x: any): x is Text {
+  return x && isNode(x) && (x as Node).nodeType === TEXT_NODE;
+}
 
 // function isNumber(x: any): x is number {
 //   return typeof x === "number";
@@ -335,13 +339,10 @@ function Part(path: Array<string | number>, start: Node, end: Node, index?: numb
   return part;
 }
 
-// TODO: change logic to account for new parameters
 function templateSetup(serial: ISerializedPart[], parts: IPart[]): WalkFn {
   return (parent, element, walkPath) => {
-    // failCondition(element != null);
-    const nodeType = element && element.nodeType;
     const isSVG = isNodeSVGChild(element);
-    if (nodeType === TEXT_NODE) {
+    if (isText(element)) {
       const text = element && element.nodeValue;
       const split = text && text.split(PART_MARKER);
       const end = split ? split.length - 1 : undefined;
@@ -373,7 +374,7 @@ function templateSetup(serial: ISerializedPart[], parts: IPart[]): WalkFn {
           parent.removeChild(element);
         }
       }
-    } else if (nodeType === ELEMENT_NODE) {
+    } else if (isElementNode(element)) {
       if (!element) {
         fail();
       } else {
