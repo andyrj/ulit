@@ -288,22 +288,48 @@ function updateTemplate(part: IPart, value: ITemplateGenerator) {
 }
 
 function updateNode(part: IPart, value: Optional<PartValue>) {
-  // TODO: either coerce to string, or update Node | DocumentFragment...
-  const first = part.firstNode() as Node;
-  if (isPartComment(first)) {
-    // replace comment node...
-  } else {
-    if (!isNode(value)) {
-
-    } else {
-      // for Node and DocumentFragment you can compare to last value and if not === remove old and replace with value...
-      const isFrag = isDocumentFragment(value);
-      if (isFrag) {
-
-      } else {
-        
+  if (value == null) {
+    value = document.createComment(`${PART_START}${PART_END}`);
+  }
+  const first = part.firstNode();
+  const parent = first.parentNode;
+  if (parent == null) {
+    fail();
+  }
+  if (!isNode(value)) {
+    if (!isString(value)) {
+      if (isFunction((value as any).toString)) {
+        value = (value as any).toString();
+      }
+      if (!isString(value)) {
+        fail();
       }
     }
+    if (isText(first)) {
+      if (first.textContent !== value) {
+        first.textContent = value as string;
+      }
+    } else {
+      const newTextNode = document.createTextNode(value as string);
+      (parent as Node).insertBefore(newTextNode, first); // working around fail(): never not propagating as expected...
+      part.remove();
+      part.start = newTextNode;
+      part.end = newTextNode;
+    }
+  } else {
+    const isFrag = isDocumentFragment(value);
+    if (!isFrag && first === value) {
+      return; // early return value is already present in dom no need to replace it...
+    }
+    const newStart = isFrag ? value.firstChild : first;
+    const newEnd = isFrag ? value.lastChild : first;
+    if (!newStart || !newEnd) {
+      fail();
+    }
+    (parent as Node).insertBefore(value, first);
+    part.remove();
+    part.start = newStart;
+    part.end = newEnd;
   }
 }
 
@@ -444,7 +470,7 @@ type NodeAttribute = [Node, string];
 function followPath(
   target: Node,
   pointer: Array<string | number>
-): Node | NodeAttribute | never {
+): Optional<Node | NodeAttribute> | never {
   if (!target) {
     throw new RangeError();
   }
@@ -460,11 +486,11 @@ function followPath(
     if (cPath.length === 0) {
       return [target, current];
     } else {
-      throw new RangeError();
+      fail();
     }
-  } else {
-    throw new Error();
   }
+  fail();
+  return; // satisifying typescript, can't be reached... ><
 }
 
 function isFirstChildSerial(parent: DocumentFragment): boolean {
@@ -543,7 +569,7 @@ function getTemplateGeneratorFactory(id: number, strs: TemplateStringsArray): IT
           const isSVG = pair[1];
           const target = followPath(fragment, path);
           const start = Array.isArray(target) ? target[0] : target;
-          return Part(path, start, index, isSVG);
+          return Part(path, start as Node, index, isSVG);
         });
         return Template(id, parts, values);
       }
