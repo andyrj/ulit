@@ -45,10 +45,11 @@ export type WalkFn = (
 ) => boolean;
 export type KeyFn = (item: any, index?: number) => Key;
 export type TemplateFn = (item: any) => ITemplateGenerator;
+type ISerializedPart = [Array<string | number>, boolean];
 interface ISerialCacheEntry {
   template: HTMLTemplateElement;
-  parts: IPart[];
-}
+  serializedParts: ISerializedPart[];
+};
 export type PrimitivePart = string | Node | DocumentFragment;
 export type PartValue =
   | PrimitivePart
@@ -159,6 +160,14 @@ function generateTemplateElement(str: string) {
   return element as HTMLTemplateElement;
 }
 
+function fail(msg?: Optional<string>): never {
+  if (msg) {
+    throw new RangeError(msg);
+  } else {
+    throw new RangeError();
+  }
+}
+
 function walkDOM(
   parent: HTMLElement | DocumentFragment,
   element: Node | null | undefined,
@@ -172,7 +181,7 @@ function walkDOM(
     element = parent;
   }
   if (!condition || !element) {
-    throw new RangeError();
+    fail();
   }
   [].forEach.call(element.childNodes, (child: Node, index: number) => {
     path.push(index);
@@ -196,51 +205,57 @@ function getBaseDomTarget() {
     fn.end = undefined;
     fn.isSVG = false;
     fn.addDisposer = function(handler: IDisposer) {
-      if (this.disposers.indexOf(handler) > -1) {
+      const disposers = this.disposers;
+      if (disposers.indexOf(handler) > -1) {
         return;
       }
-      this.disposers.push(handler);
+      disposers.push(handler);
     };
     fn.dispose = function() {
+      const disposers = this.disposers;
       if (isPart(this)) {
         partParentCache.delete(this);
       } else if (isTemplate(this)) {
         // TODO: special dispose logic for Template.dispose()?
       }
-      while (this.disposers.length > 0) {
-        (this.disposers.pop() as IDisposer)();
+      while (disposers.length > 0) {
+        (disposers.pop() as IDisposer)();
       }
     };
     fn.firstNode = function() {
-      if (isNode(this.start)) {
-        return this.start;
+      const start = this.start;
+      if (isNode(start)) {
+        return start;
       } else {
-        return (this.start as IDomTarget).firstNode();
+        return (start as IDomTarget).firstNode();
       }
     };
     fn.lastNode = function() {
-      if (isNode(this.end)) {
-        return this.end;
+      const end = this.end;
+      if (isNode(end)) {
+        return end;
       } else {
-        return (this.end as IDomTarget).lastNode();
+        return (end as IDomTarget).lastNode();
       }
     };
     fn.remove = function(): Optional<DocumentFragment> {
       const fragment = document.createDocumentFragment();
+      const end = this.lastNode();
       let cursor: Optional<Node> = this.firstNode();
       while (cursor != null) {
         const next: Node = cursor.nextSibling as Node;
         fragment.appendChild(cursor);
-        cursor = cursor === this.end || !next ? undefined : next;
+        cursor = cursor === end || !next ? undefined : next;
       }
       return fragment;
     }
     fn.removeDisposer = function(handler: IDisposer) {
-      const index = this.disposers.indexOf(handler);
+      const disposers = this.disposers;
+      const index = disposers.indexOf(handler);
       if (index === -1) {
         return;
       }
-      this.disposers.splice(index, 1);
+      disposers.splice(index, 1);
     };
     BaseDomTarget = fn;
   }
@@ -256,14 +271,24 @@ function updateAttribute(part: IPart, value: Optional<PartValue>) {
 
 function updateArray(part: IPart, value: Optional<PartValue[]>) {
   // TODO: implement
+  // call into repeat() to "emulate" unkeyed using index as key
+  // in standard array/iterable we make no guarantee to nodes not being recreated
+  // so index as key is fine...
 }
 
 function updateTemplate(part: IPart, value: ITemplateGenerator) {
   // TODO: implement
+  // if part.value.id === value.id update in place
+  // else insert new template above part and remove current...
 }
 
 function updateNode(part: IPart, value: Optional<PartValue>) {
   // TODO: either coerce to string, or update Node | DocumentFragment...
+  if (!isNode(value)) {
+    // coerce to string
+  } else {
+    // for Node and DocumentFragment you can compare to last value and if not === remove old and replace with value...
+  }
 }
 
 const partParentCache = new Map<IPart, ITemplate>();
@@ -310,11 +335,10 @@ function Part(path: Array<string | number>, start: Node, end: Node, index?: numb
   return part;
 }
 
-function templateSetup(parts: IPart[]): WalkFn {
+// TODO: change logic to account for new parameters
+function templateSetup(serial: ISerializedPart[], parts: IPart[]): WalkFn {
   return (parent, element, walkPath) => {
-    if (!element) {
-      throw new RangeError();
-    }
+    // failCondition(element != null);
     const nodeType = element && element.nodeType;
     const isSVG = isNodeSVGChild(element);
     if (nodeType === TEXT_NODE) {
@@ -335,6 +359,7 @@ function templateSetup(parts: IPart[]): WalkFn {
             const adjustedPath = walkPath.slice(0);
             const len = adjustedPath.length - 1;
             (adjustedPath[len] as number) += cursor;
+            serial.push([adjustedPath, isSVG]);
             parts.push(Part(adjustedPath, newPartComment, newPartComment, parts.length, isSVG));
             cursor++;
           }
@@ -342,20 +367,33 @@ function templateSetup(parts: IPart[]): WalkFn {
         nodes.forEach(node => {
           parent.insertBefore(node, element as Node);
         });
-        parent.removeChild(element);
+        if (!element) {
+          fail();
+        } else {
+          parent.removeChild(element);
+        }
       }
     } else if (nodeType === ELEMENT_NODE) {
-      [].forEach.call(element.attributes, (attr: Attr) => {
-        if (attr.nodeValue === PART_MARKER) {
-          parts.push(Part(walkPath.concat(attr.nodeName), element, attr, parts.length, isSVG));
-        }
-      });
+      if (!element) {
+        fail();
+      } else {
+        [].forEach.call(element.attributes, (attr: Attr) => {
+          if (attr.nodeValue === PART_MARKER) {
+            const attrPath = walkPath.concat(attr.nodeName);
+            serial.push([attrPath, isSVG]);
+            parts.push(Part(attrPath, element, attr, parts.length, isSVG));
+          }
+        });
+      }
     }
     return true;
   };
 }
 
-function isNodeSVGChild(node: Node): boolean {
+function isNodeSVGChild(node: Optional<Node>): boolean {
+  if (!node) {
+    return false;
+  }
   let result = false;
   let current: Optional<Node> = node;
   while (current) {
@@ -382,29 +420,42 @@ function Template(id: number, parts: IPart[], values: PartValue[]): ITemplate {
     });
   }
   template.id = id;
+  Object.freeze(template.id);
   template.parts = parts;
   template.values = values;
+  template.prototype = getBaseDomTarget();
   return template;
+}
+
+function deserializeParts(fragment: DocumentFragment, serial: ISerializedPart[]): IPart[] {
+  const parts: IPart[] = [];
+  serial.forEach(entry => {
+    
+  });
+  return parts;
 }
 
 const serialCache = new Map<number, ISerialCacheEntry>();
 function createTemplateGenerator(id: number, strs: TemplateStringsArray): ITemplateGenerator {
   const markUp = strs.join(PART_MARKER);
   let foundSerial = true;
-  const serial = serialCache.get(id) || function(){
+  let serial = serialCache.get(id);
+  if (!serial) {
     foundSerial = false;
-    return {
-      parts: [],
+    serial = {
+      serializedParts: [],
       template: generateTemplateElement(markUp)
     };
-  }();
+  }
   const generator = (values: PartValue[]): ITemplate => {
-    const { parts, template } = serial;
+    const { serializedParts, template } = serial as ISerialCacheEntry;
+    const fragment = template.content;
+    let parts: IPart[] = [];
     if (!foundSerial) {
-      walkDOM(template.content, undefined, templateSetup(parts));
-      serialCache.set(id, serial);
+      walkDOM(fragment, undefined, templateSetup(serializedParts, parts));
+      serialCache.set(id, serial as ISerialCacheEntry);
     } else {
-
+      parts = deserializeParts(fragment, serializedParts as ISerializedPart[]);
     }
     return Template(id, parts, values);
   }
@@ -432,10 +483,10 @@ export function defaultTemplateFn(item: PartValue): ITemplateGenerator {
   return html`${item}`;
 }
 
-// const renderedCache = new WeakMap<Node, ITemplate>();
+const renderedCache = new WeakMap<Node, ITemplate>();
 export function render(
   view: PartValue | PartValue[] | Iterable<PartValue>,
-  container: Optional<Node>
+  container?: Optional<Node>
 ) {
   if (!container) {
     container = document.body;
@@ -443,11 +494,29 @@ export function render(
   if (!isTemplateGenerator(view)) {
     view = defaultTemplateFn(view as PartValue);
     if (!isTemplateGenerator(view)) {
-      throw new Error();
+      fail();
     }
   }
-  
   // TODO: finsish render function...
+  const instance = renderedCache.get(container);
+  if (instance) {
+    if (instance.id === view.id) {
+      // update in place
+      // instance(view.)
+    } else {
+      // replace instance with view
+    }
+  } else {
+    if (isPartComment(container)) {
+      // replace comment with template
+    } else if (isNode(container)){
+      // otherwise take over all children for this template
+      if (!container.hasChildNodes()) {
+        // hydrate and if fails remove all children and append view
+      }
+      // empty so append view into container...
+    }
+  }
 }
 
 // TODO: re-write/cleanup repeat()...
@@ -461,7 +530,7 @@ export function repeat(
     let target = part.firstNode();
     const parent = target.parentNode;
     if (!parent) {
-      throw new RangeError();
+      fail();
     }
     // const isSVG = part.isSVG;
     // might need for hydrate...
@@ -523,20 +592,21 @@ export function repeat(
         } else {
           const targetEntry = oldCacheMap.get(oldCacheOrder[index]);
           if (!targetEntry) {
-            throw new RangeError();
-          }
-          target = targetEntry.firstNode();
-          const oldIndex = oldCacheOrder.indexOf(key);
-          oldCacheOrder.splice(oldIndex, 1);
-          oldCacheOrder.splice(index, 0, key);
-          // const frag = oldEntry.remove();
-          if (oldEntry.id === nextTemplate.id) {
-            // oldEntry.update(nextTemplate.values);
-            // parent.insertBefore(frag, target);
+            fail();
           } else {
-            // nextTemplate.update();
-            // TODO: rewrite without the dom helper methods...
-            // nextTemplate.insertBefore(target);
+            target = targetEntry.firstNode();
+            const oldIndex = oldCacheOrder.indexOf(key);
+            oldCacheOrder.splice(oldIndex, 1);
+            oldCacheOrder.splice(index, 0, key);
+            // const frag = oldEntry.remove();
+            if (oldEntry.id === nextTemplate.id) {
+              // oldEntry.update(nextTemplate.values);
+              // parent.insertBefore(frag, target);
+            } else {
+              // nextTemplate.update();
+              // TODO: rewrite without the dom helper methods...
+              // nextTemplate.insertBefore(target);
+            }
           }
         }
         return;
@@ -548,15 +618,20 @@ export function repeat(
       if (index === 0 && isPartComment(firstNode) && !cursor && !oldEntry) {
         // TODO: rewrite without dom helpers...
         // nextTemplate.insertBefore(firstNode);
-        parent.removeChild(firstNode);
-        oldCacheOrder.push(key);
+        if (!parent) {
+          fail();
+        } else {
+          parent.removeChild(firstNode);
+          oldCacheOrder.push(key);
+        }
       } else {
         if (!oldEntry) {
-          throw new RangeError();
+          fail();
+        } else {
+          // TODO: rewrite without dom helpers...
+          // nextTemplate.insertBefore(oldEntry);
+          oldCacheOrder.splice(index, 0, key);
         }
-        // TODO: rewrite without dom helpers...
-        // nextTemplate.insertBefore(oldEntry);
-        oldCacheOrder.splice(index, 0, key);
       }
       oldCacheMap.set(key, nextTemplate);
     });
