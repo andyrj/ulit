@@ -2,9 +2,12 @@ const SVG = "SVG";
 const FOREIGN_OBJECT = "FOREIGNOBJECT";
 const PART_START = "{{";
 const PART_END = "}}";
+const PART = "part";
+const SERIAL_PART_START = `${PART_START}${PART}s:`;
 const PART_MARKER = `${PART_START}${PART_END}`;
 const TEMPLATE = "template";
 const DIRECTIVE = "directive";
+const ULIT = "ulit";
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
@@ -21,6 +24,7 @@ export interface IDomTarget {
 }
 export interface ITemplate extends IDomTarget {
   (values?: PartValue[]): void;
+  element: Optional<HTMLTemplateElement>;
   id: number;
   parts: IPart[];
   values: Optional<PartValue[]>;
@@ -94,9 +98,9 @@ function isText(x: any): x is Text {
   return x && isNode(x) && (x as Node).nodeType === TEXT_NODE;
 }
 
-// function isNumber(x: any): x is number {
-//   return typeof x === "number";
-// }
+function isNumber(x: any): x is number {
+  return typeof x === "number";
+}
 
 function isIterable(x: any): x is Iterable<any> {
   return (
@@ -159,12 +163,6 @@ function getId(str: string): number {
   return id;
 }
 
-function generateTemplateElement(str: string) {
-  const element = document.createElement(TEMPLATE);
-  element.innerHTML = str;
-  return element as HTMLTemplateElement;
-}
-
 function fail(msg?: Optional<string>): never {
   if (msg) {
     throw new RangeError(msg);
@@ -221,7 +219,8 @@ function getBaseDomTarget() {
       if (isPart(this)) {
         partParentCache.delete(this);
       } else if (isTemplate(this)) {
-        // TODO: special dispose logic for Template.dispose()?
+        // TODO: anything that needs to be cleaned up on disposed Templates?
+        // recoverTemplateElement(fn.element);
       }
       while (disposers.length > 0) {
         (disposers.pop() as IDisposer)();
@@ -425,16 +424,81 @@ function Template(id: number, parts: IPart[], values: PartValue[]): ITemplate {
   Object.freeze(template.id);
   template.parts = parts;
   template.values = values;
+  template.element = undefined;
   template.prototype = getBaseDomTarget();
   return template;
 }
 
-function deserializeParts(fragment: DocumentFragment, serial: ISerializedPart[]): IPart[] {
-  const parts: IPart[] = [];
-  serial.forEach(entry => {
-    
-  });
-  return parts;
+type NodeAttribute = [Node, string];
+function followPath(
+  target: Node,
+  pointer: Array<string | number>
+): Node | NodeAttribute | never {
+  if (!target) {
+    throw new RangeError();
+  }
+  const cPath = pointer.slice(0);
+  const current = cPath.shift() as string | number;
+  if (isNumber(current)) {
+    if (cPath.length === 0) {
+      return target.childNodes[current];
+    } else {
+      return followPath(target.childNodes[current], cPath);
+    }
+  } else if (isString(current)) {
+    if (cPath.length === 0) {
+      return [target, current];
+    } else {
+      throw new RangeError();
+    }
+  } else {
+    throw new Error();
+  }
+}
+
+function isFirstChildSerial(parent: DocumentFragment): boolean {
+  const child = parent.firstChild;
+  return (child &&
+    child.nodeType === COMMENT_NODE &&
+    child.nodeValue &&
+    child.nodeValue.startsWith(SERIAL_PART_START)) as boolean;
+}
+
+function parseSerializedParts(value?: string): ISerializedPart[] {
+  if (!value) {
+    return [];
+  } else {
+    return JSON.parse(value.split(SERIAL_PART_START)[1].slice(0, -2)) as ISerializedPart[];
+  }
+}
+
+function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
+  const el = document.getElementById(`${ULIT}${id}`) as HTMLTemplateElement;
+  if (!el) {
+    return;
+  }
+  const fragment = (el.cloneNode(true) as HTMLTemplateElement).content;
+  if (!fragment) {
+    return;
+  }
+  const first = fragment.firstChild;
+  if (!first) {
+    return;
+  }
+  const isFirstSerial = isFirstChildSerial(fragment);
+  let deserialized: Optional<ISerialCacheEntry> = undefined;
+  if (isFirstSerial) {
+    const fc = fragment.removeChild(first);
+    const serializedParts = parseSerializedParts(fc.nodeValue || undefined);
+    const template = el as HTMLTemplateElement;
+    if (serializedParts && template) {
+      deserialized = { template, serializedParts };
+    }
+  }
+  if (deserialized) {
+    return deserialized;
+  }
+  return;
 }
 
 const serialCache = new Map<number, ISerialCacheEntry>();
@@ -448,9 +512,9 @@ function getTemplateGeneratorFactory(id: number, strs: TemplateStringsArray): IT
   const markUp = strs.join(PART_MARKER);
   const newTemplateGeneratorFactory: ITemplateGeneratorFactory = (exprs: PartValue[]) => {
     const newGenerator = (values: PartValue[]) => {
-      let serial = serialCache.get(id); // TODO: get serialized Template?
+      let serial = serialCache.get(id) || getSerializedTemplate(id);
       let parts: IPart[] = [];
-      if (!serial) {
+      if (serial == null) {
         const newTemplateEl = document.createElement(TEMPLATE);
         newTemplateEl.innerHTML = markUp;
         const fragment = newTemplateEl.content;
@@ -461,14 +525,17 @@ function getTemplateGeneratorFactory(id: number, strs: TemplateStringsArray): IT
         walkDOM(fragment, undefined, templateSetup(serial.serializedParts, parts));
         serialCache.set(id, serial as ISerialCacheEntry);
         return Template(id, parts, values);
+      } else {
+        const fragment = serial.template.content;
+        parts = serial.serializedParts.map((pair, index) => {
+          const path = pair[0];
+          const isSVG = pair[1];
+          const target = followPath(fragment, path);
+          const start = Array.isArray(target) ? target[0] : target;
+          return Part(path, start, start, index, isSVG);
+        });
+        return Template(id, parts, values);
       }
-      parts = serial.serializedParts.map((pair, index) => {
-        const path = pair[0];
-        const isSVG = pair[1];
-        // TODO: followPath on fragment and that should be start... end depends on path being for attribute or not...
-        return Part(path, start, end, index, isSVG);
-      });
-      return Template(id, parts, values);
     };
     (newGenerator as ITemplateGenerator).id = id;
     (newGenerator as ITemplateGenerator).exprs = exprs;
@@ -476,36 +543,6 @@ function getTemplateGeneratorFactory(id: number, strs: TemplateStringsArray): IT
   }; 
   templateGeneratorFactoryCache.set(id, newTemplateGeneratorFactory);
   return newTemplateGeneratorFactory;
-}
-function getTemplateGenerator(id: number, strs: TemplateStringsArray): ITemplateGenerator {
-  const factory = getTemplateGeneratorFactory(id, strs);
-  // const markUp = strs.join(PART_MARKER);
-  // let foundSerial = true;
-  // let serial = serialCache.get(id);
-  // TODO: return a ITemplateGeneratorFactory
-  /*
-  if (!serial) {
-    foundSerial = false;
-    serial = {
-      serializedParts: [],
-      template: generateTemplateElement(markUp)
-    };
-  }
-  const generator = (values: PartValue[]): ITemplate => {
-    const { serializedParts, template } = serial as ISerialCacheEntry;
-    const fragment = template.content;
-    let parts: IPart[] = [];
-    if (!foundSerial) {
-      walkDOM(fragment, undefined, templateSetup(serializedParts, parts));
-      serialCache.set(id, serial as ISerialCacheEntry);
-    } else {
-      parts = deserializeParts(fragment, serializedParts as ISerializedPart[]);
-    }
-    return Template(id, parts, values);
-  }
-  (generator as ITemplateGenerator).id = id;
-  return generator as ITemplateGenerator;
-  */
 }
 
 const templateGeneratorCache = new Map<number, ITemplateGenerator>();
