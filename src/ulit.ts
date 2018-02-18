@@ -537,7 +537,7 @@ function followPath(
     }
   }
   fail();
-  return; // satisifying typescript, can't be reached... ><
+  return; // satisifying typescript, can't be reached anyways... ><
 }
 
 function isFirstChildSerial(parent: DocumentFragment): boolean {
@@ -664,7 +664,6 @@ export function render(
       fail();
     }
   }
-  // TODO: finsish render function...
   const instance = renderedCache.get(container);
   if (instance) {
     if (instance.id === view.id) {
@@ -672,7 +671,6 @@ export function render(
     } else {
       // replace instance with view
       const template = view();
-      // TODO: think about best way to build the api from here...
       //  I want this to be lazy initialized...
     }
   } else {
