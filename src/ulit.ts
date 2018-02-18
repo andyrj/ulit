@@ -503,10 +503,13 @@ export class Template extends DomTarget {
   public update(newValues?: Optional<PartValue[]>) {
     newValues = newValues || this.values;
     const templateParts = this.parts as Part[];
-    templateParts.forEach((part, index) => {
-      const newVal = newValues ? newValues[index] : undefined;
-      part.update(newVal, index, this);
-    });
+    let i = 0;
+    const len = templateParts.length;
+    for (; i < len; i++) {
+      const part = templateParts[i];
+      const newVal = newValues ? newValues[i] : undefined;
+      part.update(newVal, i, this);
+    }
   }
 }
 
@@ -619,7 +622,8 @@ function getTemplateGeneratorFactory(
           templateSetup(serial.serializedParts, parts)
         );
         serialCache.set(id, serial as ISerialCacheEntry);
-        return new Template(id, serial.template, parts, values);
+
+        return new Template(id, serial.template.cloneNode(true) as HTMLTemplateElement, parts.slice(0), values);
       } else {
         const fragment = serial.template.content;
         parts = serial.serializedParts.map((pair, index) => {
@@ -684,8 +688,8 @@ export function render(
     return;
   }
   // replace instance with view
-  const template = view();
-  // template();
+  const template = view(view.exprs);
+  template.update();
   if (isTemplateElement(template.element)) {
     // TODO: add hydration here...
     const first: Optional<Node> = container.firstChild;
@@ -706,6 +710,8 @@ export function render(
       instance.end = newEnd;
       instance.values = template.values;
     } else {
+      template.start = newStart;
+      template.end = newEnd;
       renderedCache.set(container, template);
     }
   } else {
