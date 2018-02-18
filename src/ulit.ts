@@ -1,4 +1,5 @@
 const SVG = "SVG";
+const SVG_NS = "http://www.w3.org/2000/svg";
 const FOREIGN_OBJECT = "FOREIGNOBJECT";
 const PART_START = "{{";
 const PART_END = "}}";
@@ -268,9 +269,36 @@ function getBaseDomTarget() {
 }
 
 function updateAttribute(part: IPart, value: Optional<PartValue>) {
-  // TODO: implement
-  if (isEventPart(part) && isFunction(value)) {
-
+  const element = part.start as Node;
+  if (!element) {
+    fail();
+  }
+  const name = part.path[part.path.length - 1] as string;
+  const isSVG = part.isSVG;
+  if (isEventPart(part)) {
+    if (isFunction(value) && name in element && !isSVG) {
+      (element as any)[name] = value;
+      return;
+    } else {
+      fail();
+    }
+  } else {
+    if(value == null) {
+      if (isSVG) {
+        (element as HTMLElement).removeAttributeNS(SVG_NS, name);
+      } else {
+        (element as HTMLElement).removeAttribute(name);
+      } 
+    } else {
+      if (!isString(value) && isFunction((value as any).toString)) {
+        value = (value as any).toString();
+      }
+      if (isSVG) {
+        (element as HTMLElement).setAttributeNS(SVG_NS, name, value as string);
+      } else {
+        (element as HTMLElement).setAttribute(name, value as string);
+      }
+    }
   }
 }
 
