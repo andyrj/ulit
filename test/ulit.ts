@@ -24,10 +24,8 @@ describe("Templates", () => {
     render(template);
     expect(document.body.innerHTML).to.equal(`<div id="test">test</div>`);
   });
-  /*
   it("should handle dynamic attributes", () => {
     const str = "test";
-    // @ts-ignore
     const template = value => html`<div id=${str}>test</div>`;
     render(template(str));
     expect(document.body.innerHTML).to.equal(`<div id="${str}">test</div>`);
