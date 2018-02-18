@@ -303,10 +303,10 @@ function updateAttribute(part: IPart, value: Optional<PartValue>) {
 }
 
 function updateArray(part: IPart, value: Optional<PartValue[]>) {
-  // TODO: implement
-  // call into repeat() to "emulate" unkeyed using index as key
-  // in standard array/iterable we make no guarantee to nodes not being recreated
-  // so index as key is fine...
+  if (!value) {
+    return;
+  }
+  repeat(value)(part);
 }
 
 function updateTemplate(part: IPart, value: ITemplateGenerator) {
