@@ -665,28 +665,33 @@ export function render(
     }
   }
   const instance = renderedCache.get(container);
-  if (instance) {
-    if (instance.id === view.id) {
-      instance(view.exprs);
+  if (instance && instance.id === view.id) {
+    instance(view.exprs);
+    return;
+  }
+  // replace instance with view
+  const template = view();
+  if (isTemplateElement(template.element)) {
+    // TODO: add hydration here...
+    const first: Optional<Node> = container.firstChild;
+    const parent: Optional<Node> = container;
+    const fragment = template.element.content;
+    const newStart = template.firstNode();
+    const newEnd = template.lastNode();
+    (parent as Node).insertBefore(fragment, first);
+    if (instance) {
+      instance.remove();
+      instance.start = newStart;
+      instance.end = newEnd;
+      instance.values = template.values;
     } else {
-      // replace instance with view
-      const template = view();
-      //  I want this to be lazy initialized...
+      renderedCache.set(container, template);
     }
   } else {
-    if (isPartComment(container)) {
-      // replace comment with template
-    } else if (isNode(container)){
-      // otherwise take over all children for this template
-      if (!container.hasChildNodes()) {
-        // hydrate and if fails remove all children and append view
-      }
-      // empty so append view into container...
-    }
+    fail();
   }
 }
 
-// TODO: re-write/cleanup repeat()...
 const repeatCache = new Map<IPart, [Key[], Map<Key, ITemplate>]>();
 export function repeat(
   items: Array<{}>,
@@ -694,7 +699,7 @@ export function repeat(
   templateFn: TemplateFn = defaultTemplateFn
 ): IDirective {
   return Directive((part: IPart) => {
-    let target = part.firstNode();
+    const target = part.firstNode();
     const parent = target.parentNode;
     if (!parent) {
       fail();
@@ -725,7 +730,7 @@ export function repeat(
       const newEntry = newCacheMap.get(key);
       const oldEntry = oldCacheMap.get(key);
       if (oldEntry && !newEntry) {
-        // oldEntry.remove();
+        oldEntry.remove();
         oldCacheMap.delete(key);
         removeKeys.push(index);
       }
@@ -741,66 +746,79 @@ export function repeat(
     }
     // move/update and add
     keys.forEach((key, index) => {
-      let oldEntry = oldCacheMap.get(key);
+      const oldEntry = oldCacheMap.get(key);
       const nextTemplate = templates[index];
       if (oldEntry) {
+        if (!parent) {
+          fail();
+        }
+        const first = oldEntry.firstNode();
         if (key === oldCacheOrder[index]) {
           // update in place
           if (oldEntry.id === nextTemplate.id) {
-            // oldEntry.update(nextTemplate.values);
+            oldEntry(nextTemplate.values as PartValue[]);
           } else {
             //  maybe at some point think about diffing between templates?
-            // nextTemplate.update();
-            // TODO: rewrite without helper methods...
-            // nextTemplate.insertBefore(oldEntry);
-            // oldEntry.remove();
-            oldCacheMap.set(key, nextTemplate);
-          }
-        } else {
-          const targetEntry = oldCacheMap.get(oldCacheOrder[index]);
-          if (!targetEntry) {
-            fail();
-          } else {
-            target = targetEntry.firstNode();
-            const oldIndex = oldCacheOrder.indexOf(key);
-            oldCacheOrder.splice(oldIndex, 1);
-            oldCacheOrder.splice(index, 0, key);
-            // const frag = oldEntry.remove();
-            if (oldEntry.id === nextTemplate.id) {
-              // oldEntry.update(nextTemplate.values);
-              // parent.insertBefore(frag, target);
+            nextTemplate();
+            if (isTemplateElement(nextTemplate.element)) {
+              const fragment = nextTemplate.element.content;
+              (parent as Node).insertBefore(fragment, first);
+              oldEntry.remove();
+              oldCacheMap.set(key, nextTemplate);
             } else {
-              // nextTemplate.update();
-              // TODO: rewrite without the dom helper methods...
-              // nextTemplate.insertBefore(target);
+              fail();
             }
           }
+        } else {
+          // TODO: look at this code again with fresh eyes...
+          // const targetEntry = oldCacheMap.get(oldCacheOrder[index]);
+          // if (!targetEntry) {
+          //   fail();
+          // } else {
+          //   target = targetEntry.firstNode();
+          //   const oldIndex = oldCacheOrder.indexOf(key);
+          //   oldCacheOrder.splice(oldIndex, 1);
+          //   oldCacheOrder.splice(index, 0, key);
+          //   const fragment = oldEntry.remove();
+          //   if (oldEntry.id === nextTemplate.id) {
+          //     oldEntry(nextTemplate.values as PartValue[]);
+          //     (parent as Node).insertBefore(fragment, target);
+          //   } else {
+          //     nextTemplate();
+          //     // nextTemplate.insertBefore(target);
+          //     (parent as Node).insertBefore(fragment, target);
+          //   }
+          // }
         }
         return;
       }
       // add template to
-      const cursor = oldCacheOrder[index];
-      oldEntry = oldCacheMap.get(cursor);
-      const firstNode = part.firstNode();
-      if (index === 0 && isPartComment(firstNode) && !cursor && !oldEntry) {
-        // TODO: rewrite without dom helpers...
-        // nextTemplate.insertBefore(firstNode);
-        if (!parent) {
-          fail();
-        } else {
-          parent.removeChild(firstNode);
-          oldCacheOrder.push(key);
-        }
-      } else {
-        if (!oldEntry) {
-          fail();
-        } else {
-          // TODO: rewrite without dom helpers...
-          // nextTemplate.insertBefore(oldEntry);
-          oldCacheOrder.splice(index, 0, key);
-        }
-      }
-      oldCacheMap.set(key, nextTemplate);
+      // TODO: look over this logic and clean it up...
+      // const cursor = oldCacheOrder[index];
+      // oldEntry = oldCacheMap.get(cursor);
+      // const firstNode = part.firstNode();
+      // if (index === 0 && isPartComment(firstNode) && !cursor && !oldEntry) {
+      //   if (isTemplateElement(nextTemplate.element)) {
+      //     const fragment = nextTemplate.element.content;
+      //     (parent as Node).insertBefore(fragment, firstNode);
+      //     if (!parent) {
+      //       fail();
+      //     } else {
+      //       parent.removeChild(firstNode);
+      //       oldCacheOrder.push(key);
+      //     }
+      //   } else {
+      //     fail();
+      //   }
+      // } else {
+      //   if (!oldEntry) {
+      //     fail();
+      //   } else {
+      //     // nextTemplate.insertBefore(oldEntry);
+      //     oldCacheOrder.splice(index, 0, key);
+      //   }
+      // }
+      // oldCacheMap.set(key, nextTemplate);
     });
   });
 }
