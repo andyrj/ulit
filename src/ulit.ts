@@ -37,6 +37,7 @@ export interface IDirective {
 export interface ITemplateGenerator {
   (values?: PartValue[]): ITemplate;
   id: number;
+  exprs: PartValue[];
 }
 export type WalkFn = (
   parent: Node,
@@ -437,10 +438,52 @@ function deserializeParts(fragment: DocumentFragment, serial: ISerializedPart[])
 }
 
 const serialCache = new Map<number, ISerialCacheEntry>();
-function createTemplateGenerator(id: number, strs: TemplateStringsArray): ITemplateGenerator {
+const templateGeneratorFactoryCache = new Map<number, ITemplateGeneratorFactory>();
+type ITemplateGeneratorFactory = (exprs: PartValue[]) => ITemplateGenerator;
+function getTemplateGeneratorFactory(id: number, strs: TemplateStringsArray): ITemplateGeneratorFactory {
+  const cacheEntry = templateGeneratorFactoryCache.get(id);
+  if (cacheEntry) {
+    return cacheEntry;
+  }
   const markUp = strs.join(PART_MARKER);
-  let foundSerial = true;
-  let serial = serialCache.get(id);
+  const newTemplateGeneratorFactory: ITemplateGeneratorFactory = (exprs: PartValue[]) => {
+    const newGenerator = (values: PartValue[]) => {
+      let serial = serialCache.get(id); // TODO: get serialized Template?
+      let parts: IPart[] = [];
+      if (!serial) {
+        const newTemplateEl = document.createElement(TEMPLATE);
+        newTemplateEl.innerHTML = markUp;
+        const fragment = newTemplateEl.content;
+        serial = {
+          serializedParts: [],
+          template: newTemplateEl
+        };
+        walkDOM(fragment, undefined, templateSetup(serial.serializedParts, parts));
+        serialCache.set(id, serial as ISerialCacheEntry);
+        return Template(id, parts, values);
+      }
+      parts = serial.serializedParts.map((pair, index) => {
+        const path = pair[0];
+        const isSVG = pair[1];
+        // TODO: followPath on fragment and that should be start... end depends on path being for attribute or not...
+        return Part(path, start, end, index, isSVG);
+      });
+      return Template(id, parts, values);
+    };
+    (newGenerator as ITemplateGenerator).id = id;
+    (newGenerator as ITemplateGenerator).exprs = exprs;
+    return newGenerator as ITemplateGenerator;
+  }; 
+  templateGeneratorFactoryCache.set(id, newTemplateGeneratorFactory);
+  return newTemplateGeneratorFactory;
+}
+function getTemplateGenerator(id: number, strs: TemplateStringsArray): ITemplateGenerator {
+  const factory = getTemplateGeneratorFactory(id, strs);
+  // const markUp = strs.join(PART_MARKER);
+  // let foundSerial = true;
+  // let serial = serialCache.get(id);
+  // TODO: return a ITemplateGeneratorFactory
+  /*
   if (!serial) {
     foundSerial = false;
     serial = {
@@ -462,6 +505,7 @@ function createTemplateGenerator(id: number, strs: TemplateStringsArray): ITempl
   }
   (generator as ITemplateGenerator).id = id;
   return generator as ITemplateGenerator;
+  */
 }
 
 const templateGeneratorCache = new Map<number, ITemplateGenerator>();
@@ -471,7 +515,8 @@ export function html(strs: TemplateStringsArray, ...exprs: PartValue[]): ITempla
   if (generator) {
     return generator;
   }
-  const newGenerator = createTemplateGenerator(id, strs);
+  const factory = getTemplateGeneratorFactory(id, strs);
+  const newGenerator = factory(exprs);
   templateGeneratorCache.set(id, newGenerator);
   return newGenerator;
 }
