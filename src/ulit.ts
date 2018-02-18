@@ -19,8 +19,8 @@ export interface IDomTarget {
   end: Optional<Node | IPart>;
   isSVG: boolean;
   start: Optional<Node | IPart>;
-  firstNode: () => Node;
-  lastNode: () => Node;
+  first: () => Node;
+  last: () => Node;
   remove: () => DocumentFragment;
 }
 export interface ITemplate extends IDomTarget {
@@ -123,7 +123,7 @@ function isTemplate(x: any): x is ITemplate {
 }
 
 function isTemplateElement(x: any): x is HTMLTemplateElement {
-  return x && isNode(x) && x.nodeName === TEMPLATE;
+  return x && x instanceof HTMLTemplateElement;
 }
 
 function isTemplateGenerator(x: any): x is ITemplateGenerator {
@@ -228,26 +228,26 @@ function getBaseDomTarget() {
         (disposers.pop() as IDisposer)();
       }
     };
-    fn.firstNode = function() {
+    fn.first = function() {
       const start = this.start;
       if (isNode(start)) {
         return start;
       } else {
-        return (start as IDomTarget).firstNode();
+        return (start as IDomTarget).first();
       }
     };
-    fn.lastNode = function() {
+    fn.last = function() {
       const end = this.end;
       if (isNode(end)) {
         return end;
       } else {
-        return (end as IDomTarget).lastNode();
+        return (end as IDomTarget).last();
       }
     };
     fn.remove = function(): Optional<DocumentFragment> {
       const fragment = document.createDocumentFragment();
-      const end = this.lastNode();
-      let cursor: Optional<Node> = this.firstNode();
+      const end = this.last();
+      let cursor: Optional<Node> = this.first();
       while (cursor != null) {
         const next: Node = cursor.nextSibling as Node;
         fragment.appendChild(cursor);
@@ -310,7 +310,7 @@ function updateArray(part: IPart, value: Optional<PartValue[]>) {
 }
 
 function updateTemplate(part: IPart, value: ITemplateGenerator) {
-  const first = part.firstNode();
+  const first = part.first();
   const parent = first.parentNode;
   if (!parent) {
     fail();
@@ -323,8 +323,8 @@ function updateTemplate(part: IPart, value: ITemplateGenerator) {
   const template = value();
   if (isTemplateElement(template.element)) {
     const fragment = template.element.content;
-    const newStart = template.firstNode();
-    const newEnd = template.lastNode();
+    const newStart = template.first();
+    const newEnd = template.last();
     (parent as Node).insertBefore(fragment, first);
     part.start = newStart;
     part.end = newEnd;
@@ -338,7 +338,7 @@ function updateNode(part: IPart, value: Optional<PartValue>) {
   if (value == null) {
     value = document.createComment(`${PART_START}${PART_END}`);
   }
-  const first = part.firstNode();
+  const first = part.first();
   const parent = first.parentNode;
   if (parent == null) {
     fail();
@@ -496,7 +496,7 @@ function isNodeSVGChild(node: Optional<Node>): boolean {
   return result;
 }
 
-function Template(id: number, parts: IPart[], values: PartValue[]): ITemplate {
+function Template(id: number, element: HTMLTemplateElement, parts: IPart[], values: PartValue[]): ITemplate {
   const template: any = function(newValues?: PartValue[]) {
     newValues = newValues || template.values || values;
     const templateParts = template.parts as IPart[] || parts;
@@ -508,7 +508,7 @@ function Template(id: number, parts: IPart[], values: PartValue[]): ITemplate {
   template.id = id;
   template.parts = parts;
   template.values = values;
-  template.element = undefined;
+  template.element = element;
   template.prototype = getBaseDomTarget();
   return template;
 }
@@ -608,7 +608,7 @@ function getTemplateGeneratorFactory(id: number, strs: TemplateStringsArray): IT
         };
         walkDOM(fragment, undefined, templateSetup(serial.serializedParts, parts));
         serialCache.set(id, serial as ISerialCacheEntry);
-        return Template(id, parts, values);
+        return Template(id, serial.template, parts, values);
       } else {
         const fragment = serial.template.content;
         parts = serial.serializedParts.map((pair, index) => {
@@ -618,7 +618,7 @@ function getTemplateGeneratorFactory(id: number, strs: TemplateStringsArray): IT
           const start = Array.isArray(target) ? target[0] : target;
           return Part(path, start as Node, index, isSVG);
         });
-        return Template(id, parts, values);
+        return Template(id, serial.template, parts, values);
       }
     };
     (newGenerator as ITemplateGenerator).id = id;
@@ -671,13 +671,16 @@ export function render(
   }
   // replace instance with view
   const template = view();
+  // template();
   if (isTemplateElement(template.element)) {
     // TODO: add hydration here...
     const first: Optional<Node> = container.firstChild;
     const parent: Optional<Node> = container;
     const fragment = template.element.content;
-    const newStart = template.firstNode();
-    const newEnd = template.lastNode();
+    const fragmentFirst = fragment.firstChild;
+    const fragmentLast = fragment.lastChild;
+    const newStart = isPartComment(fragmentFirst) ? template.parts[0] : fragmentFirst;
+    const newEnd = isPartComment(fragment.lastChild) ? template.parts[template.parts.length - 1] : fragmentLast;
     (parent as Node).insertBefore(fragment, first);
     if (instance) {
       instance.remove();
@@ -699,7 +702,7 @@ export function repeat(
   templateFn: TemplateFn = defaultTemplateFn
 ): IDirective {
   return Directive((part: IPart) => {
-    const target = part.firstNode();
+    const target = part.first();
     const parent = target.parentNode;
     if (!parent) {
       fail();
@@ -752,7 +755,7 @@ export function repeat(
         if (!parent) {
           fail();
         }
-        const first = oldEntry.firstNode();
+        const first = oldEntry.first();
         if (key === oldCacheOrder[index]) {
           // update in place
           if (oldEntry.id === nextTemplate.id) {
@@ -775,7 +778,7 @@ export function repeat(
           // if (!targetEntry) {
           //   fail();
           // } else {
-          //   target = targetEntry.firstNode();
+          //   target = targetEntry.first();
           //   const oldIndex = oldCacheOrder.indexOf(key);
           //   oldCacheOrder.splice(oldIndex, 1);
           //   oldCacheOrder.splice(index, 0, key);
@@ -796,7 +799,7 @@ export function repeat(
       // TODO: look over this logic and clean it up...
       // const cursor = oldCacheOrder[index];
       // oldEntry = oldCacheMap.get(cursor);
-      // const firstNode = part.firstNode();
+      // const firstNode = part.first();
       // if (index === 0 && isPartComment(firstNode) && !cursor && !oldEntry) {
       //   if (isTemplateElement(nextTemplate.element)) {
       //     const fragment = nextTemplate.element.content;
