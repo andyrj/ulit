@@ -33,6 +33,7 @@ export interface IPart extends IDomTarget {
   (value?: PartValue, index?: number, parent?: ITemplate): void;
   path: Array<string | number>;
   parent: ITemplate;
+  value: Optional<PartValue>;
 };
 export interface IDirective {
   (part: IPart): void;
@@ -217,10 +218,10 @@ function getBaseDomTarget() {
     fn.dispose = function() {
       const disposers = this.disposers;
       if (isPart(this)) {
+        // TODO: make sure to add any other part object members that need to be cleaned up
         partParentCache.delete(this);
       } else if (isTemplate(this)) {
         // TODO: anything that needs to be cleaned up on disposed Templates?
-        // recoverTemplateElement(fn.element);
       }
       while (disposers.length > 0) {
         (disposers.pop() as IDisposer)();
@@ -268,7 +269,7 @@ function getBaseDomTarget() {
 
 function updateAttribute(part: IPart, value: Optional<PartValue>) {
   // TODO: implement
-  if (isEventPart(part)) {
+  if (isEventPart(part) && isFunction(value)) {
 
   }
 }
@@ -288,15 +289,26 @@ function updateTemplate(part: IPart, value: ITemplateGenerator) {
 
 function updateNode(part: IPart, value: Optional<PartValue>) {
   // TODO: either coerce to string, or update Node | DocumentFragment...
-  if (!isNode(value)) {
-    // coerce to string
+  const first = part.firstNode() as Node;
+  if (isPartComment(first)) {
+    // replace comment node...
   } else {
-    // for Node and DocumentFragment you can compare to last value and if not === remove old and replace with value...
+    if (!isNode(value)) {
+
+    } else {
+      // for Node and DocumentFragment you can compare to last value and if not === remove old and replace with value...
+      const isFrag = isDocumentFragment(value);
+      if (isFrag) {
+
+      } else {
+        
+      }
+    }
   }
 }
 
 const partParentCache = new Map<IPart, ITemplate>();
-function Part(path: Array<string | number>, start: Node, end: Node, index?: number, isSVG?: boolean) {
+function Part(path: Array<string | number>, target: Node, index?: number, isSVG?: boolean) {
   const part: any = function(value?: PartValue) {
     if (!value) {
       value = part.value;
@@ -329,9 +341,9 @@ function Part(path: Array<string | number>, start: Node, end: Node, index?: numb
     }
   };
   (part as IPart).path = path.slice(0);
-  Object.freeze((part as IPart).path);
-  part.start = start;
-  part.end = end;
+  part.value = target;
+  part.start = target;
+  part.end = target;
   if (isSVG) {
     part.isSVG = true;
   }
@@ -361,7 +373,7 @@ function templateSetup(serial: ISerializedPart[], parts: IPart[]): WalkFn {
             const len = adjustedPath.length - 1;
             (adjustedPath[len] as number) += cursor;
             serial.push([adjustedPath, isSVG]);
-            parts.push(Part(adjustedPath, newPartComment, newPartComment, parts.length, isSVG));
+            parts.push(Part(adjustedPath, newPartComment, parts.length, isSVG));
             cursor++;
           }
         });
@@ -382,7 +394,7 @@ function templateSetup(serial: ISerializedPart[], parts: IPart[]): WalkFn {
           if (attr.nodeValue === PART_MARKER) {
             const attrPath = walkPath.concat(attr.nodeName);
             serial.push([attrPath, isSVG]);
-            parts.push(Part(attrPath, element, attr, parts.length, isSVG));
+            parts.push(Part(attrPath, element, parts.length, isSVG));
           }
         });
       }
@@ -419,9 +431,8 @@ function Template(id: number, parts: IPart[], values: PartValue[]): ITemplate {
       const newVal = newValues ? newValues[index] : undefined;
       part(newVal, template);
     });
-  }
+  };
   template.id = id;
-  Object.freeze(template.id);
   template.parts = parts;
   template.values = values;
   template.element = undefined;
@@ -532,7 +543,7 @@ function getTemplateGeneratorFactory(id: number, strs: TemplateStringsArray): IT
           const isSVG = pair[1];
           const target = followPath(fragment, path);
           const start = Array.isArray(target) ? target[0] : target;
-          return Part(path, start, start, index, isSVG);
+          return Part(path, start, index, isSVG);
         });
         return Template(id, parts, values);
       }
@@ -584,10 +595,12 @@ export function render(
   const instance = renderedCache.get(container);
   if (instance) {
     if (instance.id === view.id) {
-      // update in place
-      // instance(view.)
+      instance(view.exprs);
     } else {
       // replace instance with view
+      const template = view();
+      // TODO: think about best way to build the api from here...
+      //  I want this to be lazy initialized...
     }
   } else {
     if (isPartComment(container)) {
