@@ -37,7 +37,13 @@ interface ISerialCacheEntry {
   template: HTMLTemplateElement;
   serializedParts: ISerializedPart[];
 }
-export type PrimitivePart = boolean | number | string | Node | DocumentFragment;
+export type PrimitivePart =
+  | boolean
+  | number
+  | string
+  | Node
+  | DocumentFragment
+  | Function;
 export type PartValue =
   | PrimitivePart
   | IPartPromise
@@ -261,7 +267,7 @@ function updateAttribute(part: Part, value: Optional<PartValue>) {
     fail();
   }
   const isValFn = isFunction(value);
-  if (isValFn || (name in element && !isSVG)) {
+  if ((isEventPart(part) && isValFn) || (name in element && !isSVG)) {
     try {
       (element as any)[name] = !value && value !== false ? EMPTY_STRING : value;
     } catch (_) {} // eslint-disable-line
@@ -378,9 +384,7 @@ export class Part extends DomTarget {
     this.start = target;
     this.end = target;
   }
-  public update(
-    value?: PartValue
-  ) {
+  public update(value?: PartValue) {
     if (value === undefined) {
       value = this.value;
     }
@@ -623,7 +627,9 @@ function getTemplateGeneratorFactory(
         serialCache.set(id, serial as ISerialCacheEntry);
         return new Template(id, newTemplateEl, parts.slice(0), values);
       } else {
-        const cTemplate = serial.template.cloneNode(true) as HTMLTemplateElement;
+        const cTemplate = serial.template.cloneNode(
+          true
+        ) as HTMLTemplateElement;
         const fragment = cTemplate.content;
         parts = serial.serializedParts.map((pair, index) => {
           const path = pair[0];
@@ -673,14 +679,14 @@ export function render(
     }
   }
   const instance = renderedCache.get(container);
-  if (instance && instance.id === view.id) {
-    // TODO: the way we cache exprs on the template generators won't work...
-    //  maybe instead we should cache them in a map?
-    instance.update(view.exprs);
+  if (instance && instance.id === (view as ITemplateGenerator).id) {
+    instance.update((view as ITemplateGenerator).exprs);
     return;
   }
   // replace instance with view
-  const template = view(view.exprs);
+  const template = (view as ITemplateGenerator)(
+    (view as ITemplateGenerator).exprs
+  );
   template.update();
   if (isTemplateElement(template.element)) {
     // TODO: add hydration here...

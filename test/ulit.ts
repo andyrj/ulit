@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import "mocha";
-import { html, render } from "../src/ulit";
+import { Directive, html, render } from "../src/ulit";
 
 beforeEach(() => {
   const body = document.body;
@@ -34,7 +34,6 @@ describe("Templates", () => {
   });
   it("should handle dynamic template with string child", () => {
     const str = "test";
-    // @ts-ignore
     const template = html`<div id="test">${str}</div>`;
     render(template);
     expect(document.body.innerHTML).to.equal(`<div id="test">test</div>`);
@@ -43,7 +42,6 @@ describe("Templates", () => {
   it("should handle dom nodes", () => {
     const node = document.createElement("div");
     node.id = "test";
-    // @ts-ignore
     const template = html`<div>${node}</div>`;
     render(template);
     expect(document.body.innerHTML).to.equal(`<div><div id="test"></div></div>`);
@@ -51,17 +49,12 @@ describe("Templates", () => {
 
   it("should handle dynamic nodes dispersed in static nodes", () => {
     const str = "dynamic";
-    // @ts-ignore
     const template = html`<div>This is static, this is ${str}</div>`;
     render(template);
     expect(document.body.innerHTML).to.equal(`<div>This is static, this is ${str}</div>`);
-    
-    // @ts-ignore
     const template1 = html`<div>${str} is at start</div>`;
     render(template1);
     expect(document.body.innerHTML).to.equal(`<div>${str} is at start</div>`);
-    
-    // @ts-ignore
     const template2 = html`<div>in the middle it's ${str}!</div>`;
     render(template2);
     expect(document.body.innerHTML).to.equal(`<div>in the middle it's ${str}!</div>`);
@@ -70,28 +63,22 @@ describe("Templates", () => {
   it("should handle dynamic child interspersed with static nodes", () => {
     const node = document.createElement("div");
     node.innerHTML = "test";
-    // @ts-ignore
     const template = html`<div><br>before${node}<br>after</div>`;
     render(template);
     expect(document.body.innerHTML).to.equal(`<div><br>before<div>test</div><br>after</div>`);
   });
   
   it("nested templates", () => {
-    // @ts-ignore
     const nested = html`<div id="test">test</div>`;
-    // @ts-ignore
     const template = html`<div>${nested}</div>`;
     render(template);
     expect(document.body.innerHTML).to.equal(`<div><div id="test">test</div></div>`);
-    
-    // @ts-ignore
     const template1 = html`<span>${template}</span>`;
     render(template1);
     expect(document.body.innerHTML).to.equal(`<span><div><div id="test">test</div></div></span>`);
   });
 
   it("null should remove attribute", () => {
-    // @ts-ignore
     const template = (enable: any) => html`<div enabled=${enable}>test</div>`;
     render(template(true));
     expect(document.body.innerHTML).to.equal(`<div enabled="true">test</div>`);
@@ -101,16 +88,13 @@ describe("Templates", () => {
   
   it("setting event handler should work", () => {
     const handler = (e: any) => {};
-    // @ts-ignore
     const template = html`<div onclick=${handler}>test</div>`;
     render(template);
     expect((document.body.firstChild as any).onclick !== undefined).to.equal(true);
   });
   
   it("nested templates should update in place", () => {
-    // @ts-ignore
     const nested = (str: string) => html`<div class=nested>${str}</div>`;
-    // @ts-ignore
     const template = (str: string) => html`<div>${nested(str)}</div>`;
     render(template("test"));
     expect((document.body.firstChild as any).firstChild.firstChild.nodeValue).to.equal("test");
@@ -119,8 +103,7 @@ describe("Templates", () => {
   });
   
   it("attribute directives should work as expected", () => {
-    // @ts-ignore
-    const template = (str: string) => html`<div id=${part => part.update(str)}>test</div>`;
+    const template = (str: string) => html`<div id=${Directive(part => part.update(str))}>test</div>`;
     render(template("test"));
     expect((document.body.firstChild as any).id).to.equal("test");
     render(template("test1"));
@@ -130,7 +113,6 @@ describe("Templates", () => {
   it("templates should be able to start and end with parts", () => {
     const t1 = "test";
     const t2 = "test1";
-    // @ts-ignore
     const template = html`${t1} and ${t2}`;
     render(template);
     expect(document.body.innerHTML).to.equal("test and test1");
@@ -140,7 +122,6 @@ describe("Templates", () => {
     const f1 = document.createDocumentFragment();
     f1.appendChild(document.createTextNode("test"));
     f1.appendChild(document.createTextNode("test1"));
-    // @ts-ignore
     const template = (frag: DocumentFragment) => html`<div>${frag}</div>`;
     render(template(f1));
     expect(document.body.innerHTML).to.equal("<div>testtest1</div>");
@@ -156,7 +137,6 @@ describe("Templates", () => {
     const str = "test";
     const div = document.createElement("div");
     div.id = "test";
-    // @ts-ignore
     const template = (p: any) => html`<div>${p}</div>`;
     render(template(str));
     expect(document.body.innerHTML).to.equal("<div>test</div>");
@@ -166,15 +146,13 @@ describe("Templates", () => {
 
   it("directives", () => {
     let lastPart;
-    // @ts-ignore
-    const template = html`<div>${part => {lastPart = part}}</div>`;
+    const template = html`<div>${Directive(part => {lastPart = part})}</div>`;
     render(template);
     lastPart.update("test");
     expect(document.body.firstChild.firstChild.nodeValue).to.equal("test");
     lastPart.update("test123");
     expect(document.body.firstChild.firstChild.nodeValue).to.equal("test123");
   });
-  /*
   it("arrays", () => {
     const arr = [1, 2 ,3];
     const template = html`<div>${arr}</div>`;
@@ -186,6 +164,5 @@ describe("Templates", () => {
     render(template);
     expect(document.body.innerHTML).to.equal("<div>321</div>");
   });
-  */
 });
 
