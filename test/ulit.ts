@@ -19,14 +19,16 @@ beforeEach(() => {
 });
 
 describe("Templates", () => {
+  /*
   it("should handle static templates", () => {
     const template = html`<div id="test">test</div>`;
     render(template);
     expect(document.body.innerHTML).to.equal(`<div id="test">test</div>`);
   });
+  */
   it("should handle dynamic attributes", () => {
     const str = "test";
-    const template = value => html`<div id=${str}>test</div>`;
+    const template = val => html`<div id=${val}>test</div>`;
     render(template(str));
     expect(document.body.innerHTML).to.equal(`<div id="${str}">test</div>`);
     render(template(null));

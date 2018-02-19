@@ -13,6 +13,7 @@ const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 const DOCUMENT_FRAGMENT = 11;
+const EMPTY_STRING = "";
 export type Optional<T> = T | undefined | null;
 export type Key = symbol | string | number;
 export interface IDirective {
@@ -36,7 +37,7 @@ interface ISerialCacheEntry {
   template: HTMLTemplateElement;
   serializedParts: ISerializedPart[];
 }
-export type PrimitivePart = string | Node | DocumentFragment;
+export type PrimitivePart = boolean | number | string | Node | DocumentFragment;
 export type PartValue =
   | PrimitivePart
   | IPartPromise
@@ -256,24 +257,23 @@ function updateAttribute(part: Part, value: Optional<PartValue>) {
   }
   const name = part.path[part.path.length - 1] as string;
   const isSVG = part.isSVG;
-  if (isEventPart(part)) {
-    if (isFunction(value) && name in element && !isSVG) {
-      (element as any)[name] = value;
-      return;
-    } else {
-      fail();
-    }
-  } else {
-    if (value == null) {
+  if (!name) {
+    fail();
+  }
+  const isValFn = isFunction(value);
+  if (isValFn || (name in element && !isSVG)) {
+    try {
+      (element as any)[name] = !value && value !== false ? EMPTY_STRING : value;
+    } catch (_) {} // eslint-disable-line
+  }
+  if (!isValFn) {
+    if (!value && value !== false) {
       if (isSVG) {
         (element as HTMLElement).removeAttributeNS(SVG_NS, name);
       } else {
         (element as HTMLElement).removeAttribute(name);
       }
     } else {
-      if (!isString(value) && isFunction((value as any).toString)) {
-        value = (value as any).toString();
-      }
       if (isSVG) {
         (element as HTMLElement).setAttributeNS(SVG_NS, name, value as string);
       } else {
@@ -614,7 +614,7 @@ function getTemplateGeneratorFactory(
         const fragment = newTemplateEl.content;
         serial = {
           serializedParts: [],
-          template: newTemplateEl
+          template: newTemplateEl.cloneNode() as HTMLTemplateElement
         };
         walkDOM(
           fragment,
@@ -622,8 +622,7 @@ function getTemplateGeneratorFactory(
           templateSetup(serial.serializedParts, parts)
         );
         serialCache.set(id, serial as ISerialCacheEntry);
-
-        return new Template(id, serial.template.cloneNode(true) as HTMLTemplateElement, parts.slice(0), values);
+        return new Template(id, newTemplateEl, parts.slice(0), values);
       } else {
         const fragment = serial.template.content;
         parts = serial.serializedParts.map((pair, index) => {
@@ -633,7 +632,7 @@ function getTemplateGeneratorFactory(
           const start = Array.isArray(target) ? target[0] : target;
           return new Part(path, start as Node, index, isSVG);
         });
-        return new Template(id, serial.template, parts, values);
+        return new Template(id, serial.template.cloneNode(true) as HTMLTemplateElement, parts.slice(0), values);
       }
     };
     (newGenerator as ITemplateGenerator).id = id;
