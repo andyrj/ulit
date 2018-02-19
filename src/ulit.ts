@@ -267,7 +267,7 @@ function updateAttribute(part: Part, value: Optional<PartValue>) {
     } catch (_) {} // eslint-disable-line
   }
   if (!isValFn) {
-    if (!value && value !== false) {
+    if (!value) {
       if (isSVG) {
         (element as HTMLElement).removeAttributeNS(SVG_NS, name);
       } else {
@@ -623,7 +623,8 @@ function getTemplateGeneratorFactory(
         serialCache.set(id, serial as ISerialCacheEntry);
         return new Template(id, newTemplateEl, parts.slice(0), values);
       } else {
-        const fragment = serial.template.content;
+        const cTemplate = serial.template.cloneNode(true) as HTMLTemplateElement;
+        const fragment = cTemplate.content;
         parts = serial.serializedParts.map((pair, index) => {
           const path = pair[0];
           const isSVG = pair[1];
@@ -631,7 +632,7 @@ function getTemplateGeneratorFactory(
           const start = Array.isArray(target) ? target[0] : target;
           return new Part(path, start as Node, index, isSVG);
         });
-        return new Template(id, serial.template.cloneNode(true) as HTMLTemplateElement, parts.slice(0), values);
+        return new Template(id, cTemplate, parts.slice(0), values);
       }
     };
     (newGenerator as ITemplateGenerator).id = id;
@@ -646,8 +647,7 @@ export function html(
   strs: TemplateStringsArray,
   ...exprs: PartValue[]
 ): ITemplateGenerator {
-  const id = getId(strs.toString());
-  return getTemplateGeneratorFactory(id, strs)(exprs);
+  return getTemplateGeneratorFactory(getId(strs.toString()), strs)(exprs);
 }
 
 export function defaultKeyFn(index: number): Key {

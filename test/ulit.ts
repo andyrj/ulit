@@ -19,22 +19,19 @@ beforeEach(() => {
 });
 
 describe("Templates", () => {
-  /*
   it("should handle static templates", () => {
     const template = html`<div id="test">test</div>`;
     render(template);
     expect(document.body.innerHTML).to.equal(`<div id="test">test</div>`);
   });
-  */
   it("should handle dynamic attributes", () => {
     const str = "test";
     const template = val => html`<div id=${val}>test</div>`;
     render(template(str));
     expect(document.body.innerHTML).to.equal(`<div id="${str}">test</div>`);
-    render(template(undefined));
+    render(template(null));
     expect(document.body.innerHTML).to.equal(`<div>test</div>`);
   });
-  /*
   it("should handle dynamic template with string child", () => {
     const str = "test";
     // @ts-ignore
@@ -177,7 +174,6 @@ describe("Templates", () => {
     lastPart.update("test123");
     expect(document.body.firstChild.firstChild.nodeValue).to.equal("test123");
   });
-  */
   /*
   it("arrays", () => {
     const arr = [1, 2 ,3];
