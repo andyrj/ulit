@@ -31,7 +31,7 @@ describe("Templates", () => {
     const template = val => html`<div id=${val}>test</div>`;
     render(template(str));
     expect(document.body.innerHTML).to.equal(`<div id="${str}">test</div>`);
-    render(template(null));
+    render(template(undefined));
     expect(document.body.innerHTML).to.equal(`<div>test</div>`);
   });
   /*

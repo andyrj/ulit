@@ -364,8 +364,7 @@ function updateNode(part: Part, value: Optional<PartValue>) {
 const partParentCache = new Map<Part, Template>();
 
 export class Part extends DomTarget {
-  public parent: Optional<Template> = undefined;
-  public value: Optional<PartValue>;
+  public value: PartValue;
   public path: Array<string | number>;
   constructor(
     path: Array<string | number>,
@@ -380,11 +379,9 @@ export class Part extends DomTarget {
     this.end = target;
   }
   public update(
-    value?: Optional<PartValue>,
-    index?: number,
-    parent?: Template
+    value?: PartValue
   ) {
-    if (!value) {
+    if (value === undefined) {
       value = this.value;
     }
     if (isDirective(value)) {
@@ -500,15 +497,17 @@ export class Template extends DomTarget {
   ) {
     super();
   }
-  public update(newValues?: Optional<PartValue[]>) {
-    newValues = newValues || this.values;
+  public update(newValues?: PartValue[]) {
+    if (newValues === undefined) {
+      newValues = this.values;
+    }
     const templateParts = this.parts as Part[];
     let i = 0;
     const len = templateParts.length;
     for (; i < len; i++) {
       const part = templateParts[i];
       const newVal = newValues ? newValues[i] : undefined;
-      part.update(newVal, i, this);
+      part.update(newVal);
     }
   }
 }
@@ -643,20 +642,12 @@ function getTemplateGeneratorFactory(
   return newTemplateGeneratorFactory;
 }
 
-const templateGeneratorCache = new Map<number, ITemplateGenerator>();
 export function html(
   strs: TemplateStringsArray,
   ...exprs: PartValue[]
 ): ITemplateGenerator {
   const id = getId(strs.toString());
-  const generator = templateGeneratorCache.get(id);
-  if (generator) {
-    return generator;
-  }
-  const factory = getTemplateGeneratorFactory(id, strs);
-  const newGenerator = factory(exprs);
-  templateGeneratorCache.set(id, newGenerator);
-  return newGenerator;
+  return getTemplateGeneratorFactory(id, strs)(exprs);
 }
 
 export function defaultKeyFn(index: number): Key {
@@ -683,6 +674,8 @@ export function render(
   }
   const instance = renderedCache.get(container);
   if (instance && instance.id === view.id) {
+    // TODO: the way we cache exprs on the template generators won't work...
+    //  maybe instead we should cache them in a map?
     instance.update(view.exprs);
     return;
   }
