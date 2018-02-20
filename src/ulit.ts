@@ -293,10 +293,36 @@ function updateArray(part: Part, value: Optional<PartValue[]>) {
   if (!value) {
     return;
   }
-  repeat(value)(part);
+  const directive = repeat(value);
+  part.value = directive;
+  return directive(part);
 }
 
 function updateTemplate(part: Part, value: ITemplateGenerator) {
+  const first = part.first();
+  const parent = first.parentNode;
+  if (!parent) {
+    fail();
+  }
+  const instance = isTemplate(part.value) ? part.value : undefined;
+  if (instance && instance.id === value.id) {
+    instance.update(value.exprs);
+    return;
+  }
+  const template = value();
+  if (isTemplateElement(template.element)) {
+    const fragment = template.element.content;
+    const newStart = template.first();
+    const newEnd = template.last();
+    (parent as Node).insertBefore(fragment, first);
+    part.start = newStart;
+    part.end = newEnd;
+    part.value = template;
+  } else {
+    fail();
+  }
+  // TODO: rewrite without renderedCache... instead store instance in part.value
+  /*
   const first = part.first();
   const parent = first.parentNode;
   if (!parent) {
@@ -319,9 +345,11 @@ function updateTemplate(part: Part, value: ITemplateGenerator) {
   } else {
     fail();
   }
+  */
 }
 
 function updateNode(part: Part, value: Optional<PartValue>) {
+  // Error condition: isText(part.value) && isNode(value) -> doesn't remove the text node...
   if (value == null) {
     value = document.createComment(`${PART_START}${PART_END}`);
   }
@@ -330,47 +358,47 @@ function updateNode(part: Part, value: Optional<PartValue>) {
   if (parent == null) {
     fail();
   }
+  let newStart: Optional<Node> = undefined;
+  let newEnd: Optional<Node> = undefined;
+  const partValue = part.value;
   if (!isNode(value)) {
+    // string or coerce to string
+    value =
+      !isString(value) && isFunction(value.toString) ? value.toString() : value;
     if (!isString(value)) {
-      if (isFunction((value as any).toString)) {
-        value = (value as any).toString();
-      }
-      if (!isString(value)) {
-        fail();
-      }
-    }
-    if (isText(first)) {
-      if (first.textContent !== value) {
-        first.textContent = value as string;
-      }
-    } else {
-      const newTextNode = document.createTextNode(value as string);
-      (parent as Node).insertBefore(newTextNode, first); // working around fail(): never not propagating as expected...
-      part.remove();
-      part.start = newTextNode;
-      part.end = newTextNode;
-    }
-  } else {
-    const isFrag = isDocumentFragment(value);
-    if (!isFrag && first === value) {
-      return; // early return value is already present in dom no need to replace it...
-    }
-    const newStart = isFrag ? value.firstChild : first;
-    const newEnd = isFrag ? value.lastChild : first;
-    if (!newStart || !newEnd) {
       fail();
     }
-    (parent as Node).insertBefore(value, first);
+    if (isText(partValue)) {
+      if (partValue.nodeValue !== value) {
+        partValue.nodeValue = value as string;
+      }
+    } else {
+      value = document.createTextNode(value as string);
+      newStart = value;
+      newEnd = value;
+    }
+  }
+  if (!isNode(value)) {
+    fail();
+  }
+  if (value !== partValue) {
+    if (!isText(value)) {
+      const isFrag = isDocumentFragment(value);
+      newStart = isFrag ? (value as Node).firstChild : (value as Node);
+      newEnd = isFrag ? (value as Node).lastChild : (value as Node);
+    }
+    // TODO: figure out why it's removing the wrong nodes here...
+    (parent as Node).insertBefore(value as Node, first);
     part.remove();
+    part.value = value;
     part.start = newStart;
     part.end = newEnd;
   }
 }
 
-const partParentCache = new Map<Part, Template>();
-
+const partParentCache = new WeakMap<Part, Template>();
 export class Part extends DomTarget {
-  public value: PartValue;
+  public value: PartValue | Template;
   public path: Array<string | number>;
   constructor(
     path: Array<string | number>,
@@ -385,7 +413,7 @@ export class Part extends DomTarget {
     this.end = target;
   }
   public update(value?: PartValue) {
-    if (value === undefined) {
+    if (arguments.length === 0 && !isTemplate(this.value)) {
       value = this.value;
     }
     if (isDirective(value)) {
@@ -407,14 +435,12 @@ export class Part extends DomTarget {
       if (Array.isArray(value)) {
         updateArray(this, value);
       }
-
       if (isTemplateGenerator(value)) {
         updateTemplate(this, value);
       } else {
         updateNode(this, value);
       }
     }
-    this.value = value;
   }
 }
 
@@ -501,8 +527,8 @@ export class Template extends DomTarget {
   ) {
     super();
   }
-  public update(newValues?: PartValue[]) {
-    if (newValues === undefined) {
+  public update(newValues?: Optional<PartValue[]>) {
+    if (arguments.length === 0) {
       newValues = this.values;
     }
     const templateParts = this.parts as Part[];
@@ -512,6 +538,9 @@ export class Template extends DomTarget {
       const part = templateParts[i];
       const newVal = newValues ? newValues[i] : undefined;
       part.update(newVal);
+    }
+    if (newValues != null) {
+      this.values = newValues;
     }
   }
 }
@@ -590,6 +619,7 @@ function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
   return;
 }
 
+/*
 const serialCache = new Map<number, ISerialCacheEntry>();
 const templateGeneratorFactoryCache = new Map<
   number,
@@ -648,12 +678,35 @@ function getTemplateGeneratorFactory(
   templateGeneratorFactoryCache.set(id, newTemplateGeneratorFactory);
   return newTemplateGeneratorFactory;
 }
-
+*/
 export function html(
-  strs: TemplateStringsArray,
-  ...exprs: PartValue[]
+  strings: TemplateStringsArray,
+  ...expressions: PartValue[]
 ): ITemplateGenerator {
-  return getTemplateGeneratorFactory(getId(strs.toString()), strs)(exprs);
+  // return getTemplateGeneratorFactory(getId(strs.toString()), strs)(exprs);
+  const id = getId(strings.toString());
+  const markUp = strings.join("{{}}");
+  const factory = function(exprs: PartValue[]) {
+    const templateGenerator = function() {
+      const templateElement = document.createElement(
+        TEMPLATE
+      ) as HTMLTemplateElement;
+      templateElement.innerHTML = markUp;
+      const fragment = templateElement.content;
+      // serial = {
+      //   serializedParts: [],
+      //   template: newTemplateEl.cloneNode() as HTMLTemplateElement
+      // };
+      const parts: Part[] = [];
+      const serializedParts: Array<[Array<string | number>, boolean]> = [];
+      walkDOM(fragment, undefined, templateSetup(serializedParts, parts));
+      return new Template(id, templateElement, parts, exprs);
+    };
+    (templateGenerator as ITemplateGenerator).id = id;
+    (templateGenerator as ITemplateGenerator).exprs = expressions;
+    return templateGenerator as ITemplateGenerator;
+  };
+  return factory(expressions);
 }
 
 export function defaultKeyFn(index: number): Key {
@@ -664,7 +717,7 @@ export function defaultTemplateFn(item: PartValue): ITemplateGenerator {
   return html`${item}`;
 }
 
-const renderedCache = new WeakMap<Node | Part, Template>();
+// const renderedCache = new WeakMap<Node | Part, Template>();
 export function render(
   view: PartValue | PartValue[] | Iterable<PartValue>,
   container?: Optional<Node>
@@ -672,18 +725,26 @@ export function render(
   if (!container) {
     container = document.body;
   }
+  if (isIterable(view)) {
+    view = Array.from(view as any);
+  }
   if (!isTemplateGenerator(view)) {
     view = defaultTemplateFn(view as PartValue);
     if (!isTemplateGenerator(view)) {
       fail();
     }
   }
-  const instance = renderedCache.get(container);
-  if (instance && instance.id === (view as ITemplateGenerator).id) {
-    instance.update((view as ITemplateGenerator).exprs);
-    return;
+  const instance = (container as any).__template; // renderedCache.get(container);
+  // TODO: re-write with expanded if structure nested here for id test...
+  if (instance) {
+    if (instance.id === (view as ITemplateGenerator).id) {
+      instance.update((view as ITemplateGenerator).exprs);
+      return;
+    } else {
+      instance.remove();
+      (container as any).__template = undefined;
+    }
   }
-  // replace instance with view
   const template = (view as ITemplateGenerator)(
     (view as ITemplateGenerator).exprs
   );
@@ -698,20 +759,16 @@ export function render(
     const newStart = isPartComment(fragmentFirst)
       ? template.parts[0]
       : fragmentFirst;
-    const newEnd = isPartComment(fragment.lastChild)
+    const newEnd = isPartComment(fragmentLast)
       ? template.parts[template.parts.length - 1]
       : fragmentLast;
     (parent as Node).insertBefore(fragment, first);
-    if (instance) {
-      instance.remove();
-      instance.start = newStart;
-      instance.end = newEnd;
-      instance.values = template.values;
-    } else {
-      template.start = newStart;
-      template.end = newEnd;
-      renderedCache.set(container, template);
-    }
+    // if (instance) {
+    //   instance.remove();
+    // }
+    template.start = newStart;
+    template.end = newEnd;
+    (container as any).__template = template;
   } else {
     fail();
   }
