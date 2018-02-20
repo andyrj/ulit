@@ -321,31 +321,6 @@ function updateTemplate(part: Part, value: ITemplateGenerator) {
   } else {
     fail();
   }
-  // TODO: rewrite without renderedCache... instead store instance in part.value
-  /*
-  const first = part.first();
-  const parent = first.parentNode;
-  if (!parent) {
-    fail();
-  }
-  const instance = renderedCache.get(part);
-  if (instance && instance.id === value.id) {
-    instance.update(value.exprs);
-    return;
-  }
-  const template = value();
-  if (isTemplateElement(template.element)) {
-    const fragment = template.element.content;
-    const newStart = template.first();
-    const newEnd = template.last();
-    (parent as Node).insertBefore(fragment, first);
-    part.start = newStart;
-    part.end = newEnd;
-    renderedCache.set(part, template);
-  } else {
-    fail();
-  }
-  */
 }
 
 function updateNode(part: Part, value: Optional<PartValue>) {
@@ -619,71 +594,10 @@ function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
   return;
 }
 
-/*
-const serialCache = new Map<number, ISerialCacheEntry>();
-const templateGeneratorFactoryCache = new Map<
-  number,
-  ITemplateGeneratorFactory
->();
-type ITemplateGeneratorFactory = (exprs: PartValue[]) => ITemplateGenerator;
-function getTemplateGeneratorFactory(
-  id: number,
-  strs: TemplateStringsArray
-): ITemplateGeneratorFactory {
-  const cacheEntry = templateGeneratorFactoryCache.get(id);
-  if (cacheEntry) {
-    return cacheEntry;
-  }
-  const markUp = strs.join(PART_MARKER);
-  const newTemplateGeneratorFactory: ITemplateGeneratorFactory = (
-    exprs: PartValue[]
-  ) => {
-    const newGenerator = (values: PartValue[]) => {
-      let serial = serialCache.get(id) || getSerializedTemplate(id);
-      let parts: Part[] = [];
-      if (serial == null) {
-        const newTemplateEl = document.createElement(TEMPLATE);
-        newTemplateEl.innerHTML = markUp;
-        const fragment = newTemplateEl.content;
-        serial = {
-          serializedParts: [],
-          template: newTemplateEl.cloneNode() as HTMLTemplateElement
-        };
-        walkDOM(
-          fragment,
-          undefined,
-          templateSetup(serial.serializedParts, parts)
-        );
-        serialCache.set(id, serial as ISerialCacheEntry);
-        return new Template(id, newTemplateEl, parts.slice(0), values);
-      } else {
-        const cTemplate = serial.template.cloneNode(
-          true
-        ) as HTMLTemplateElement;
-        const fragment = cTemplate.content;
-        parts = serial.serializedParts.map((pair, index) => {
-          const path = pair[0];
-          const isSVG = pair[1];
-          const target = followPath(fragment, path);
-          const start = Array.isArray(target) ? target[0] : target;
-          return new Part(path, start as Node, index, isSVG);
-        });
-        return new Template(id, cTemplate, parts.slice(0), values);
-      }
-    };
-    (newGenerator as ITemplateGenerator).id = id;
-    (newGenerator as ITemplateGenerator).exprs = exprs;
-    return newGenerator as ITemplateGenerator;
-  };
-  templateGeneratorFactoryCache.set(id, newTemplateGeneratorFactory);
-  return newTemplateGeneratorFactory;
-}
-*/
 export function html(
   strings: TemplateStringsArray,
   ...expressions: PartValue[]
 ): ITemplateGenerator {
-  // return getTemplateGeneratorFactory(getId(strs.toString()), strs)(exprs);
   const id = getId(strings.toString());
   const markUp = strings.join("{{}}");
   const factory = function(exprs: PartValue[]) {
