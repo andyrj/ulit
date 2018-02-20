@@ -1,10 +1,12 @@
 import { Optional } from "./common";
+import { Disposable } from "./Disposable";
 import { isNode } from "./predicates";
 
-export class DomTarget {
+export class DomTarget extends Disposable {
   public start: Optional<Node | DomTarget> = undefined;
   public end: Optional<Node | DomTarget> = undefined;
   constructor(target?: Node, public isSVG: boolean = false) {
+    super();
     if (target) {
     }
   }

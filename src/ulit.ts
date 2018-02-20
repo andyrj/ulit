@@ -1,18 +1,433 @@
-import { fail, Optional, PART_MARKER, TEMPLATE } from "./common";
-import { defaultTemplateFn } from "./directives";
-import { Part, PartValue } from "./Part";
 import {
+  COMMENT_NODE,
+  EMPTY_STRING,
+  fail,
+  FOREIGN_OBJECT,
+  Optional,
+  PART_END,
+  PART_MARKER,
+  PART_START,
+  SERIAL_PART_START,
+  SVG,
+  SVG_NS,
+  TEMPLATE,
+  ULIT
+} from "./common";
+import { defaultTemplateFn, IDirective, repeat } from "./directives";
+import { DomTarget } from "./DomTarget";
+import {
+  isAttributePart,
+  isDirective,
+  isDocumentFragment,
+  isElementNode,
+  isEventPart,
+  isFunction,
   isIterable,
+  isNode,
+  isNumber,
   isPartComment,
+  isPromise,
+  isString,
+  isTemplate,
   isTemplateElement,
-  isTemplateGenerator
+  isTemplateGenerator,
+  isText
 } from "./predicates";
-import {
-  ITemplateGenerator,
-  Template,
-  templateSetup,
-  walkDOM
-} from "./Template";
+
+export interface ITemplateGenerator {
+  (values?: PartValue[]): Template;
+  id: number;
+  exprs: PartValue[];
+}
+export type WalkFn = (
+  parent: Node,
+  element: Node | null | undefined,
+  path: Array<string | number>
+) => boolean;
+export type ISerializedPart = [Array<string | number>, boolean];
+export interface ISerialCacheEntry {
+  template: HTMLTemplateElement;
+  serializedParts: ISerializedPart[];
+}
+export function walkDOM(
+  parent: HTMLElement | DocumentFragment,
+  element: Node | null | undefined,
+  fn: WalkFn,
+  path: Array<number | string> = []
+) {
+  let condition = true;
+  if (element) {
+    condition = fn(parent, element, path);
+  } else {
+    element = parent;
+  }
+  if (!condition || !element) {
+    fail();
+  }
+  [].forEach.call(element.childNodes, (child: Node, index: number) => {
+    path.push(index);
+    walkDOM(element as HTMLElement, child, fn, path);
+    path.pop();
+  });
+}
+export function templateSetup(
+  serial: ISerializedPart[],
+  parts: Part[]
+): WalkFn {
+  return (parent, element, walkPath) => {
+    const isSVG = isNodeSVGChild(element);
+    if (isText(element)) {
+      const text = element && element.nodeValue;
+      const split = text && text.split(PART_MARKER);
+      const end = split ? split.length - 1 : undefined;
+      const nodes: Node[] = [];
+      let cursor = 0;
+      if (split && split.length > 0 && end) {
+        split.forEach((node, i) => {
+          if (node !== "") {
+            nodes.push(document.createTextNode(node));
+            cursor++;
+          }
+          if (i < end) {
+            const newPartComment = document.createComment(PART_MARKER);
+            nodes.push(newPartComment);
+            const adjustedPath = walkPath.slice(0);
+            const len = adjustedPath.length - 1;
+            (adjustedPath[len] as number) += cursor;
+            serial.push([adjustedPath, isSVG]);
+            parts.push(
+              new Part(adjustedPath, newPartComment, parts.length, isSVG)
+            );
+            cursor++;
+          }
+        });
+        nodes.forEach(node => {
+          parent.insertBefore(node, element as Node);
+        });
+        if (!element) {
+          fail();
+        } else {
+          parent.removeChild(element);
+        }
+      }
+    } else if (isElementNode(element)) {
+      if (!element) {
+        fail();
+      } else {
+        [].forEach.call(element.attributes, (attr: Attr) => {
+          if (attr.nodeValue === PART_MARKER) {
+            const attrPath = walkPath.concat(attr.nodeName);
+            serial.push([attrPath, isSVG]);
+            parts.push(new Part(attrPath, element, parts.length, isSVG));
+          }
+        });
+      }
+    }
+    return true;
+  };
+}
+
+function isNodeSVGChild(node: Optional<Node>): boolean {
+  if (!node) {
+    return false;
+  }
+  let result = false;
+  let current: Optional<Node> = node;
+  while (current) {
+    if (current.nodeName === SVG) {
+      result = true;
+      current = undefined;
+    } else if (current.nodeName === FOREIGN_OBJECT) {
+      result = false;
+      current = undefined;
+    } else {
+      current = current.parentNode;
+    }
+  }
+  return result;
+}
+
+type NodeAttribute = [Node, string];
+function followPath(
+  target: Node,
+  pointer: Array<string | number>
+): Optional<Node | NodeAttribute> | never {
+  if (!target) {
+    throw new RangeError();
+  }
+  const cPath = pointer.slice(0);
+  const current = cPath.shift() as string | number;
+  if (isNumber(current)) {
+    if (cPath.length === 0) {
+      return target.childNodes[current];
+    } else {
+      return followPath(target.childNodes[current], cPath);
+    }
+  } else if (isString(current)) {
+    if (cPath.length === 0) {
+      return [target, current];
+    } else {
+      fail();
+    }
+  }
+  fail();
+  return; // satisifying typescript, can't be reached anyways... ><
+}
+
+function isFirstChildSerial(parent: DocumentFragment): boolean {
+  const child = parent.firstChild;
+  return (child &&
+    child.nodeType === COMMENT_NODE &&
+    child.nodeValue &&
+    child.nodeValue.startsWith(SERIAL_PART_START)) as boolean;
+}
+
+function parseSerializedParts(value?: string): ISerializedPart[] {
+  if (!value) {
+    return [];
+  } else {
+    return JSON.parse(
+      value.split(SERIAL_PART_START)[1].slice(0, -2)
+    ) as ISerializedPart[];
+  }
+}
+
+function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
+  const el = document.getElementById(`${ULIT}${id}`) as HTMLTemplateElement;
+  if (!el) {
+    return;
+  }
+  const fragment = (el.cloneNode(true) as HTMLTemplateElement).content;
+  if (!fragment) {
+    return;
+  }
+  const first = fragment.firstChild;
+  if (!first) {
+    return;
+  }
+  const isFirstSerial = isFirstChildSerial(fragment);
+  let deserialized: Optional<ISerialCacheEntry> = undefined;
+  if (isFirstSerial) {
+    const fc = fragment.removeChild(first);
+    const serializedParts = parseSerializedParts(fc.nodeValue || undefined);
+    const template = el as HTMLTemplateElement;
+    if (serializedParts && template) {
+      deserialized = { template, serializedParts };
+    }
+  }
+  if (deserialized) {
+    return deserialized;
+  }
+  return;
+}
+export class Template extends DomTarget {
+  constructor(
+    public id: number,
+    public element: HTMLTemplateElement,
+    public parts: Part[],
+    public values: PartValue[]
+  ) {
+    super();
+  }
+  public update(newValues?: Optional<PartValue[]>) {
+    if (arguments.length === 0) {
+      newValues = this.values;
+    }
+    const templateParts = this.parts as Part[];
+    let i = 0;
+    const len = templateParts.length;
+    for (; i < len; i++) {
+      const part = templateParts[i];
+      const newVal = newValues ? newValues[i] : undefined;
+      part.update(newVal);
+    }
+    if (newValues != null) {
+      this.values = newValues;
+    }
+  }
+}
+
+
+export type Key = symbol | string | number;
+export type PrimitivePart =
+  | boolean
+  | number
+  | string
+  | Node
+  | DocumentFragment
+  | Function;
+export type PartValue =
+  | PrimitivePart
+  | IPartPromise
+  | IDirective
+  | IPartArray
+  | ITemplateGenerator;
+export interface IPartPromise extends Promise<PartValue> {}
+export interface IPartArray extends Array<PartValue> {}
+export type KeyFn = (item: any, index?: number) => Key;
+export type TemplateFn = (item: any) => ITemplateGenerator;
+
+function updateAttribute(part: Part, value: Optional<PartValue>) {
+  const element = part.start as Node;
+  if (!element) {
+    fail();
+  }
+  const name = part.path[part.path.length - 1] as string;
+  const isSVG = part.isSVG;
+  if (!name) {
+    fail();
+  }
+  const isValFn = isFunction(value);
+  if ((isEventPart(part) && isValFn) || (name in element && !isSVG)) {
+    try {
+      (element as any)[name] = !value && value !== false ? EMPTY_STRING : value;
+    } catch (_) {} // eslint-disable-line
+  }
+  if (!isValFn) {
+    if (!value) {
+      if (isSVG) {
+        (element as HTMLElement).removeAttributeNS(SVG_NS, name);
+      } else {
+        (element as HTMLElement).removeAttribute(name);
+      }
+    } else {
+      if (isSVG) {
+        (element as HTMLElement).setAttributeNS(SVG_NS, name, value as string);
+      } else {
+        (element as HTMLElement).setAttribute(name, value as string);
+      }
+    }
+  }
+}
+
+function updateArray(part: Part, value: Optional<PartValue[]>) {
+  if (!value) {
+    return;
+  }
+  const directive = repeat(value);
+  part.value = directive;
+  return directive(part);
+}
+
+function updateTemplate(part: Part, value: ITemplateGenerator) {
+  const first = part.first();
+  const parent = first.parentNode;
+  if (!parent) {
+    fail();
+  }
+  const instance = isTemplate(part.value) ? part.value : undefined;
+  if (instance && (instance as Template).id === value.id) {
+    (instance as Template).update(value.exprs);
+    return;
+  }
+  const template = value();
+  if (isTemplateElement(template.element)) {
+    const fragment = template.element.content;
+    const newStart = template.first();
+    const newEnd = template.last();
+    (parent as Node).insertBefore(fragment, first);
+    part.start = newStart;
+    part.end = newEnd;
+    part.value = template;
+  } else {
+    fail();
+  }
+}
+
+function updateNode(part: Part, value: Optional<PartValue>) {
+  // Error condition: isText(part.value) && isNode(value) -> doesn't remove the text node...
+  if (value == null) {
+    value = document.createComment(`${PART_START}${PART_END}`);
+  }
+  const first = part.first();
+  const parent = first.parentNode;
+  if (parent == null) {
+    fail();
+  }
+  let newStart: Optional<Node> = undefined;
+  let newEnd: Optional<Node> = undefined;
+  const partValue = part.value;
+  if (!isNode(value)) {
+    // string or coerce to string
+    value =
+      !isString(value) && isFunction(value.toString) ? value.toString() : value;
+    if (!isString(value)) {
+      fail();
+    }
+    if (isText(partValue)) {
+      if (partValue.nodeValue !== value) {
+        partValue.nodeValue = value as string;
+      }
+    } else {
+      value = document.createTextNode(value as string);
+      newStart = value;
+      newEnd = value;
+    }
+  }
+  if (!isNode(value)) {
+    fail();
+  }
+  if (value !== partValue) {
+    if (!isText(value)) {
+      const isFrag = isDocumentFragment(value);
+      newStart = isFrag ? (value as Node).firstChild : (value as Node);
+      newEnd = isFrag ? (value as Node).lastChild : (value as Node);
+    }
+    // TODO: figure out why it's removing the wrong nodes here...
+    (parent as Node).insertBefore(value as Node, first);
+    // part.remove();
+    part.value = value;
+    // part.start = newStart;
+    // part.end = newEnd;
+  }
+}
+
+export class Part extends DomTarget {
+  public value: PartValue | Template;
+  public path: Array<string | number>;
+  constructor(
+    path: Array<string | number>,
+    target: Node,
+    index: number = -1,
+    public isSVG: boolean = false
+  ) {
+    super();
+    this.path = path.slice(0);
+    this.value = target;
+    // this.start = target;
+    // this.end = target;
+  }
+  public update(value?: PartValue) {
+    if (arguments.length === 0 && !isTemplate(this.value)) {
+      value = this.value;
+    }
+    if (isDirective(value)) {
+      (value as IDirective)(this);
+      return;
+    }
+    if (isPromise(value)) {
+      (value as Promise<PartValue>).then(promised => {
+        this.update(promised);
+      });
+      return;
+    }
+    if (isAttributePart(this)) {
+      updateAttribute(this, value);
+    } else {
+      if (isIterable(value)) {
+        value = Array.from(value as any);
+      }
+      if (Array.isArray(value)) {
+        updateArray(this, value);
+      }
+      if (isTemplateGenerator(value)) {
+        updateTemplate(this, value as ITemplateGenerator);
+      } else {
+        updateNode(this, value);
+      }
+    }
+  }
+}
 
 const idCache = new Map<string, number>();
 function getId(str: string): number {

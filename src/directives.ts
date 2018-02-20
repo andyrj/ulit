@@ -1,8 +1,6 @@
 import { DIRECTIVE, fail } from "./common";
-import { Key, KeyFn, Part, PartValue, TemplateFn } from "./Part";
-import { isTemplateElement } from "./predicates";
-import { ITemplateGenerator, Template } from "./Template";
-import { html } from "./ulit";
+import { isTemplate, isTemplateElement } from "./predicates";
+import { html, ITemplateGenerator, Key, KeyFn, Part, PartValue, Template, TemplateFn } from "./ulit";
 
 export interface IDirective {
   (part: Part): void;
