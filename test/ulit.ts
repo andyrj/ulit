@@ -29,6 +29,7 @@ describe("render", () => {
     render(test1);
     expect(document.body.innerHTML).to.equal(`<div id="test">test</div>`);
   });
+  /*
   it("should handle defaultTemplateFn", () => {
     const test2 = "test2";
     const div = document.createElement("div");
@@ -37,7 +38,6 @@ describe("render", () => {
     render(defaultTemplateFn(div));
     expect(document.body.firstChild).to.equal(div);
   });
-  /*
   it("should handle attribute parts", () => {
     const str = "test3";
     const test3 = val => html`<div id=${val}></div>`;
