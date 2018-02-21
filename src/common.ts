@@ -23,3 +23,48 @@ export function fail(msg?: Optional<string>): never {
     throw new RangeError();
   }
 }
+
+export type WalkFn = (
+  parent: Node,
+  element: Node | null | undefined,
+  path: Array<string | number>
+) => boolean;
+
+export function walkDOM(
+  parent: HTMLElement | DocumentFragment,
+  element: Node | null | undefined,
+  fn: WalkFn,
+  path: Array<number | string> = []
+) {
+  let condition = true;
+  if (element) {
+    condition = fn(parent, element, path);
+  } else {
+    element = parent;
+  }
+  if (!condition || !element) {
+    fail();
+  }
+  [].forEach.call(element.childNodes, (child: Node, index: number) => {
+    path.push(index);
+    walkDOM(element as HTMLElement, child, fn, path);
+    path.pop();
+  });
+}
+
+const idCache = new Map<string, number>();
+export function getId(str: string): number {
+  if (idCache.has(str)) {
+    return idCache.get(str) as number;
+  }
+  let id = 0;
+  if (str.length > 0) {
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      id = (id << 5) - id + char;
+      id = id & id;
+    }
+  }
+  idCache.set(str, id);
+  return id;
+}

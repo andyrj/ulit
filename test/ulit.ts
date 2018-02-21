@@ -1,3 +1,4 @@
+/*
 import { expect } from "chai";
 import "mocha";
 import { 
@@ -24,12 +25,12 @@ import {
 // });
 
 describe("render", () => {
+  /*
   it("should handle static templates", () => {
     const test1 = html`<div id="test">test</div>`;
     render(test1);
     expect(document.body.innerHTML).to.equal(`<div id="test">test</div>`);
   });
-  /*
   it("should handle defaultTemplateFn", () => {
     const test2 = "test2";
     const div = document.createElement("div");
@@ -163,5 +164,5 @@ describe("render", () => {
     expect(document.body.innerHTML).to.equal("<div>321</div>");
   });
   */
-});
+// });
 
