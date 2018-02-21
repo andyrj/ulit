@@ -26,13 +26,13 @@ export function fail(msg?: Optional<string>): never {
 
 export type WalkFn = (
   parent: Node,
-  element: Node | null | undefined,
+  element: Optional<Node>,
   path: Array<string | number>
 ) => boolean;
 
 export function walkDOM(
   parent: HTMLElement | DocumentFragment,
-  element: Node | null | undefined,
+  element: Optional<Node>,
   fn: WalkFn,
   path: Array<number | string> = []
 ) {

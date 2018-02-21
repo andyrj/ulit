@@ -1,6 +1,6 @@
 {
 	"compilerOptions": {
-		"outDir": "./dist/",
+    "outDir": "./dist/",
     "target": "es2015",
     "module": "esnext",
     "moduleResolution": "node",
@@ -20,7 +20,7 @@
     "inlineSources": true
 	},
 	"include": [
-		"src/**/*.ts"
+		"src/ulit.ts"
 	],
 	"exclude": [
 		"test/**/*.ts"

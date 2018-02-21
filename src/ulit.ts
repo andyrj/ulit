@@ -16,6 +16,7 @@ import {
 } from "./predicates";
 import { ITemplateGenerator, Template, templateSetup } from "./Template";
 
+export { repeat, until } from "./directives";
 export function html(
   strings: TemplateStringsArray,
   ...expressions: PartValue[]
