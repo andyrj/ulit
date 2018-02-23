@@ -734,7 +734,7 @@ export type WalkFn = (
   parent: Node,
   element: Optional<Node>,
   path: Array<string | number>
-) => boolean;
+) => void | never;
 
 export function walkDOM(
   parent: HTMLElement | DocumentFragment,
@@ -742,14 +742,10 @@ export function walkDOM(
   fn: WalkFn,
   path: Array<number | string> = []
 ) {
-  let condition = true;
-  if (element) {
-    condition = fn(parent, element, path);
-  } else {
+  if (!element) {
     element = parent;
-  }
-  if (!condition || !element) {
-    fail();
+  } else {
+    fn(parent, element, path);
   }
   [].forEach.call(element.childNodes, (child: Node, index: number) => {
     path.push(index);

@@ -143,10 +143,13 @@ describe("common", () => {
     expect(count).to.equal(4);
   });
 
-  it("walkDOM should throw if WalkFn fn returns falsey", () => {
+  it("walkDOM should throw if WalkFn throws", () => {
     const fragment = document.createDocumentFragment();
     const div = document.createElement("div");
-    const errWalkFn: WalkFn = (parent, element, path) => undefined;
+    fragment.appendChild(div);
+    const errWalkFn: WalkFn = (parent, element, path) => {
+      throw new Error()
+    };
     expect(() => walkDOM(fragment, undefined, errWalkFn)).to.throw();
   });
 });
