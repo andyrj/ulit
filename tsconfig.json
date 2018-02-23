@@ -1,9 +1,10 @@
 {
 	"compilerOptions": {
-    "outDir": "./dist/tsc",
+    "outDir": "./dist",
     "target": "es2015",
     "module": "es2015",
     "sourceMap": true,
+    "declaration": true,
     "experimentalDecorators": true,
     "strict": true,
     "strictNullChecks": true,

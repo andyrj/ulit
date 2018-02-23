@@ -1,3 +1,125 @@
+import { expect } from "chai";
+import "mocha";
+import { Disposable, DomTarget, fail, getId, IDisposer, Part, Template, walkDOM, WalkFn } from "../src/ulit";
+
+describe("DomTarget", () => {
+  it("should have {start, end, isSVG}", () => {
+    const test = new DomTarget();
+    expect(test.start).to.equal(undefined);
+    expect(test.end).to.equal(undefined);
+    const keys = Object.keys(test);
+    expect(keys.indexOf("end") > -1 && keys.indexOf("start") > -1).to.equal(true);
+    expect(test.isSVG).to.equal(false);
+  });
+  it("should initially set start and end to target in constructor", () => {
+    const comment = document.createComment("{{}}");;
+    const test = new DomTarget(comment);
+    expect(test.start).to.equal(comment);
+    expect(test.end).to.equal(comment);
+  });
+  it("should properly identify first and last", () => {
+    const fragment = document.createDocumentFragment();
+    const partNode = document.createComment("{{}}");
+    fragment.appendChild(partNode);
+    const t1 = new DomTarget();
+    t1.start = new Part([0], partNode, 0, false);
+    t1.end = new Part([1], partNode, 0, false);
+    expect(t1.first()).to.equal(partNode);
+    expect(t1.last()).to.equal(partNode);
+    t1.start = partNode;
+    t1.end = partNode;
+    expect(t1.first()).to.equal(partNode);
+    expect(t1.last()).to.equal(partNode);
+  });
+  it("should proplery remove itself from the dom", () => {
+    const fragment = document.createDocumentFragment();
+    const partNode = document.createComment("{{1}}");
+    fragment.appendChild(partNode);
+    const t1 = new DomTarget(partNode);
+    expect(t1.remove().firstChild.nodeValue).to.equal("{{1}}");
+    fragment.appendChild(partNode);
+    const partNode1 = document.createComment("{{2}}");
+    fragment.appendChild(partNode1);
+    t1.start = partNode;
+    t1.end = partNode1;
+    const removedFragment = t1.remove();
+    expect(removedFragment.firstChild).to.equal(partNode);
+    expect(removedFragment.lastChild).to.equal(partNode1);
+  })
+});
+
+describe("Disposable", () => {
+  it("should have {add,remove}Disposer", () => {
+    const test = new Disposable();
+    expect(typeof test.addDisposer).to.equal("function");
+    expect(typeof test.removeDisposer).to.equal("function");
+  });
+  it("should have dispose method", () => {
+    const test = new Disposable();
+    expect(typeof test.dispose).to.equal("function");
+  });
+  it("should call any disposers added when dispose is called", () => {
+    let count = 0;
+    const handler: IDisposer = () => {
+      count++;
+    };
+    const test = new Disposable();
+    test.addDisposer(handler);
+    test.dispose();
+    expect(count).to.equal(1);
+  });
+  it("should not call a disposer after it is removed", () => {
+    let count = 0;
+    const handler: IDisposer = () => {
+      count++;
+    };
+    const test = new Disposable();
+    test.addDisposer(handler);
+    test.removeDisposer(handler);
+    test.dispose();
+    expect(count).to.equal(0);
+  });
+});
+
+describe("common", () => {
+  it("should throw anytime fail is called", () => {
+    const fn = () => fail("test");
+    expect(fail).to.throw();
+    expect(fn).to.throw();
+  });
+
+  it("should always generate the same id for the same string", () => {
+    const str1 = "test1";
+    const str2 = "test2";
+    const result1 = getId(str1);
+    const result2 = getId(str2);
+    expect(getId(str1)).to.equal(result1);
+    expect(getId(str2)).to.equal(result2);
+  });
+
+  it("walkDOM should traverse all nodes in tree", () => {
+    const fragment = document.createDocumentFragment();
+    const d1 = document.createElement("div");
+    d1.appendChild(document.createElement("div"));
+    fragment.appendChild(d1);
+    fragment.appendChild(document.createElement("div"));
+    fragment.appendChild(document.createElement("div"));
+    let count = 0;
+    const walkIt: WalkFn = () => {
+      count++;
+      return true;
+    };
+    walkDOM(fragment, undefined, walkIt);
+    expect(count).to.equal(4);
+  });
+
+  it("walkDOM should throw if WalkFn fn returns falsey", () => {
+    const fragment = document.createDocumentFragment();
+    const div = document.createElement("div");
+    const errWalkFn: WalkFn = (parent, element, path) => undefined;
+    expect(() => walkDOM(fragment, undefined, errWalkFn)).to.throw();
+  });
+});
 /*
 import { expect } from "chai";
 import "mocha";
