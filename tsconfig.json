@@ -3,6 +3,7 @@
     "outDir": "./dist",
     "target": "es2015",
     "module": "es2015",
+    "moduleResolution": "node",
     "sourceMap": true,
     "declaration": true,
     "experimentalDecorators": true,

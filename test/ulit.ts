@@ -2,6 +2,10 @@ import { expect } from "chai";
 import "mocha";
 import { Disposable, DomTarget, fail, getId, IDisposer, Part, Template, walkDOM, WalkFn } from "../src/ulit";
 
+describe("Template", () => {
+  it("should have {disposable, target, id, element, parts, values}")
+});
+
 describe("DomTarget", () => {
   it("should have {start, end, isSVG}", () => {
     const test = new DomTarget();
