@@ -1,12 +1,12 @@
 import {
-  COMMENT_NODE,
+  /*COMMENT_NODE,*/
   fail,
   FOREIGN_OBJECT,
   Optional,
   PART_MARKER,
-  SERIAL_PART_START,
+  /*SERIAL_PART_START,*/
   SVG,
-  ULIT,
+  /*ULIT,*/
   WalkFn
 } from "./common";
 import { Disposable } from "./Disposable";
@@ -43,52 +43,54 @@ function isNodeSVGChild(node: Optional<Node>): boolean {
   }
   return result;
 }
-function isFirstChildSerial(parent: DocumentFragment): boolean {
-  const child = parent.firstChild;
-  return (child &&
-    child.nodeType === COMMENT_NODE &&
-    child.nodeValue &&
-    child.nodeValue.startsWith(SERIAL_PART_START)) as boolean;
-}
 
-function parseSerializedParts(value?: string): ISerializedPart[] {
-  if (!value) {
-    return [];
-  } else {
-    return JSON.parse(
-      value.split(SERIAL_PART_START)[1].slice(0, -2)
-    ) as ISerializedPart[];
-  }
-}
+// function isFirstChildSerial(parent: DocumentFragment): boolean {
+//   const child = parent.firstChild;
+//   return (child &&
+//     child.nodeType === COMMENT_NODE &&
+//     child.nodeValue &&
+//     child.nodeValue.startsWith(SERIAL_PART_START)) as boolean;
+// }
 
-function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
-  const el = document.getElementById(`${ULIT}${id}`) as HTMLTemplateElement;
-  if (!el) {
-    return;
-  }
-  const fragment = (el.cloneNode(true) as HTMLTemplateElement).content;
-  if (!fragment) {
-    return;
-  }
-  const first = fragment.firstChild;
-  if (!first) {
-    return;
-  }
-  const isFirstSerial = isFirstChildSerial(fragment);
-  let deserialized: Optional<ISerialCacheEntry> = undefined;
-  if (isFirstSerial) {
-    const fc = fragment.removeChild(first);
-    const serializedParts = parseSerializedParts(fc.nodeValue || undefined);
-    const template = el as HTMLTemplateElement;
-    if (serializedParts && template) {
-      deserialized = { template, serializedParts };
-    }
-  }
-  if (deserialized) {
-    return deserialized;
-  }
-  return;
-}
+// function parseSerializedParts(value?: string): ISerializedPart[] {
+//   if (!value) {
+//     return [];
+//   } else {
+//     return JSON.parse(
+//       value.split(SERIAL_PART_START)[1].slice(0, -2)
+//     ) as ISerializedPart[];
+//   }
+// }
+
+// function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
+//   const el = document.getElementById(`${ULIT}${id}`) as HTMLTemplateElement;
+//   if (!el) {
+//     return;
+//   }
+//   const fragment = (el.cloneNode(true) as HTMLTemplateElement).content;
+//   if (!fragment) {
+//     return;
+//   }
+//   const first = fragment.firstChild;
+//   if (!first) {
+//     return;
+//   }
+//   const isFirstSerial = isFirstChildSerial(fragment);
+//   let deserialized: Optional<ISerialCacheEntry> = undefined;
+//   if (isFirstSerial) {
+//     const fc = fragment.removeChild(first);
+//     const serializedParts = parseSerializedParts(fc.nodeValue || undefined);
+//     const template = el as HTMLTemplateElement;
+//     if (serializedParts && template) {
+//       deserialized = { template, serializedParts };
+//     }
+//   }
+//   if (deserialized) {
+//     return deserialized;
+//   }
+//   return;
+// }
+
 export function templateSetup(
   serial: ISerializedPart[],
   parts: Part[]

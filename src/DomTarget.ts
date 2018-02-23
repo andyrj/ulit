@@ -1,6 +1,6 @@
 import { fail, Optional } from "./common";
+import { Part } from "./Part";
 import { isNode } from "./predicates";
-import { Part } from "./ulit";
 
 export class DomTarget {
   public start: Optional<Node | Part> = undefined;

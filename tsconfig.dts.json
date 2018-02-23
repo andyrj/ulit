@@ -1,0 +1,18 @@
+{
+	"compilerOptions": {
+    "outFile": "./dist/ulit.js",
+    "target": "es2015",
+    "module": "amd",
+    "moduleResolution": "node",
+    "experimentalDecorators": true,
+    "declaration": true,
+    "inlineSourceMap": true,
+    "inlineSources": true
+	},
+	"include": [
+		"src/ulit.ts"
+	],
+	"exclude": [
+		"test/**/*.ts"
+	]
+}

@@ -205,10 +205,10 @@ export class Part {
       }
       // TODO: figure out why it's removing the wrong nodes here...
       (parent as Node).insertBefore(value as Node, first);
-      // part.remove();
+      part.target.remove();
       part.value = value;
-      // part.start = newStart;
-      // part.end = newEnd;
+      part.target.start = newStart;
+      part.target.end = newEnd;
     }
   }
 }

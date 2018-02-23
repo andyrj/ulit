@@ -1,13 +1,10 @@
 {
 	"compilerOptions": {
-    "outDir": "./dist/",
+    "outDir": "./dist/tsc",
     "target": "es2015",
-    "module": "esnext",
-    "moduleResolution": "node",
+    "module": "es2015",
     "sourceMap": true,
     "experimentalDecorators": true,
-		"lib": [ "dom", "dom.iterable", "es6", "es2017", "es5"],
-    "declaration": true,
     "strict": true,
     "strictNullChecks": true,
     "strictFunctionTypes": true,
@@ -20,7 +17,7 @@
     "inlineSources": true
 	},
 	"include": [
-		"src/ulit.ts"
+        "src/ulit.ts"
 	],
 	"exclude": [
 		"test/**/*.ts"

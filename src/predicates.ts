@@ -7,7 +7,8 @@ import {
   TEXT_NODE
 } from "./common";
 import { IDirective } from "./directives";
-import { ITemplateGenerator, Part, Template } from "./ulit";
+import { Part } from "./Part";
+import { ITemplateGenerator, Template } from "./Template";
 
 export function isNode(x: any): x is Node {
   return (x as Node) && (x as Node).nodeType > 0;

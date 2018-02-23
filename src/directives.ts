@@ -1,15 +1,8 @@
 import { DIRECTIVE, fail } from "./common";
+import { Key, KeyFn, Part, PartValue, TemplateFn } from "./Part";
 import { isTemplate, isTemplateElement } from "./predicates";
-import {
-  html,
-  ITemplateGenerator,
-  Key,
-  KeyFn,
-  Part,
-  PartValue,
-  Template,
-  TemplateFn
-} from "./ulit";
+import { ITemplateGenerator, Template } from "./Template";
+import { html } from "./ulit";
 
 export interface IDirective {
   (part: Part): void;
@@ -36,7 +29,7 @@ export function repeat(
   templateFn: TemplateFn = defaultTemplateFn
 ): IDirective {
   return Directive((part: Part) => {
-    const target = part.first();
+    const target = part.target.first();
     const parent = target.parentNode;
     if (!parent) {
       fail();
@@ -67,7 +60,7 @@ export function repeat(
       const newEntry = newCacheMap.get(key);
       const oldEntry = oldCacheMap.get(key);
       if (oldEntry && !newEntry) {
-        oldEntry.remove();
+        oldEntry.target.remove();
         oldCacheMap.delete(key);
         removeKeys.push(index);
       }
@@ -89,7 +82,7 @@ export function repeat(
         if (!parent) {
           fail();
         }
-        const first = oldEntry.first();
+        const first = oldEntry.target.first();
         if (key === oldCacheOrder[index]) {
           // update in place
           if (oldEntry.id === nextTemplate.id) {
@@ -100,7 +93,7 @@ export function repeat(
             if (isTemplateElement(nextTemplate.element)) {
               const fragment = nextTemplate.element.content;
               (parent as Node).insertBefore(fragment, first);
-              oldEntry.remove();
+              oldEntry.target.remove();
               oldCacheMap.set(key, nextTemplate);
             } else {
               fail();
