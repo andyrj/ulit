@@ -3,7 +3,33 @@ import "mocha";
 import { Disposable, DomTarget, fail, getId, IDisposer, Part, Template, walkDOM, WalkFn } from "../src/ulit";
 
 describe("Template", () => {
-  it("should have {disposable, target, id, element, parts, values}")
+  it("should have {disposable, target, id, element, parts, values}", () => {
+    const test1 = new Template(1, document.createElement("template"), [], []);
+    expect(test1.disposable !== undefined).to.equal(true);
+    expect(test1.target !== undefined).to.equal(true);
+    expect(test1.id !== undefined).to.equal(true);
+    expect(test1.element !== undefined).to.equal(true);
+    expect(test1.parts !== undefined).to.equal(true);
+    expect(test1.values !== undefined).to.equal(true);
+  });
+
+  // TODO: add more tests for Template
+});
+
+describe("Part", () => {
+  it("should have {value, path, disposable, target, isSVG}", () => {
+    const fragment = document.createDocumentFragment();
+    const target = document.createElement("div");
+    fragment.appendChild(target);
+    const test1 = new Part([0], target, 0, false);
+    expect(test1.value !== undefined).to.equal(true);
+    expect(test1.path !== undefined).to.equal(true);
+    expect(test1.disposable !== undefined).to.equal(true);
+    expect(test1.target !== undefined).to.equal(true);
+    expect(test1.isSVG !== undefined).to.equal(true);
+  });
+
+  // TODO: add more tests for Part
 });
 
 describe("DomTarget", () => {

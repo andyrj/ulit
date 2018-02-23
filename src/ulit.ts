@@ -73,7 +73,7 @@ export class Disposable {
   }
 }
 
-function isNodeSVGChild(node: Optional<Node>): boolean {
+export function isNodeSVGChild(node: Optional<Node>): boolean {
   if (!node) {
     return false;
   }
@@ -242,6 +242,7 @@ export class Template {
         this.target.start = isArr
           ? (target as [Node, string][0])
           : (target as Node);
+        // TODO: we need to walk from start to end on "un-rendered" fragment, to determine where the "end" node is located, in the hydrated dom...
         // this.target.end = isArr ? target as [Node, string][0]: target as Node;
       }
     });
