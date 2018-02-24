@@ -480,8 +480,6 @@ export class DomTarget {
   }
 }
 
-
-
 export function isNode(x: any): x is Node {
   return (x as Node) && (x as Node).nodeType > 0;
 }
@@ -491,7 +489,7 @@ export function isElementNode(x: any): x is HTMLElement {
 }
 
 export function isDirective(x: any): x is IDirective {
-  return isFunction(x) && x.kind === DIRECTIVE;
+  return isFunction(x) && DIRECTIVE in x;
 }
 
 export function isDocumentFragment(x: any): x is DocumentFragment {
@@ -562,15 +560,14 @@ export function isEventPart(x: any) {
   return false;
 }
 
-
 export interface IDirective {
   (part: Part): void;
-  kind: string;
+  directive: boolean;
 }
 
 export type DirectiveFn = (part: Part) => void;
 export function Directive(fn: DirectiveFn): IDirective {
-  (fn as any).kind = DIRECTIVE;
+  (fn as any).directive = true;
   return fn as IDirective;
 }
 
