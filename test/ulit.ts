@@ -115,6 +115,21 @@ describe("Part", () => {
     directivePart.update("test");
     expect(fragment.firstChild.nodeType).to.equal(3);
   });
+
+  it("update should correctly handle promises", done => {
+    const fragment = document.createDocumentFragment();
+    const comment = document.createComment("{{}}");
+    fragment.appendChild(comment);
+    const part = new Part([0], comment, 0, false);
+    part.update();
+    expect(fragment.firstChild.nodeType).to.equal(8);
+    part.update(new Promise((resolve, reject) => {
+      resolve("test");
+      done();
+    }));
+    expect(fragment.firstChild.nodeType).to.equal(8);
+    setTimeout(expect(fragment.firstChild.nodeType).to.equal(3), 600);
+  });
 });
 
 describe("DomTarget", () => {
