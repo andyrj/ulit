@@ -202,26 +202,16 @@ function followPath(
   target: Node,
   pointer: Array<string | number>
 ): Optional<Node | NodeAttribute> | never {
-  if (!target) {
-    throw new RangeError();
-  }
-  const cPath = pointer.slice(0);
-  const current = cPath.shift() as string | number;
-  if (isNumber(current)) {
-    if (cPath.length === 0) {
-      return target.childNodes[current];
-    } else {
-      return followPath(target.childNodes[current], cPath);
+  const path = pointer.slice(0);
+  let cursor = target;
+  while (path.length > 0) {
+    const next = path.shift();
+    if (isString(next)) {
+      return [cursor, next];
     }
-  } else if (isString(current)) {
-    if (cPath.length === 0) {
-      return [target, current];
-    } else {
-      fail();
-    }
+    cursor = cursor.childNodes[next as number];
   }
-  fail();
-  return; // satisifying typescript, can't be reached anyways... ><
+  return cursor;
 }
 
 export class Template {
