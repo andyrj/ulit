@@ -18,7 +18,7 @@ Started this from a desire to see how hard it would be to improve upon the imple
 
 ## What was the result?
 
-Rough parity with lit + lit-extended on features and general api setup.
+Rough parity with lit-html + lit-extended on features and general api setup.
 
 Pros:
 * Transparent svg support - (no need for special svg tagged template function)
