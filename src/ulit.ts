@@ -35,7 +35,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const FOREIGN_OBJECT = "FOREIGNOBJECT";
 const PART_START = "{{";
 const PART_END = "}}";
-const PART = "part";
+// const PART = "part";
 const NODE_TYPE = "nodeType";
 // const SERIAL_PART_START = `${PART_START}${PART}s:`;
 const PART_MARKER = `${PART_START}${PART_END}`;
@@ -408,6 +408,7 @@ export class Part {
       if (isText(partValue)) {
         if (partValue.nodeValue !== value) {
           partValue.nodeValue = value as string;
+          return;
         }
       } else {
         value = document.createTextNode(value as string);
@@ -482,7 +483,7 @@ export class DomTarget {
 }
 
 function isNode(x: any): x is Node {
-  return (x as Node) && NODE_TYPE in x;
+  return (x as Node) && x.nodeType != null;
 }
 
 function isElementNode(x: any): x is HTMLElement {
@@ -814,13 +815,12 @@ export function render(
     }
   }
   const instance = (container as any).__template;
-  // TODO: re-write with expanded if structure nested here for id test...
   if (instance) {
     if (instance.id === (view as ITemplateGenerator).id) {
       instance.update((view as ITemplateGenerator).exprs);
       return;
     } else {
-      instance.remove();
+      instance.target.remove();
       (container as any).__template = undefined;
     }
   }
