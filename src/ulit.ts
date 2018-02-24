@@ -272,6 +272,10 @@ export class Part {
     this.value = target;
   }
   public update(value?: PartValue) {
+    if (isAttributePart(this)) {
+      this.updateAttribute(this, value);
+      return;
+    }
     if (arguments.length === 0 && !isTemplate(this.value)) {
       value = this.value;
     }
@@ -284,24 +288,25 @@ export class Part {
         this.update(promised);
       });
       return;
+    } 
+    if (isIterable(value)) {
+      value = Array.from(value as any);
     }
-    if (isAttributePart(this)) {
-      this.updateAttribute(this, value);
+    if (Array.isArray(value)) {
+      this.updateArray(this, value);
+    }
+    if (isTemplateGenerator(value)) {
+      this.updateTemplate(this, value as ITemplateGenerator);
     } else {
-      if (isIterable(value)) {
-        value = Array.from(value as any);
-      }
-      if (Array.isArray(value)) {
-        this.updateArray(this, value);
-      }
-      if (isTemplateGenerator(value)) {
-        this.updateTemplate(this, value as ITemplateGenerator);
-      } else {
-        this.updateNode(this, value);
-      }
+      this.updateNode(this, value);
     }
   }
   private updateAttribute(part: Part, value: Optional<PartValue>) {
+    if (isPromise(value)) {
+      value.then(promised => {
+        this.updateAttribute(part, promised);
+      });
+    }
     const element = part.target.start as Node;
     if (!element) {
       fail();

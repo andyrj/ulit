@@ -128,7 +128,28 @@ describe("Part", () => {
       done();
     }));
     expect(fragment.firstChild.nodeType).to.equal(8);
+    expect(fragment.firstChild.nodeValue).to.equal("test");
     setTimeout(expect(fragment.firstChild.nodeType).to.equal(3), 600);
+  });
+
+  it("update should correctly handle attributes", done => {
+    const fragment = document.createDocumentFragment();
+    const div = document.createElement("div");
+    div.id = "{{}}";
+    fragment.appendChild(div);
+    const part = new Part([0, "id"], div, 0, false);
+    expect((fragment.firstChild as HTMLElement).id).to.equal("{{}}");
+    part.update();
+    expect((fragment.firstChild as HTMLElement).id).to.equal("");
+    part.update("test");
+    expect((fragment.firstChild as HTMLElement).id).to.equal("test");
+    part.update(new Promise(resolve => {
+      resolve("async");
+    }));
+    setTimeout(() => {
+      expect((fragment.firstChild as HTMLElement).id).to.equal("async");
+      done();
+    }, 500);
   });
 });
 
