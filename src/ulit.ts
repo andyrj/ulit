@@ -30,22 +30,23 @@ export interface ITemplateGenerator {
 export type IDisposer = () => void;
 export type NodeAttribute = [Node, string];
 
-export const SVG = "SVG";
-export const SVG_NS = "http://www.w3.org/2000/svg";
-export const FOREIGN_OBJECT = "FOREIGNOBJECT";
-export const PART_START = "{{";
-export const PART_END = "}}";
-export const PART = "part";
-export const SERIAL_PART_START = `${PART_START}${PART}s:`;
-export const PART_MARKER = `${PART_START}${PART_END}`;
-export const TEMPLATE = "template";
-export const DIRECTIVE = "directive";
-export const ULIT = "ulit";
-export const ELEMENT_NODE = 1;
-export const TEXT_NODE = 3;
-export const COMMENT_NODE = 8;
-export const DOCUMENT_FRAGMENT = 11;
-export const EMPTY_STRING = "";
+const SVG = "SVG";
+const SVG_NS = "http://www.w3.org/2000/svg";
+const FOREIGN_OBJECT = "FOREIGNOBJECT";
+const PART_START = "{{";
+const PART_END = "}}";
+const PART = "part";
+const NODE_TYPE = "nodeType";
+// const SERIAL_PART_START = `${PART_START}${PART}s:`;
+const PART_MARKER = `${PART_START}${PART_END}`;
+const TEMPLATE = "template";
+const DIRECTIVE = "directive";
+// const ULIT = "ulit";
+const ELEMENT_NODE = 1;
+const TEXT_NODE = 3;
+const COMMENT_NODE = 8;
+const DOCUMENT_FRAGMENT = 11;
+const EMPTY_STRING = "";
 
 export class Disposable {
   public disposers: IDisposer[] = [];
@@ -73,7 +74,7 @@ export class Disposable {
   }
 }
 
-export function isNodeSVGChild(node: Optional<Node>): boolean {
+function isNodeSVGChild(node: Optional<Node>): boolean {
   if (!node) {
     return false;
   }
@@ -140,7 +141,7 @@ export function isNodeSVGChild(node: Optional<Node>): boolean {
 //   return;
 // }
 
-export function templateSetup(
+function templateSetup(
   serial: ISerializedPart[],
   parts: Part[]
 ): WalkFn {
@@ -197,7 +198,7 @@ export function templateSetup(
   };
 }
 
-export function followPath(
+function followPath(
   target: Node,
   pointer: Array<string | number>
 ): Optional<Node | NodeAttribute> | never {
@@ -480,80 +481,80 @@ export class DomTarget {
   }
 }
 
-export function isNode(x: any): x is Node {
-  return (x as Node) && (x as Node).nodeType > 0;
+function isNode(x: any): x is Node {
+  return (x as Node) && NODE_TYPE in x;
 }
 
-export function isElementNode(x: any): x is HTMLElement {
+function isElementNode(x: any): x is HTMLElement {
   return isNode(x) && (x as Node).nodeType === ELEMENT_NODE;
 }
 
-export function isDirective(x: any): x is IDirective {
+function isDirective(x: any): x is IDirective {
   return isFunction(x) && DIRECTIVE in x;
 }
 
-export function isDocumentFragment(x: any): x is DocumentFragment {
+function isDocumentFragment(x: any): x is DocumentFragment {
   return isNode(x) && (x as Node).nodeType === DOCUMENT_FRAGMENT;
 }
 
-export function isComment(x: any): x is Comment {
+function isComment(x: any): x is Comment {
   return isNode(x) && (x as Node).nodeType === COMMENT_NODE;
 }
 
-export function isFunction(x: any): x is Function {
+function isFunction(x: any): x is Function {
   return typeof x === "function";
 }
 
-export function isString(x: any): x is string {
+function isString(x: any): x is string {
   return typeof x === "string";
 }
 
-export function isText(x: any): x is Text {
+function isText(x: any): x is Text {
   return x && isNode(x) && (x as Node).nodeType === TEXT_NODE;
 }
 
-export function isNumber(x: any): x is number {
+function isNumber(x: any): x is number {
   return typeof x === "number";
 }
 
-export function isIterable(x: any): x is Iterable<any> {
+function isIterable(x: any): x is Iterable<any> {
   return (
     !isString(x) && !Array.isArray(x) && isFunction((x as any)[Symbol.iterator])
   );
 }
 
-export function isPartComment(x: any): x is Comment {
+function isPartComment(x: any): x is Comment {
   return isComment(x) && x.textContent === PART_MARKER;
 }
 
-export function isPromise(x: any): x is Promise<any> {
+function isPromise(x: any): x is Promise<any> {
   return x && isFunction(x.then);
 }
 
-export function isTemplate(x: any): x is Template {
+function isTemplate(x: any): x is Template {
   return x && x instanceof Template;
 }
 
-export function isTemplateElement(x: any): x is HTMLTemplateElement {
+function isTemplateElement(x: any): x is HTMLTemplateElement {
   return x && x instanceof HTMLTemplateElement;
 }
 
-export function isTemplateGenerator(x: any): x is ITemplateGenerator {
+function isTemplateGenerator(x: any): x is ITemplateGenerator {
   return isFunction(x) && x.id;
 }
 
-export function isPart(x: any): x is Part {
+function isPart(x: any): x is Part {
   return x && x instanceof Part;
 }
 
-export function isAttributePart(x: any) {
+function isAttributePart(x: any) {
   if (isPart(x) && isString(x.path[x.path.length - 1])) {
     return true;
   }
   return false;
 }
 
-export function isEventPart(x: any) {
+function isEventPart(x: any) {
   if (isAttributePart(x) && x.path[x.path.length - 1].startsWith("on")) {
     return true;
   }
@@ -564,18 +565,17 @@ export interface IDirective {
   (part: Part): void;
   directive: boolean;
 }
-
 export type DirectiveFn = (part: Part) => void;
 export function Directive(fn: DirectiveFn): IDirective {
   (fn as any).directive = true;
   return fn as IDirective;
 }
 
-export function defaultKeyFn(index: number): Key {
+function defaultKeyFn(index: number): Key {
   return index;
 }
 
-export function defaultTemplateFn(item: PartValue): ITemplateGenerator {
+function defaultTemplateFn(item: PartValue): ITemplateGenerator {
   return html`${item}`;
 }
 const repeatCache = new Map<Part, [Key[], Map<Key, Template>]>();
@@ -719,7 +719,7 @@ export function until(
   });
 }
 
-export function fail(msg?: Optional<string>): never {
+function fail(msg?: Optional<string>): never {
   if (msg) {
     throw new RangeError(msg);
   } else {
@@ -727,13 +727,13 @@ export function fail(msg?: Optional<string>): never {
   }
 }
 
-export type WalkFn = (
+type WalkFn = (
   parent: Node,
   element: Optional<Node>,
   path: Array<string | number>
 ) => void | never;
 
-export function walkDOM(
+function walkDOM(
   parent: HTMLElement | DocumentFragment,
   element: Optional<Node>,
   fn: WalkFn,
@@ -752,7 +752,7 @@ export function walkDOM(
 }
 
 const idCache = new Map<string, number>();
-export function getId(str: string): number {
+function getId(str: string): number {
   if (idCache.has(str)) {
     return idCache.get(str) as number;
   }
@@ -768,8 +768,6 @@ export function getId(str: string): number {
   return id;
 }
 
-// TODO: change how you are exporting...  lets make an index that has nothing but exports...
-// export { repeat, until } from "./common";
 export function html(
   strings: TemplateStringsArray,
   ...expressions: PartValue[]

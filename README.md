@@ -5,11 +5,11 @@
 [![Build Status](https://travis-ci.org/andyrj/ulit.svg?branch=master)](https://travis-ci.org/andyrj/ulit)
 
 *WIP* Tagged Template Literal html template library.  Inspired by lit-html/hyperHTML.
- - This branch is a rewrite to functional typescript...
 
 TODO:
-1. Correct repeat()
-2. get test coverage up to 100/100
+1. Finish typescript conversion and cleanup
+2. Correct repeat()
+3. get test coverage up to 100/100
 
 ## Why another tagged template literal library?
 "I cannot understand what I cannot build." - Feynman
@@ -18,15 +18,24 @@ Started this from a desire to see how hard it would be to improve upon the imple
 
 ## What was the result?
 
-Rough parity with lit-extended on features and general api setup.
+Rough parity with lit + lit-extended on features and general api setup.
 
-Improvements:
-* Transparent svg support - (no need for special svg tag function)
-* Simple depth first search walkDOM(fn) avoids using slow TreeWalker api (even if that's only a perf hit in the initial un-cached render()) client side.
-* SSR support via serializable part paths.  This uses followPath(Array<Number|String>), which handles most of the setup work can be pre-rendered down to static html that can be delivered to the client and hydrated.
+Pros:
+* Transparent svg support - (no need for special svg tagged template function)
+* Simple depth first search walkDOM(fn) avoids using slow TreeWalker and allows for simple tracking of path during recursive dfs.
+* SSR support via serializable part paths.  This uses followPath(Array<Number|String>), which handles most of the setup work, and it can be pre-rendered down to static html that can be delivered to the client and hydrated, bypassing the more expensive process required if a serialized template is not present in the dom.
 * By using "{{}}" for attributes and <!--{{}}--> for part placeholders, this library doesn't need to use regex, doesn't force quotes on attributes in templates and can be generally simpler.
 
+Cons:
+* No plan to support partial parts (i.e. html`<div style="{foo: ${bar}}">boom</div>`, or html`<div id=prefix-${fail}-suffix></div>`) you should instead always write your templates to replace the whole property/attribute as a single variable (i.e. html`<div id=${good}></div>`)
+* Style tags within html tagged template literals are not supported initially, will need to add a style tagged template literal helper for this purpose, can be made outside of core.
+
 ## How can I use it?
+
+You shouldn't yet, the version checked into npm is working except for repeat/iterables/arrays, but there are many bug fixes in this rewrite I just haven't quite finished yet...
+
+Once it's finished being built/debugged you can install/use it as normal.
+
 ### Install
 ```
 npm install --save ulit
@@ -36,7 +45,7 @@ npm install --save ulit
 ```js
 // repeat is used for rendering keyed lists of dom nodes
 // until allows you to conditionally load a template that is replaced upon promise completion (code-splitting, fetch, etc...)
-import { html, render, repeat, until } from "ulit";
+import { Directive, html, render, repeat, until } from "ulit";
 
 // "components" are just template functions
 const hello = subject => html`<h1>hello ${subject}</h1>`;
@@ -50,16 +59,17 @@ render(hello("internet"));
 document.body.innerHTML === "<h1>hello internet</h1>"; // true
 
 // Build your own directive to extend ulit...
-// the example below defaultDirective is essentially what ulit does by default without a directive internally
-const defaultDirective = value => part => {
+// the example below passthroughDirective is a dummy directive example that is equivalent to just passing the value to the part
+// in the template expressions.
+const passthroughDirective = value => Directive(part => {
   part.update(value);
-};
+});
 
-render(html`<h1>${defaultDirective("pass through example...")}</h1>`);
+render(html`<h1>${passthroughDirective("pass through example...")}</h1>`);
 document.body.innerHTML === "<h1>pass through example...</h1>"; // true
 
 // Example Part API brain dump
-const partApiDirective = () => part => {
+const partApiDirective = Directive(() => part => {
   // update part with a new PartValue
   part.update("test");
 
@@ -76,18 +86,8 @@ const partApiDirective = () => part => {
   part.isAttached; // readonly boolean, denotes whether this part has been placed into the parent template fragment/parent dom
   part.firstNode(); // Node that begins this part
   part.lastNode(); // Node that ends this part...
-  
-  // Danger: dom manipulations below use carefully can do weird things like remove a part and then update the containing template which is undefined behavior...
-  const frag = document.createDocumentFragment();
-  const cursor = document.createComment("");
-  frag.appendChild(cursor);
-  //
-  // all dom mutations will remove current part from dom if attached like the browsers dom api does for elements.
-  part.appendTo(frag);
-  part.insertAfter(cursor); 
-  part.insertBefore(cursor);
-  part.remove(); // moves the part back into it's private container fragment, used internally by apendTo, insertAfter, insertBefore.
-};
+  part.remove(); // moves the part out of the dom and into a document fragment.
+});
 
 // Arrays/iterables are valid PartValue and render templates, this uses repeat() internally
 const nums = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -96,7 +96,7 @@ render(nums.map(num => {
 }));
 document.body.innerHTML === "<h1>hello 0</h1><h1>hello 1</h1>..."; //true
 render(hello(nums));
-document.body.innerHTML === "<h1>hello 012345678910</h1>"; // true
+document.body.innerHTML === "<h1>hello 012345678910</h1>"; // true NOTE: each number would be it's own textNode in this case...
 
 // Promises are valid PartValues, by default they will leave a HTML comment node where the part will update to whatever PartValue returned to resolve...
 render(hello(new Promise(resolve => {

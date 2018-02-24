@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import "mocha";
-import { Disposable, DomTarget, fail, getId, IDisposer, Part, Template, walkDOM, WalkFn } from "../src/ulit";
+import { Disposable, DomTarget, IDisposer, Part, Template } from "../src/ulit";
 
 describe("Template", () => {
   it("should have {disposable, target, id, element, parts, values}", () => {
@@ -111,6 +111,7 @@ describe("Disposable", () => {
   });
 });
 
+/* TODO: remove this was only useful when I refactored to start from bottom up instead of top down...
 describe("common", () => {
   it("should throw anytime fail is called", () => {
     const fn = () => fail("test");
@@ -153,6 +154,7 @@ describe("common", () => {
     expect(() => walkDOM(fragment, undefined, errWalkFn)).to.throw();
   });
 });
+*/
 /*
 import { expect } from "chai";
 import "mocha";
