@@ -36,7 +36,7 @@ const FOREIGN_OBJECT = "FOREIGNOBJECT";
 const PART_START = "{{";
 const PART_END = "}}";
 // const PART = "part";
-const NODE_TYPE = "nodeType";
+// const NODE_TYPE = "nodeType";
 // const SERIAL_PART_START = `${PART_START}${PART}s:`;
 const PART_MARKER = `${PART_START}${PART_END}`;
 const TEMPLATE = "template";
@@ -509,9 +509,9 @@ function isText(x: any): x is Text {
   return x && isNode(x) && (x as Node).nodeType === TEXT_NODE;
 }
 
-function isNumber(x: any): x is number {
-  return typeof x === "number";
-}
+// function isNumber(x: any): x is number {
+//   return typeof x === "number";
+// }
 
 function isIterable(x: any): x is Iterable<any> {
   return (
