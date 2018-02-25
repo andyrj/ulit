@@ -7,14 +7,12 @@ export type PrimitivePart =
   | Node
   | DocumentFragment
   | EventListener;
-export type PartValue =
-  | PrimitivePart
-  | IPartPromise
-  | IDirective
-  | IPartArray
-  | ITemplateGenerator;
-export interface IPartPromise extends Promise<PartValue> {}
-export interface IPartArray extends Array<PartValue> {}
+export type PartValue = Optional<
+  PrimitivePart | IPartPromise | IDirective | IPartArray | ITemplateGenerator
+>;
+export interface IPartPromise extends Promise<PartValue> {};
+export interface IPartArray extends Array<PartValue> {};
+export type PartGenerator = (target: Node, value: PartValue) => Part; 
 export type KeyFn = (item: any, index?: number) => Key;
 export type TemplateFn = (item: any) => ITemplateGenerator;
 export interface ISerialCacheEntry {
@@ -26,7 +24,7 @@ export interface ITemplateGenerator {
   (values?: PartValue[]): Template;
   id: number;
   exprs: PartValue[];
-}
+};
 export type IDisposer = () => void;
 export type NodeAttribute = [Node, string];
 
@@ -47,7 +45,7 @@ const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 const DOCUMENT_FRAGMENT = 11;
-const EMPTY_STRING = "";
+// const EMPTY_STRING = "";
 
 export class Disposable {
   public disposers: IDisposer[] = [];
@@ -142,10 +140,7 @@ function isNodeSVGChild(node: Optional<Node>): boolean {
 //   return;
 // }
 
-function templateSetup(
-  serial: ISerializedPart[],
-  parts: Part[]
-): WalkFn {
+function templateSetup(serial: ISerializedPart[], partGenerators: PartGenerator[]): WalkFn {
   return (parent, element, walkPath) => {
     const isSVG = isNodeSVGChild(element);
     if (isText(element)) {
@@ -167,9 +162,10 @@ function templateSetup(
             const len = adjustedPath.length - 1;
             (adjustedPath[len] as number) += cursor;
             serial.push([adjustedPath, isSVG]);
-            parts.push(
-              new Part(adjustedPath, newPartComment, parts.length, isSVG)
-            );
+            partGenerators.push((target: Node, value: PartValue) => {
+              const partTarget = followPath(target, adjustedPath);
+              return new Part(adjustedPath, partTarget as Node, partGenerators.length, isSVG);
+            });
             cursor++;
           }
         });
@@ -191,7 +187,10 @@ function templateSetup(
             const name = attr.nodeName;
             const attrPath = walkPath.concat(name);
             serial.push([attrPath, isSVG]);
-            parts.push(new Part(attrPath, element, parts.length, isSVG));
+            partGenerators.push((target: Node, value: PartValue) => {
+              const partTarget = followPath(target, attrPath) as NodeAttribute;
+              return new Part(attrPath, partTarget[0], partGenerators.length, isSVG);
+            });
             if (isSVG) {
               element.removeAttributeNS(SVG_NS, name);
             } else {
@@ -234,12 +233,16 @@ function followPath(
 export class Template {
   public disposable = new Disposable();
   public target = new DomTarget();
+  public parts: Part[] = [];
   constructor(
     public id: number,
     public element: HTMLTemplateElement,
-    public parts: Part[],
+    partGenerators: PartGenerator[],
     public values: PartValue[]
-  ) {}
+  ) {
+    const fragment = element.content;
+    this.parts = partGenerators.map((generator, i) => generator(fragment, values[i]));
+  }
   public hydrate(element: Node) {
     this.parts.forEach(part => {
       const target = followPath(element, part.path);
@@ -250,7 +253,7 @@ export class Template {
         this.target.start = isArr
           ? (target as [Node, string][0])
           : (target as Node);
-        // TODO: we need to walk from start to end on "un-rendered" fragment, to determine where the "end" node is located, in the hydrated dom...
+        // TODO: we need to walk from start to end on "un-rendered" parts in fragment, to determine where the "end" node is located, in the hydrated dom...
         // this.target.end = isArr ? target as [Node, string][0]: target as Node;
       }
     });
@@ -273,17 +276,26 @@ export class Template {
   }
 }
 
-function attachPartListener(part: Part, element: HTMLElement, name: string, capture: boolean) {
-  (element as HTMLElement).addEventListener(name, e => {
-    const entry = eventHandlerMap.get(part);
-    if (!entry) {
-      fail();
-    }
-    const handler = (entry as Map<string, Function>).get(name);
-    if (handler) {
-      handler(e);
-    }
-  }, capture);
+function attachPartListener(
+  part: Part,
+  element: HTMLElement,
+  name: string,
+  capture: boolean
+) {
+  (element as HTMLElement).addEventListener(
+    name,
+    e => {
+      const entry = eventHandlerMap.get(part);
+      if (!entry) {
+        fail();
+      }
+      const handler = (entry as Map<string, Function>).get(name);
+      if (handler) {
+        handler(e);
+      }
+    },
+    capture
+  );
 }
 
 const eventHandlerMap = new WeakMap<Part, Map<string, Function>>();
@@ -319,7 +331,7 @@ export class Part {
         this.update(promised);
       });
       return;
-    } 
+    }
     if (isIterable(value)) {
       value = Array.from(value as any);
     }
@@ -357,11 +369,20 @@ export class Part {
           eventHandlerMap.set(part, handlerMap);
           const isCapture = name.endsWith(CAPTURE);
           const rawName = name.split(CAPTURE)[0];
-          attachPartListener(part, element as HTMLElement, isCapture ? rawName : name, isCapture);
+          attachPartListener(
+            part,
+            element as HTMLElement,
+            isCapture ? rawName : name,
+            isCapture
+          );
           part.disposable.addDisposer(() => {
             const handler = handlerMap.get(name);
             if (handler) {
-              (element as HTMLElement).removeEventListener(name, handler as EventListener, isCapture);
+              (element as HTMLElement).removeEventListener(
+                name,
+                handler as EventListener,
+                isCapture
+              );
             }
           });
           // TODO: add disposer to cleanup the eventHandlerMap on part.dispose()
@@ -387,24 +408,31 @@ export class Part {
           if (!value) {
             (element as HTMLElement).removeAttributeNS(SVG_NS, name);
           } else {
-            (element as HTMLElement).setAttributeNS(SVG_NS, name, isString(value) ? value : value.toString());
+            (element as HTMLElement).setAttributeNS(
+              SVG_NS,
+              name,
+              isString(value) ? value : value.toString()
+            );
           }
         } else {
           if (!value) {
             (element as HTMLElement).removeAttribute(name);
           } else {
-            (element as HTMLElement).setAttribute(name, isString(value) ? value : value.toString());
+            (element as HTMLElement).setAttribute(
+              name,
+              isString(value) ? value : value.toString()
+            );
           }
         }
       }
     }
   }
 
-  private updateArray(part: Part, value: Optional<PartValue[]>) {
-    if (!value) {
+  private updateArray(part: Part, values: Optional<PartValue[]>) {
+    if (!values) {
       return;
     }
-    const directive = repeat(value);
+    const directive = repeat(values as any);
     part.value = directive;
     return directive(part);
   }
@@ -837,10 +865,10 @@ export function html(
       //   serializedParts: [],
       //   template: newTemplateEl.cloneNode() as HTMLTemplateElement
       // };
-      const parts: Part[] = [];
+      const partGenerators: PartGenerator[] = [];
       const serializedParts: Array<[Array<string | number>, boolean]> = [];
-      walkDOM(fragment, undefined, templateSetup(serializedParts, parts));
-      return new Template(id, templateElement, parts, exprs);
+      walkDOM(fragment, undefined, templateSetup(serializedParts, partGenerators));
+      return new Template(id, templateElement, partGenerators, exprs);
     };
     (templateGenerator as ITemplateGenerator).id = id;
     (templateGenerator as ITemplateGenerator).exprs = expressions;
@@ -871,13 +899,17 @@ export function render(
       instance.update((view as ITemplateGenerator).exprs);
       return;
     } else {
+      const newInstance = (view as ITemplateGenerator)();
+      container.insertBefore(
+        newInstance.element.content,
+        instance.target.first()
+      );
       instance.target.remove();
-      (container as any).__template = undefined;
+      (container as any).__template = newInstance;
     }
+    return;
   }
-  const template = (view as ITemplateGenerator)(
-    (view as ITemplateGenerator).exprs
-  );
+  const template = (view as ITemplateGenerator)();
 
   if (container.hasChildNodes()) {
     // TODO: add hydration here...

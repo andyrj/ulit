@@ -293,10 +293,14 @@ describe("render", () => {
     expect(document.body.firstChild).to.equal(div);
   });
   it("setting event handler should work", () => {
-    const handler = (e: any) => {};
+    let count = 0;
+    const handler = (e: Event) => count++;
     const template = html`<div onclick=${handler}>test</div>`;
     render(template);
-    expect((document.body.firstChild as any).onclick !== undefined).to.equal(true);
+    const event = document.createEvent("HTMLEvents");
+    event.initEvent("click", false, true);
+    document.body.firstChild.dispatchEvent(event);
+    expect(count).to.equal(1);
   });
   it("should handle attribute parts", () => {
     const str = "test3";
