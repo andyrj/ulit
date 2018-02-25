@@ -6,7 +6,7 @@ export type PrimitivePart =
   | string
   | Node
   | DocumentFragment
-  | Function;
+  | EventListener;
 export type PartValue =
   | PrimitivePart
   | IPartPromise
@@ -40,6 +40,7 @@ const PART_END = "}}";
 // const SERIAL_PART_START = `${PART_START}${PART}s:`;
 const PART_MARKER = `${PART_START}${PART_END}`;
 const TEMPLATE = "template";
+const CAPTURE = "Capture";
 const DIRECTIVE = "directive";
 // const ULIT = "ulit";
 const ELEMENT_NODE = 1;
@@ -187,14 +188,30 @@ function templateSetup(
       } else {
         [].forEach.call(element.attributes, (attr: Attr) => {
           if (attr.nodeValue === PART_MARKER) {
-            const attrPath = walkPath.concat(attr.nodeName);
+            const name = attr.nodeName;
+            const attrPath = walkPath.concat(name);
             serial.push([attrPath, isSVG]);
             parts.push(new Part(attrPath, element, parts.length, isSVG));
+            if (isSVG) {
+              element.removeAttributeNS(SVG_NS, name);
+            } else {
+              element.removeAttribute(name);
+            }
           }
         });
+        const keys = Object.keys(element);
+        const len = keys.length;
+        let i = 0;
+        for (; i < len; i++) {
+          const name = keys[i];
+          if ((element as any)[name] === PART_MARKER) {
+            const propPath = walkPath.concat(name);
+            serial.push([propPath, isSVG]);
+            delete (element as any)[name];
+          }
+        }
       }
     }
-    return true;
   };
 }
 
@@ -256,6 +273,20 @@ export class Template {
   }
 }
 
+function attachPartListener(part: Part, element: HTMLElement, name: string, capture: boolean) {
+  (element as HTMLElement).addEventListener(name, e => {
+    const entry = eventHandlerMap.get(part);
+    if (!entry) {
+      fail();
+    }
+    const handler = (entry as Map<string, Function>).get(name);
+    if (handler) {
+      handler(e);
+    }
+  }, capture);
+}
+
+const eventHandlerMap = new WeakMap<Part, Map<string, Function>>();
 export class Part {
   public value: PartValue | Template;
   public path: Array<string | number>;
@@ -317,28 +348,53 @@ export class Part {
       fail();
     }
     const isValFn = isFunction(value);
-    if ((isEventPart(part) && isValFn) || (name in element && !isSVG)) {
-      try {
-        (element as any)[name] =
-          !value && value !== false ? EMPTY_STRING : value;
-      } catch (_) {} // eslint-disable-line
-    }
-    if (!isValFn) {
-      if (!value) {
-        if (isSVG) {
-          (element as HTMLElement).removeAttributeNS(SVG_NS, name);
+    if (isValFn) {
+      if (isEventPart(part)) {
+        const cachedEntry = eventHandlerMap.get(part);
+        if (!cachedEntry) {
+          const handlerMap = new Map<string, EventListener>();
+          handlerMap.set(name, value as EventListener);
+          eventHandlerMap.set(part, handlerMap);
+          const isCapture = name.endsWith(CAPTURE);
+          const rawName = name.split(CAPTURE)[0];
+          attachPartListener(part, element as HTMLElement, isCapture ? rawName : name, isCapture);
+          part.disposable.addDisposer(() => {
+            const handler = handlerMap.get(name);
+            if (handler) {
+              (element as HTMLElement).removeEventListener(name, handler as EventListener, isCapture);
+            }
+          });
+          // TODO: add disposer to cleanup the eventHandlerMap on part.dispose()
         } else {
-          (element as HTMLElement).removeAttribute(name);
+          const handler = cachedEntry.get(name);
+          if (handler !== value) {
+            cachedEntry.set(name, value as Function);
+          }
+        }
+      } else {
+        fail();
+      }
+    } else {
+      if (name in element) {
+        // (element as any)[name] = !value && value !== false ? EMPTY_STRING : value;
+        if (value) {
+          (element as any)[name] = value;
+        } else {
+          delete (element as any)[name];
         }
       } else {
         if (isSVG) {
-          (element as HTMLElement).setAttributeNS(
-            SVG_NS,
-            name,
-            value as string
-          );
+          if (!value) {
+            (element as HTMLElement).removeAttributeNS(SVG_NS, name);
+          } else {
+            (element as HTMLElement).setAttributeNS(SVG_NS, name, isString(value) ? value : value.toString());
+          }
         } else {
-          (element as HTMLElement).setAttribute(name, value as string);
+          if (!value) {
+            (element as HTMLElement).removeAttribute(name);
+          } else {
+            (element as HTMLElement).setAttribute(name, isString(value) ? value : value.toString());
+          }
         }
       }
     }

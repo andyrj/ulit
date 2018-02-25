@@ -29,7 +29,6 @@ describe("Part", () => {
     expect(test1.isSVG !== undefined).to.equal(true);
   });
 
-  // TODO: add more tests for Part
   it("update should replace initial comment node", () => {
     const fragment = document.createDocumentFragment();
     const comment = document.createComment("{{}}");
@@ -135,10 +134,9 @@ describe("Part", () => {
   it("update should correctly handle attributes", done => {
     const fragment = document.createDocumentFragment();
     const div = document.createElement("div");
-    div.id = "{{}}";
     fragment.appendChild(div);
     const part = new Part([0, "id"], div, 0, false);
-    expect((fragment.firstChild as HTMLElement).id).to.equal("{{}}");
+    expect((fragment.firstChild as HTMLElement).id).to.equal("");
     part.update();
     expect((fragment.firstChild as HTMLElement).id).to.equal("");
     part.update("test");
@@ -151,6 +149,8 @@ describe("Part", () => {
       done();
     }, 500);
   });
+
+  // TODO: add tests for arrays/iterables and nested templates
 });
 
 describe("DomTarget", () => {
@@ -298,13 +298,12 @@ describe("render", () => {
     render(template);
     expect((document.body.firstChild as any).onclick !== undefined).to.equal(true);
   });
-  /*
   it("should handle attribute parts", () => {
     const str = "test3";
     const test3 = val => html`<div id=${val}></div>`;
     render(test3(str));
     expect(document.body.innerHTML).to.equal(`<div id="${str}"></div>`);  
-    render(test3(null));
+    render(test3(undefined));
     expect(document.body.innerHTML).to.equal(`<div></div>`);
   });
   it("expression can change part types between renders", () => {
@@ -414,5 +413,4 @@ describe("render", () => {
     render(template);
     expect(document.body.innerHTML).to.equal("<div>321</div>");
   });
-  */
 });
