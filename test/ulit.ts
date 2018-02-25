@@ -285,26 +285,26 @@ describe("render", () => {
     expect(document.body.innerHTML).to.equal(`<div id="test">test</div>`);
   });
   it("expression can change part types between renders", () => {
-    const str = "test";
+    const str = "test2";
     const div = document.createElement("div");
-    div.id = "test";
-    const test3 = val => html`${val}`;
-    render(test3(str));
-    expect(document.body.innerHTML).to.equal("test");
-    render(test3(div));
-    expect(document.body.innerHTML).to.equal(`<div id="test"></div>`);
+    div.id = str;
+    const test2 = val => html`${val}`;
+    render(test2(str));
+    expect(document.body.innerHTML).to.equal(str);
+    render(test2(div));
+    expect(document.body.innerHTML).to.equal(`<div id="${str}"></div>`);
   });
   it("should handle single node templates", () => {
-    const str = "test";
-    const test4 = val => html`${val}`;
-    render(test4(str));
-    expect(document.body.innerHTML).to.equal(`test`);
+    const str = "test3";
+    const test3 = val => html`${val}`;
+    render(test3(str));
+    expect(document.body.innerHTML).to.equal(`${str}`);
   });
   it("should handle defaultTemplateFn", () => {
-    const test2 = "test2";
+    const test4 = "test2";
     const div = document.createElement("div");
-    render(test2);
-    expect(document.body.innerHTML).to.equal(test2);
+    render(test4);
+    expect(document.body.innerHTML).to.equal(test4);
     render(html`${div}`);
     expect(document.body.firstChild).to.equal(div);
   });
@@ -313,7 +313,7 @@ describe("render", () => {
     const handler = (e: Event) => count++;
     const template = html`<div onclick=${handler}>test</div>`;
     render(template);
-    const event = document.createEvent("HTMLEvents");
+    const event = document.createEvent("mouseevent");
     event.initEvent("click", false, true);
     document.body.firstChild.dispatchEvent(event);
     expect(count).to.equal(1);

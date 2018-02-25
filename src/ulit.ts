@@ -16,7 +16,8 @@ export type PartGenerator = (target: Node) => Part;
 export type KeyFn = (item: any, index?: number) => Key;
 export type TemplateFn = (item: any) => ITemplateGenerator;
 export interface ISerialCacheEntry {
-  template: HTMLTemplateElement;
+  templateElement: HTMLTemplateElement;
+  partGenerators: PartGenerator[];
   serializedParts: ISerializedPart[];
 }
 export type ISerializedPart = [Array<string | number>, boolean];
@@ -25,6 +26,7 @@ export interface ITemplateGenerator {
   id: number;
   exprs: PartValue[];
 };
+type ITemplateGeneratorFactory = (exprs: PartValue[]) => ITemplateGenerator; 
 export type IDisposer = () => void;
 export type NodeAttribute = [Node, string];
 
@@ -33,14 +35,14 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const FOREIGN_OBJECT = "FOREIGNOBJECT";
 const PART_START = "{{";
 const PART_END = "}}";
-// const PART = "part";
+const PART = "part";
 // const NODE_TYPE = "nodeType";
-// const SERIAL_PART_START = `${PART_START}${PART}s:`;
+const SERIAL_PART_START = `${PART_START}${PART}s:`;
 const PART_MARKER = `${PART_START}${PART_END}`;
 const TEMPLATE = "template";
 const CAPTURE = "Capture";
 const DIRECTIVE = "directive";
-// const ULIT = "ulit";
+const ULIT = "ulit";
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
@@ -93,52 +95,65 @@ function isNodeSVGChild(node: Optional<Node>): boolean {
   return result;
 }
 
-// function isFirstChildSerial(parent: DocumentFragment): boolean {
-//   const child = parent.firstChild;
-//   return (child &&
-//     child.nodeType === COMMENT_NODE &&
-//     child.nodeValue &&
-//     child.nodeValue.startsWith(SERIAL_PART_START)) as boolean;
-// }
+function isFirstChildSerial(parent: DocumentFragment): boolean {
+  const child = parent.firstChild;
+  return (child &&
+    child.nodeType === COMMENT_NODE &&
+    child.nodeValue &&
+    child.nodeValue.startsWith(SERIAL_PART_START)) as boolean;
+}
 
-// function parseSerializedParts(value?: string): ISerializedPart[] {
-//   if (!value) {
-//     return [];
-//   } else {
-//     return JSON.parse(
-//       value.split(SERIAL_PART_START)[1].slice(0, -2)
-//     ) as ISerializedPart[];
-//   }
-// }
+function parseSerializedParts(value?: string): ISerializedPart[] {
+  let result: ISerializedPart[] = [];
+  if (value) {
+    result = JSON.parse(
+      value.split(SERIAL_PART_START)[1].slice(0, -2)
+    ) as ISerializedPart[];
+  }
+  return result;
+}
 
-// function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
-//   const el = document.getElementById(`${ULIT}${id}`) as HTMLTemplateElement;
-//   if (!el) {
-//     return;
-//   }
-//   const fragment = (el.cloneNode(true) as HTMLTemplateElement).content;
-//   if (!fragment) {
-//     return;
-//   }
-//   const first = fragment.firstChild;
-//   if (!first) {
-//     return;
-//   }
-//   const isFirstSerial = isFirstChildSerial(fragment);
-//   let deserialized: Optional<ISerialCacheEntry> = undefined;
-//   if (isFirstSerial) {
-//     const fc = fragment.removeChild(first);
-//     const serializedParts = parseSerializedParts(fc.nodeValue || undefined);
-//     const template = el as HTMLTemplateElement;
-//     if (serializedParts && template) {
-//       deserialized = { template, serializedParts };
-//     }
-//   }
-//   if (deserialized) {
-//     return deserialized;
-//   }
-//   return;
-// }
+function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
+  const el = document.getElementById(`${ULIT}${id}`) as HTMLTemplateElement;
+  if (!el) {
+    return;
+  }
+  const clone: HTMLTemplateElement = document.importNode(el as HTMLTemplateElement, true);
+  const fragment = clone.content;
+  if (!fragment) {
+    return;
+  }
+  const first = fragment.firstChild;
+  if (!first) {
+    return;
+  }
+  const isFirstSerial = isFirstChildSerial(fragment);
+  let deserialized: Optional<ISerialCacheEntry> = undefined;
+  if (isFirstSerial) {
+    const firstChild = fragment.removeChild(first);
+    const serializedParts: ISerializedPart[] = parseSerializedParts(firstChild.nodeValue || undefined);
+    const templateElement: HTMLTemplateElement = el;
+    if (serializedParts && templateElement) {
+      const partGenerators: PartGenerator[] = serializedParts.map((serial, i) => {
+        return (target: Node) => {
+          const path = serial[0];
+          const isSVG = serial[1];
+          const partTarget = followPath(target, path);
+          if (Array.isArray(partTarget)) {
+            return new Part(path, partTarget[0], i, isSVG);
+          }
+          return new Part(path, partTarget as Node, partGenerators.length, isSVG);
+        };
+      });
+      deserialized = { templateElement, serializedParts, partGenerators };
+    }
+  }
+  if (deserialized) {
+    serialCache.set(id, deserialized);
+    return deserialized;
+  }
+  return;
+}
 
 function templateSetup(serial: ISerializedPart[], partGenerators: PartGenerator[]): WalkFn {
   return (parent, element, walkPath) => {
@@ -849,32 +864,40 @@ function getId(str: string): number {
   return id;
 }
 
+const factoryCache = new Map<number, ITemplateGeneratorFactory>();
+const serialCache = new Map<number, ISerialCacheEntry>();
 export function html(
   strings: TemplateStringsArray,
   ...expressions: PartValue[]
 ): ITemplateGenerator {
   const id = getId(strings.toString());
   const markUp = strings.join(PART_MARKER);
-  const factory = function(exprs: PartValue[]) {
-    const templateGenerator = function() {
-      const templateElement = document.createElement(
-        TEMPLATE
-      ) as HTMLTemplateElement;
-      templateElement.innerHTML = markUp;
-      const fragment = templateElement.content;
-      // serial = {
-      //   serializedParts: [],
-      //   template: newTemplateEl.cloneNode() as HTMLTemplateElement
-      // };
-      const partGenerators: PartGenerator[] = [];
-      const serializedParts: Array<[Array<string | number>, boolean]> = [];
-      walkDOM(fragment, undefined, templateSetup(serializedParts, partGenerators));
-      return new Template(id, templateElement, partGenerators, exprs);
+  let factory = factoryCache.get(id);
+  if (factory) {
+    return factory(expressions);
+  }
+  factory = function(exprs: PartValue[]) {
+    const generator = function() {
+      const values = arguments.length === 0 ? exprs : arguments[0];
+      const { templateElement, partGenerators, serializedParts  } = serialCache.get(id) || getSerializedTemplate(id) 
+        || { 
+          templateElement: document.createElement(TEMPLATE),
+          partGenerators: [],
+          serializedParts: []
+        };
+      if (!templateElement.hasChildNodes()) {
+        templateElement.innerHTML = markUp;
+        const fragment = templateElement.content;
+        walkDOM(fragment, undefined, templateSetup(serializedParts, partGenerators));
+        serialCache.set(id, { templateElement, partGenerators, serializedParts });
+      }
+      return new Template(id, document.importNode(templateElement, true), partGenerators, values);
     };
-    (templateGenerator as ITemplateGenerator).id = id;
-    (templateGenerator as ITemplateGenerator).exprs = expressions;
-    return templateGenerator as ITemplateGenerator;
+    (generator as ITemplateGenerator).id = id;
+    (generator as ITemplateGenerator).exprs = expressions;
+    return generator as ITemplateGenerator;
   };
+  factoryCache.set(id, factory);
   return factory(expressions);
 }
 
