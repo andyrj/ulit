@@ -12,7 +12,7 @@ export type PartValue = Optional<
 >;
 export interface IPartPromise extends Promise<PartValue> {};
 export interface IPartArray extends Array<PartValue> {};
-export type PartGenerator = (target: Node, value: PartValue) => Part; 
+export type PartGenerator = (target: Node) => Part; 
 export type KeyFn = (item: any, index?: number) => Key;
 export type TemplateFn = (item: any) => ITemplateGenerator;
 export interface ISerialCacheEntry {
@@ -162,7 +162,7 @@ function templateSetup(serial: ISerializedPart[], partGenerators: PartGenerator[
             const len = adjustedPath.length - 1;
             (adjustedPath[len] as number) += cursor;
             serial.push([adjustedPath, isSVG]);
-            partGenerators.push((target: Node, value: PartValue) => {
+            partGenerators.push((target: Node) => {
               const partTarget = followPath(target, adjustedPath);
               return new Part(adjustedPath, partTarget as Node, partGenerators.length, isSVG);
             });
@@ -187,7 +187,7 @@ function templateSetup(serial: ISerializedPart[], partGenerators: PartGenerator[
             const name = attr.nodeName;
             const attrPath = walkPath.concat(name);
             serial.push([attrPath, isSVG]);
-            partGenerators.push((target: Node, value: PartValue) => {
+            partGenerators.push((target: Node) => {
               const partTarget = followPath(target, attrPath) as NodeAttribute;
               return new Part(attrPath, partTarget[0], partGenerators.length, isSVG);
             });
@@ -233,7 +233,7 @@ function followPath(
 export class Template {
   public disposable = new Disposable();
   public target = new DomTarget();
-  public parts: Part[] = [];
+  public parts: Part[];
   constructor(
     public id: number,
     public element: HTMLTemplateElement,
@@ -241,7 +241,8 @@ export class Template {
     public values: PartValue[]
   ) {
     const fragment = element.content;
-    this.parts = partGenerators.map((generator, i) => generator(fragment, values[i]));
+    this.parts = partGenerators.map(generator => generator(fragment));
+    this.parts.forEach((part, i) => part.update(values[i]));
   }
   public hydrate(element: Node) {
     this.parts.forEach(part => {

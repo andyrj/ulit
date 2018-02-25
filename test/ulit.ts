@@ -284,6 +284,22 @@ describe("render", () => {
     render(test1);
     expect(document.body.innerHTML).to.equal(`<div id="test">test</div>`);
   });
+  it("expression can change part types between renders", () => {
+    const str = "test";
+    const div = document.createElement("div");
+    div.id = "test";
+    const test3 = val => html`${val}`;
+    render(test3(str));
+    expect(document.body.innerHTML).to.equal("test");
+    render(test3(div));
+    expect(document.body.innerHTML).to.equal(`<div id="test"></div>`);
+  });
+  it("should handle single node templates", () => {
+    const str = "test";
+    const test4 = val => html`${val}`;
+    render(test4(str));
+    expect(document.body.innerHTML).to.equal(`test`);
+  });
   it("should handle defaultTemplateFn", () => {
     const test2 = "test2";
     const div = document.createElement("div");
@@ -310,22 +326,7 @@ describe("render", () => {
     render(test3(undefined));
     expect(document.body.innerHTML).to.equal(`<div></div>`);
   });
-  it("expression can change part types between renders", () => {
-    const str = "test";
-    const div = document.createElement("div");
-    div.id = "test";
-    const test3 = val => html`${val}`;
-    render(test3(str));
-    expect(document.body.innerHTML).to.equal("test");
-    render(test3(div));
-    expect(document.body.innerHTML).to.equal(`<div id="test"></div>`);
-  });
-  it("should handle single node templates", () => {
-    const str = "test";
-    const test4 = val => html`${val}`;
-    render(test4(str));
-    expect(document.body.innerHTML).to.equal(`test`);
-  });
+  
   
   it("should handle dynamic nodes dispersed in static nodes", () => {
     const str = "dynamic";
