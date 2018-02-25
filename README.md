@@ -24,11 +24,28 @@ Pros:
 * Transparent svg support - (no need for special svg tagged template function)
 * Simple depth first search walkDOM(fn) avoids using slow TreeWalker and allows for simple tracking of path during recursive dfs.
 * SSR support via serializable part paths.  This uses followPath(Array<Number|String>), which handles most of the setup work, and it can be pre-rendered down to static html that can be delivered to the client and hydrated, bypassing the more expensive process required if a serialized template is not present in the dom.
-* By using "{{}}" for attributes and <!--{{}}--> for part placeholders, this library doesn't need to use regex, doesn't force quotes on attributes in templates and can be generally simpler.
+* By using "{{}}" for attributes and \<\!\-\-\{\{\}\}\-\-\> for part placeholders, this library doesn't need to use regex, doesn't force quotes on attributes in templates and can be generally simpler.
 
 Cons:
-* No plan to support partial parts (i.e. html`<div style="{foo: ${bar}}">boom</div>`, or html`<div id=prefix-${fail}-suffix></div>`) you should instead always write your templates to replace the whole property/attribute as a single variable (i.e. html`<div id=${good}></div>`)
+* No plan to support partial parts. i.e.
+  ```js
+  // DO NOT DO THIS
+  bar => html`<div style="{foo: ${bar}}">boom</div>`
+  ```
+  ```js
+  // DO NOT DO THIS
+  fail => html`<div id=prefix-${fail}-suffix></div>`
+  ```
+  you should instead always write your templates to replace the whole property/attribute as a single variable i.e. 
+  ```js
+  // DO THIS INSTEAD
+  good => html`<div id=${good}></div>`
+  ```
 * Style tags within html tagged template literals are not supported initially, will need to add a style tagged template literal helper for this purpose, can be made outside of core.
+```js
+// basic idea if someone feels like implementing something
+html`${style`...`}<div></div>`; // template out -> <style>...</style><div></div> 
+```
 
 ## How can I use it?
 

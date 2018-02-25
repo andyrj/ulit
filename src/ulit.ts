@@ -438,7 +438,6 @@ export class Part {
       }
     } else {
       if (name in element) {
-        // (element as any)[name] = !value && value !== false ? EMPTY_STRING : value;
         if (value) {
           (element as any)[name] = value;
         } else {
