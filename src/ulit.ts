@@ -281,8 +281,12 @@ export class Template {
     public values: PartValue[]
   ) {
     const fragment = element.content;
-    this.parts = partGenerators.map(generator => generator(fragment));
-    this.parts.forEach((part, i) => part.update(values[i]));
+    const first = fragment.firstChild;
+    const last = fragment.lastChild;
+    const parts = this.parts = partGenerators.map(generator => generator(fragment));
+    this.target.start = isPartComment(first) ? parts[0] : first;
+    this.target.end = isPartComment(last) ? parts[parts.length - 1] : last;
+    parts.forEach((part, i) => part.update(values[i]));
   }
   public hydrate(element: Node) {
     this.parts.forEach(part => {
