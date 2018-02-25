@@ -10,9 +10,9 @@ export type PrimitivePart =
 export type PartValue = Optional<
   PrimitivePart | IPartPromise | IDirective | IPartArray | ITemplateGenerator
 >;
-export interface IPartPromise extends Promise<PartValue> {};
-export interface IPartArray extends Array<PartValue> {};
-export type PartGenerator = (target: Node) => Part; 
+export interface IPartPromise extends Promise<PartValue> {}
+export interface IPartArray extends Array<PartValue> {}
+export type PartGenerator = (target: Node) => Part;
 export type KeyFn = (item: any, index?: number) => Key;
 export type TemplateFn = (item: any) => ITemplateGenerator;
 export interface ISerialCacheEntry {
@@ -25,8 +25,8 @@ export interface ITemplateGenerator {
   (values?: PartValue[]): Template;
   id: number;
   exprs: PartValue[];
-};
-type ITemplateGeneratorFactory = (exprs: PartValue[]) => ITemplateGenerator; 
+}
+type ITemplateGeneratorFactory = (exprs: PartValue[]) => ITemplateGenerator;
 export type IDisposer = () => void;
 export type NodeAttribute = [Node, string];
 
@@ -118,7 +118,10 @@ function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
   if (!el) {
     return;
   }
-  const clone: HTMLTemplateElement = document.importNode(el as HTMLTemplateElement, true);
+  const clone: HTMLTemplateElement = document.importNode(
+    el as HTMLTemplateElement,
+    true
+  );
   const fragment = clone.content;
   if (!fragment) {
     return;
@@ -131,20 +134,29 @@ function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
   let deserialized: Optional<ISerialCacheEntry> = undefined;
   if (isFirstSerial) {
     const firstChild = fragment.removeChild(first);
-    const serializedParts: ISerializedPart[] = parseSerializedParts(firstChild.nodeValue || undefined);
+    const serializedParts: ISerializedPart[] = parseSerializedParts(
+      firstChild.nodeValue || undefined
+    );
     const templateElement: HTMLTemplateElement = el;
     if (serializedParts && templateElement) {
-      const partGenerators: PartGenerator[] = serializedParts.map((serial, i) => {
-        return (target: Node) => {
-          const path = serial[0];
-          const isSVG = serial[1];
-          const partTarget = followPath(target, path);
-          if (Array.isArray(partTarget)) {
-            return new Part(path, partTarget[0], i, isSVG);
-          }
-          return new Part(path, partTarget as Node, partGenerators.length, isSVG);
-        };
-      });
+      const partGenerators: PartGenerator[] = serializedParts.map(
+        (serial, i) => {
+          return (target: Node) => {
+            const path = serial[0];
+            const isSVG = serial[1];
+            const partTarget = followPath(target, path);
+            if (Array.isArray(partTarget)) {
+              return new Part(path, partTarget[0], i, isSVG);
+            }
+            return new Part(
+              path,
+              partTarget as Node,
+              partGenerators.length,
+              isSVG
+            );
+          };
+        }
+      );
       deserialized = { templateElement, serializedParts, partGenerators };
     }
   }
@@ -155,7 +167,10 @@ function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
   return;
 }
 
-function templateSetup(serial: ISerializedPart[], partGenerators: PartGenerator[]): WalkFn {
+function templateSetup(
+  serial: ISerializedPart[],
+  partGenerators: PartGenerator[]
+): WalkFn {
   return (parent, element, walkPath) => {
     const isSVG = isNodeSVGChild(element);
     if (isText(element)) {
@@ -179,7 +194,12 @@ function templateSetup(serial: ISerializedPart[], partGenerators: PartGenerator[
             serial.push([adjustedPath, isSVG]);
             partGenerators.push((target: Node) => {
               const partTarget = followPath(target, adjustedPath);
-              return new Part(adjustedPath, partTarget as Node, partGenerators.length, isSVG);
+              return new Part(
+                adjustedPath,
+                partTarget as Node,
+                partGenerators.length,
+                isSVG
+              );
             });
             cursor++;
           }
@@ -204,7 +224,12 @@ function templateSetup(serial: ISerializedPart[], partGenerators: PartGenerator[
             serial.push([attrPath, isSVG]);
             partGenerators.push((target: Node) => {
               const partTarget = followPath(target, attrPath) as NodeAttribute;
-              return new Part(attrPath, partTarget[0], partGenerators.length, isSVG);
+              return new Part(
+                attrPath,
+                partTarget[0],
+                partGenerators.length,
+                isSVG
+              );
             });
             if (isSVG) {
               element.removeAttributeNS(SVG_NS, name);
@@ -879,8 +904,12 @@ export function html(
   factory = function(exprs: PartValue[]) {
     const generator = function() {
       const values = arguments.length === 0 ? exprs : arguments[0];
-      const { templateElement, partGenerators, serializedParts  } = serialCache.get(id) || getSerializedTemplate(id) 
-        || { 
+      const {
+        templateElement,
+        partGenerators,
+        serializedParts
+      } = serialCache.get(id) ||
+        getSerializedTemplate(id) || {
           templateElement: document.createElement(TEMPLATE),
           partGenerators: [],
           serializedParts: []
@@ -888,10 +917,23 @@ export function html(
       if (!templateElement.hasChildNodes()) {
         templateElement.innerHTML = markUp;
         const fragment = templateElement.content;
-        walkDOM(fragment, undefined, templateSetup(serializedParts, partGenerators));
-        serialCache.set(id, { templateElement, partGenerators, serializedParts });
+        walkDOM(
+          fragment,
+          undefined,
+          templateSetup(serializedParts, partGenerators)
+        );
+        serialCache.set(id, {
+          templateElement,
+          partGenerators,
+          serializedParts
+        });
       }
-      return new Template(id, document.importNode(templateElement, true), partGenerators, values);
+      return new Template(
+        id,
+        document.importNode(templateElement, true),
+        partGenerators,
+        values
+      );
     };
     (generator as ITemplateGenerator).id = id;
     (generator as ITemplateGenerator).exprs = expressions;
