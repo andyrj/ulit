@@ -503,7 +503,6 @@ export class Part {
   }
 
   private updateNode(part: Part, value: Optional<PartValue>) {
-    // Error condition: isText(part.value) && isNode(value) -> doesn't remove the text node...
     if (value == null) {
       value = document.createComment(`${PART_START}${PART_END}`);
     }
@@ -515,41 +514,63 @@ export class Part {
     let newStart: Optional<Node> = undefined;
     let newEnd: Optional<Node> = undefined;
     const partValue = part.value;
-    if (!isNode(value)) {
-      // string or coerce to string
-      value =
-        !isString(value) && isFunction(value.toString)
-          ? value.toString()
-          : value;
-      if (!isString(value)) {
-        fail();
-      }
-      if (isText(partValue)) {
-        if (partValue.nodeValue !== value) {
-          partValue.nodeValue = value as string;
-          return;
-        }
-      } else {
-        value = document.createTextNode(value as string);
+    if (isText(partValue)) {
+      if (isNode(value)) {
+        // replace the text node with node/fragment in value
         newStart = value;
         newEnd = value;
+        if (isDocumentFragment(value)) {
+          newStart = value.firstChild;
+          newEnd = value.lastChild;
+        }
+        (parent as Node).insertBefore(value as Node, first);
+        part.target.remove();
+        part.target.start = newStart;
+        part.target.end = newEnd;
+        part.value = value;
+      } else if (isText(value)) {
+        // compare nodeValues
+        if (partValue.nodeValue !== value.nodeValue) {
+          partValue.nodeValue = value.nodeValue;
+        }
+      } else {
+        // compare value with partValue.nodeValue
+        if (!isString(value)) {
+          value = value.toString();
+        }
+        if (partValue.nodeValue !== value) {
+          partValue.nodeValue = value;
+        }
+      } 
+    } else {
+      if (isText(value) || !isNode(value)) {
+        // replace node/fragment with new textNode...
+        if (!isText(value)) {
+          value = document.createTextNode(value.toString());
+        }
+        newStart = value;
+        newEnd = value;
+        (parent as Node).insertBefore(value, first);
+        part.target.remove();
+        part.target.start = newStart;
+        part.target.end = newEnd;
+        part.value = value;
+      } else {
+        // compare nodes and update if the don't ===
+        if (partValue !== value) {
+          newStart = value;
+          newEnd = value;
+          if (isDocumentFragment(value)) {
+            newStart = value.firstChild;
+            newEnd = value.lastChild;
+          }
+          (parent as Node).insertBefore(value, first);
+          part.target.remove();
+          part.target.start = newStart;
+          part.target.end = newEnd;
+          part.value = value;
+        }
       }
-    }
-    if (!isNode(value)) {
-      fail();
-    }
-    if (value !== partValue) {
-      if (!isText(value)) {
-        const isFrag = isDocumentFragment(value);
-        newStart = isFrag ? (value as Node).firstChild : (value as Node);
-        newEnd = isFrag ? (value as Node).lastChild : (value as Node);
-      }
-      // TODO: figure out why it's removing the wrong nodes here...
-      (parent as Node).insertBefore(value as Node, first);
-      part.target.remove();
-      part.value = value;
-      part.target.start = newStart;
-      part.target.end = newEnd;
     }
   }
 }
@@ -935,7 +956,7 @@ export function html(
       );
     };
     (generator as ITemplateGenerator).id = id;
-    (generator as ITemplateGenerator).exprs = expressions;
+    (generator as ITemplateGenerator).exprs = exprs;
     return generator as ITemplateGenerator;
   };
   factoryCache.set(id, factory);
