@@ -254,7 +254,7 @@ function templateSetup(
   };
 }
 
-function followPath(
+export function followPath(
   target: Node,
   pointer: Array<string | number>
 ): Optional<Node | NodeAttribute> | never {
@@ -364,29 +364,33 @@ export class Part {
       this.updateAttribute(this, value);
       return;
     }
-    if (arguments.length === 0 && !isTemplate(this.value)) {
-      value = this.value;
+    let val: Optional<PartValue | Template> = value;
+    if ((val == null || arguments.length === 0)) {
+      val = this.value;
     }
-    if (isDirective(value)) {
-      (value as IDirective)(this);
+    if (isDirective(val)) {
+      (val as IDirective)(this);
       return;
     }
-    if (isPromise(value)) {
-      (value as Promise<PartValue>).then(promised => {
+    if (isPromise(val)) {
+      (val as Promise<PartValue>).then(promised => {
         this.update(promised);
       });
       return;
     }
-    if (isIterable(value)) {
-      value = Array.from(value as any);
+    if (isIterable(val)) {
+      val = Array.from(val as any);
     }
-    if (Array.isArray(value)) {
-      this.updateArray(this, value);
+    if (Array.isArray(val)) {
+      this.updateArray(this, val);
     }
-    if (isTemplateGenerator(value)) {
-      this.updateTemplate(this, value as ITemplateGenerator);
+    if (isTemplateGenerator(val)) {
+      this.updateTemplate(this, val as ITemplateGenerator);
     } else {
-      this.updateNode(this, value);
+      if (isTemplate(val)) {
+        fail();
+      }
+      this.updateNode(this, val as Optional<PartValue>);
     }
   }
   private updateAttribute(part: Part, value: Optional<PartValue>) {
