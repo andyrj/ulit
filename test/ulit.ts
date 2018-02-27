@@ -30,6 +30,8 @@ describe("Template", () => {
       });
     });
     const test2 = new Template(0, templateEl, generators, [undefined, undefined, undefined]);
+    expect((test2.target.start as any).nodeType).to.equal(undefined);
+    expect((test2.target.end as any).nodeType).to.equal(undefined); 
   });
   // TODO: add more tests for Template
 });
@@ -169,6 +171,19 @@ describe("Part", () => {
   });
 
   // TODO: add tests for arrays/iterables and nested templates
+  it("should correctly handle iterables/arrays", () => {
+    const fragment = document.createDocumentFragment();
+    const comment = document.createComment("{{}}");
+    fragment.appendChild(comment);
+    const part = new Part([0], comment, 0, false);
+    expect(fragment.firstChild.nodeType === 8).to.equal(true);
+    const iter = new Set<string>();
+    iter.add("1");
+    iter.add("2");
+    part.update(iter);
+    expect(fragment.firstChild.nodeValue).to.equal("1");
+    expect(fragment.lastChild.nodeValue).to.equal("2");
+  });
 });
 
 describe("DomTarget", () => {
@@ -345,16 +360,25 @@ describe("render", () => {
     render(template2);
     expect(document.body.innerHTML).to.equal(`<div>in the middle it's ${str}!</div>`);
   });
+  /*
   it("nested templates should update in place", () => {
     const nested = (str: string) => html`<div class=nested>${str}</div>`;
     const template = (str: string) => html`<div>${nested(str)}</div>`;
     render(template("test"));
-    expect((document.body.firstChild as any).firstChild.firstChild.nodeValue).to.equal("test");
-    render(template("123"));
-    expect((document.body.firstChild as any).firstChild.firstChild.nodeValue).to.equal("123");
+    expect(document.body.innerHTML).to.equal(`<div><div class="nested">test</div></div>`);
+    // render(template("123"));
+    // expect((document.body.firstChild as any).firstChild.firstChild.nodeValue).to.equal("123");
   });
-
   /*
+  it("nested templates", () => {
+    const nested = html`<div id="test">test</div>`;
+    const template = html`<div>${nested}</div>`;
+    render(template);
+    expect(document.body.innerHTML).to.equal(`<div><div id="test">test</div></div>`);
+    const template1 = html`<span>${template}</span>`;
+    render(template1);
+    expect(document.body.innerHTML).to.equal(`<span><div><div id="test">test</div></div></span>`);
+  });
   it("setting event handler should work", () => {
     let count = 0;
     const handler = (e: Event) => count++;
@@ -373,15 +397,7 @@ describe("render", () => {
     render(test3(undefined));
     expect(document.body.innerHTML).to.equal(`<div></div>`);
   });
-  it("nested templates", () => {
-    const nested = html`<div id="test">test</div>`;
-    const template = html`<div>${nested}</div>`;
-    render(template);
-    expect(document.body.innerHTML).to.equal(`<div><div id="test">test</div></div>`);
-    const template1 = html`<span>${template}</span>`;
-    render(template1);
-    expect(document.body.innerHTML).to.equal(`<span><div><div id="test">test</div></div></span>`);
-  });
+  
   it("attribute directives should work as expected", () => {
     const template = (str: string) => html`<div id=${Directive(part => part.update(str))}>test</div>`;
     render(template("test"));
