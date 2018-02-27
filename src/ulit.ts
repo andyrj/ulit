@@ -976,18 +976,7 @@ export function render(
     if (isTemplateElement(template.element)) {
       const first: Optional<Node> = container.firstChild;
       const parent: Optional<Node> = container;
-      const fragment = template.element.content;
-      const fragmentFirst = fragment.firstChild;
-      const fragmentLast = fragment.lastChild;
-      const newStart = isPartComment(fragmentFirst)
-        ? template.parts[0]
-        : fragmentFirst;
-      const newEnd = isPartComment(fragmentLast)
-        ? template.parts[template.parts.length - 1]
-        : fragmentLast;
-      (parent as Node).insertBefore(fragment, first);
-      template.target.start = newStart;
-      template.target.end = newEnd;
+      (parent as Node).insertBefore(template.element.content, first);
       (container as any).__template = template;
     } else {
       fail();
