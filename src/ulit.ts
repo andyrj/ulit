@@ -487,7 +487,6 @@ export class Part {
   }
 
   private updateTemplate(part: Part, value: ITemplateGenerator) {
-    // TODO: find error case missing Part.target.remove() 
     const first = part.target.first();
     const parent = first.parentNode;
     if (!parent) {
@@ -504,6 +503,7 @@ export class Part {
       const newStart = template.target.first();
       const newEnd = template.target.last();
       (parent as Node).insertBefore(fragment, first);
+      part.target.remove();
       part.target.start = newStart;
       part.target.end = newEnd;
       part.value = template;
