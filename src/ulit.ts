@@ -780,7 +780,6 @@ export function repeat(
         delta--;
       }
     }
-    // TODO: finish repeat rewrite... with respect to ITemplateGenerator
     // move/update and add new
     index = 0;
     for (; index < keysLen; index++) {
@@ -788,11 +787,17 @@ export function repeat(
       const oldKey = oldCacheOrder[index];
       const newTemplateGenerator = newCacheMap.get(key);
       const oldTemplate = oldCacheMap.get(key);
+      const oldTargetTemplate = oldCacheMap.get(oldKey);
+      const target = oldTargetTemplate ? oldTargetTemplate.target.first() : null;
 
       // if key is not in oldCacheMap, add new part, be sure to mutate oldCacheOrder and oldCacheMap to match for each iteration...
       if (!oldTemplate) {
         // add new
-      } else if (key === oldCacheOrder[index]) {
+        const newTemplate = (newTemplateGenerator as ITemplateGenerator)();
+        (parent as Node).insertBefore(newTemplate.element.content, target);
+        oldCacheOrder.splice(index, 0, key);
+        oldCacheMap.set(key, newTemplate);
+      } else if (key === oldKey) {
         // updates do not change repeat state cache, as key order will not change...
         if (!newTemplateGenerator) {
           fail();
@@ -811,12 +816,16 @@ export function repeat(
         // move
         // else remove oldCacheMap[key] and move to index with update after remove() to minimize dom operations...
         const oldFragment = oldTemplate.target.remove();
+        const oldIndex = oldCacheOrder.indexOf(key);
         if (oldTemplate.id === (newTemplateGenerator as ITemplateGenerator).id) {
           oldTemplate.update((newTemplateGenerator as ITemplateGenerator).exprs);
-          
+          (parent as Node).insertBefore(oldFragment, target);
         } else {
-
+          const newTemplate = (newTemplateGenerator as ITemplateGenerator)();
+          (parent as Node).insertBefore(newTemplate.element.content, target);
         }
+        oldCacheOrder.splice(oldIndex, 1);
+        oldCacheOrder.splice(index, 0, key);
       }
     }
   });
