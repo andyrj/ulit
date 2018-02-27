@@ -958,6 +958,7 @@ export function render(
       return;
     } else {
       const newInstance = (view as ITemplateGenerator)();
+      // TODO: this seems un-DRY wtih code below... can't instance.target.first() instead be container.firstChild below?
       container.insertBefore(
         newInstance.element.content,
         instance.target.first()
