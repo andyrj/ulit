@@ -86,7 +86,7 @@ render(html`<h1>${passthroughDirective("pass through example...")}</h1>`);
 document.body.innerHTML === "<h1>pass through example...</h1>"; // true
 
 // Example Part API brain dump
-const partApiDirective = Directive(() => part => {
+const partApiDirective = Directive(part => {
   // update part with a new PartValue
   part.update("test");
 
@@ -100,10 +100,9 @@ const partApiDirective = Directive(() => part => {
 
   // readonly/private typescript classes enforced at runtime in javascript via es6 proxy...
   part.path; // readonly Array<string | number>, the path from containing templates root to this part
-  part.isAttached; // readonly boolean, denotes whether this part has been placed into the parent template fragment/parent dom
-  part.firstNode(); // Node that begins this part
-  part.lastNode(); // Node that ends this part...
-  part.remove(); // moves the part out of the dom and into a document fragment.
+  part.target.first(); // Node that begins this part
+  part.target.last(); // Node that ends this part...
+  part.target.remove(); // moves the part out of the dom and into a document fragment.
 });
 
 // Arrays/iterables are valid PartValue and render templates, this uses repeat() internally
