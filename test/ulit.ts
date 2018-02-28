@@ -2,7 +2,6 @@ import { expect } from "chai";
 import "mocha";
 import { Directive, Disposable, DomTarget, html, IDisposer, Part, render, Template, PartGenerator, followPath } from "../src/ulit";
 
-/*
 describe("Template", () => {
   it("should have {disposable, target, id, element, parts, values}", () => {
     const test1 = new Template(1, document.createElement("template"), [], []);
@@ -36,9 +35,8 @@ describe("Template", () => {
   });
   // TODO: add more tests for Template
 });
-*/
+
 describe("Part", () => {
-  /*
   it("should have {value, path, disposable, target, isSVG}", () => {
     const fragment = document.createDocumentFragment();
     const target = document.createElement("div");
@@ -171,7 +169,6 @@ describe("Part", () => {
       done();
     }, 500);
   });
-  */
   // TODO: add tests for arrays/iterables and nested templates
   it("should correctly handle iterables/arrays", () => {
     const fragment = document.createDocumentFragment();
@@ -188,7 +185,7 @@ describe("Part", () => {
     expect(fragment.childNodes[1].nodeValue).to.equal("B");
   });
 });
-/*
+
 describe("DomTarget", () => {
   it("should have {start, end, isSVG}", () => {
     const test = new DomTarget();
@@ -319,7 +316,6 @@ describe("render", () => {
     render(template2);
     expect(document.body.innerHTML).to.equal(`<div>in the middle it's ${str}!</div>`);
   });
-  /*
   it("nested templates should update in place", () => {
     const nested = (str: string) => html`<div class=nested>${str}</div>`;
     const template = (str: string) => html`<div>${nested(str)}</div>`;
@@ -328,7 +324,6 @@ describe("render", () => {
     // render(template("123"));
     // expect((document.body.firstChild as any).firstChild.firstChild.nodeValue).to.equal("123");
   });
-  /*
   it("nested templates", () => {
     const nested = html`<div id="test">test</div>`;
     const template = html`<div>${nested}</div>`;
@@ -406,4 +401,3 @@ describe("render", () => {
     expect(document.body.innerHTML).to.equal("<div>321</div>");
   });
 });
-*/
