@@ -383,7 +383,10 @@ export class Part {
       val = Array.from(val as any);
     }
     if (Array.isArray(val)) {
-      this.updateArray(this, val);
+      const directive = repeat(val);
+      this.value = directive;
+      directive(this);
+      return; 
     }
     if (isTemplateGenerator(val)) {
       this.updateTemplate(this, val as ITemplateGenerator);
@@ -477,15 +480,6 @@ export class Part {
     }
   }
 
-  private updateArray(part: Part, values: Optional<PartValue[]>) {
-    if (!values) {
-      return;
-    }
-    const directive = repeat(values as any);
-    part.value = directive;
-    return directive(part);
-  }
-
   private updateTemplate(part: Part, value: ITemplateGenerator) {
     const first = part.target.first();
     const parent = first.parentNode;
@@ -545,9 +539,7 @@ export class Part {
         }
       } else {
         // compare value with partValue.nodeValue
-        if (!isString(value)) {
-          value = value.toString();
-        }
+        value = !isString(value) ? value.toString() : value;
         if (!isString(value)) {
           fail();
         } else {
@@ -560,7 +552,7 @@ export class Part {
       if (isText(value) || !isNode(value)) {
         // replace node/fragment with new textNode...
         if (!isText(value)) {
-          value = document.createTextNode(value.toString());
+          value = document.createTextNode(!isString(value) ? value.toString() : value);
         }
         newStart = value;
         newEnd = value;
@@ -590,8 +582,8 @@ export class Part {
 }
 
 export class DomTarget {
-  public start: Optional<Node | Part> = undefined;
-  public end: Optional<Node | Part> = undefined;
+  public start: Optional<Node | Part | Template> = undefined;
+  public end: Optional<Node | Part | Template> = undefined;
   constructor(target?: Node, public isSVG: boolean = false) {
     if (target) {
       this.start = target;
@@ -726,20 +718,58 @@ export function Directive(fn: DirectiveFn): IDirective {
   return fn as IDirective;
 }
 
-function defaultKeyFn(index: number): Key {
-  return index;
+function defaultKeyFn(item: any, index?: number): Key {
+  return index as number;
 }
 
-function defaultTemplateFn(item: PartValue): ITemplateGenerator {
+function defaultTemplateFn(item: any): ITemplateGenerator {
   return html`${item}`;
 }
 const repeatCache = new Map<Part, [Key[], Map<Key, Template>]>();
 export function repeat(
-  items: Array<{}>,
+  items: Array<any>,
   keyFn: KeyFn = defaultKeyFn,
   templateFn: TemplateFn = defaultTemplateFn
 ): IDirective {
   return Directive((part: Part) => {
+    let keys: Key[] = [];
+    let generators: ITemplateGenerator[] = [];
+    items.forEach((item, index) => {
+      keys.push(keyFn(item, index))
+      generators.push(templateFn(item));
+    });
+    let cursor = part.target.first();
+    let parent = cursor.parentNode;
+    if (!parent) {
+      fail();
+    }
+    const cacheEntry = repeatCache.get(part);
+    if (!cacheEntry /*isPartComment(cursor)*/) {
+      const newFragment = document.createDocumentFragment();
+      const newCacheEntry: [Key[], Map<Key, Template>] = [[], new Map<Key, Template>()]; 
+      const generatorLen = generators.length;
+      generators.forEach((generator, index) => {
+        const key = keys[index];
+        const template = (generator as ITemplateGenerator)();
+        template.update();
+        newFragment.appendChild(template.element.content);
+        newCacheEntry[0].push(key);
+        newCacheEntry[1].set(key, template);
+        if (index === 0) {
+          part.target.start = template;
+        }
+        if (index === generatorLen) {
+          part.target.end = template;
+        }
+      });
+      // TODO: instead of calling part.update() just handle the logic here for placing nodes
+      // part.update(newFragment);
+      (parent as Node).insertBefore(newFragment, cursor);
+      repeatCache.set(part, newCacheEntry);
+    } else {
+      // TODO: add update logic from below commented code block...
+    }
+    /*
     let target = part.target.first();
     const parent = target.parentNode;
     if (!parent) {
@@ -756,8 +786,7 @@ export function repeat(
       [],
       new Map<Key, Template>()
     ];
-    const newCache = [keys, new Map<Key, ITemplateGenerator>()];
-    const newCacheMap = newCache[1] as Map<Key, ITemplateGenerator>;
+    const newCacheMap = new Map<Key, ITemplateGenerator>();
     // build LUT for new keys/templates
     let index = 0;
     const keysLen = keys.length;
@@ -780,54 +809,87 @@ export function repeat(
         delta--;
       }
     }
-    // move/update and add new
-    index = 0;
-    for (; index < keysLen; index++) {
-      const key = keys[index];
-      const oldKey = oldCacheOrder[index];
-      const newTemplateGenerator = newCacheMap.get(key);
-      const oldTemplate = oldCacheMap.get(key);
-      const oldTargetTemplate = oldCacheMap.get(oldKey);
-      const target = oldTargetTemplate ? oldTargetTemplate.target.first() : null;
-
-      // if key is not in oldCacheMap, add new part, be sure to mutate oldCacheOrder and oldCacheMap to match for each iteration...
-      if (!oldTemplate) {
-        // add new
-        const newTemplate = (newTemplateGenerator as ITemplateGenerator)();
-        (parent as Node).insertBefore(newTemplate.element.content, target);
-        oldCacheOrder.splice(index, 0, key);
-        oldCacheMap.set(key, newTemplate);
-      } else if (key === oldKey) {
-        // updates do not change repeat state cache, as key order will not change...
-        if (!newTemplateGenerator) {
-          fail();
-        }
-        if (oldTemplate.id === (newTemplateGenerator as ITemplateGenerator).id) {
-          // update in place
-          oldTemplate.update((newTemplateGenerator as ITemplateGenerator).exprs);
-        } else {
-          // replace oldTemplate with newTemplateGenerator()...
-          const oldFirst = oldTemplate.target.first();
-          const newTemplate = (newTemplateGenerator as ITemplateGenerator)();
-          (parent as Node).insertBefore(newTemplate.element.content, oldFirst);
-          oldTemplate.target.remove();
-        }
+    if (oldCacheOrder.length === 0 && isPartComment(part.value)) {
+      if (keysLen === 0) {
+        return;
       } else {
-        // move
-        // else remove oldCacheMap[key] and move to index with update after remove() to minimize dom operations...
-        const oldFragment = oldTemplate.target.remove();
-        const oldIndex = oldCacheOrder.indexOf(key);
-        if (oldTemplate.id === (newTemplateGenerator as ITemplateGenerator).id) {
-          oldTemplate.update((newTemplateGenerator as ITemplateGenerator).exprs);
-          (parent as Node).insertBefore(oldFragment, target);
-        } else {
+        const newFragment = document.createDocumentFragment();
+        index = 0;
+        for (; index < keysLen; index++) {
+          const key = keys[index];
+          const generator = newCacheMap.get(key);
+          if (!generator) {
+            fail();
+          }
+          const newTemplate = (generator as ITemplateGenerator)();
+          oldCacheMap.set(key, newTemplate);
+          oldCacheOrder.push(key);
+          newFragment.appendChild(newTemplate.element.content);
+        }
+        part.update(newFragment);
+        part.value = templates;
+      }
+    } else {
+      // let initComment: Optional<Comment> = undefined;
+      // if (oldCacheOrder.length === 0 && isPartComment((parent as Node).firstChild)) {
+      //   initComment = (parent as Node).firstChild as Comment;
+      // }
+      
+      // move/update and add new
+      index = 0;
+      for (; index < keysLen; index++) {
+        const key = keys[index];
+        const oldKey = oldCacheOrder[index];
+        const newTemplateGenerator = newCacheMap.get(key);
+        const oldTemplate = oldCacheMap.get(key);
+        const oldTargetTemplate = oldCacheMap.get(oldKey);
+        const target = oldTargetTemplate ? oldTargetTemplate.target.first() : null;
+
+        // if key is not in oldCacheMap, add new part, be sure to mutate oldCacheOrder and oldCacheMap to match for each iteration...
+        if (!oldTemplate) {
+          // add new
           const newTemplate = (newTemplateGenerator as ITemplateGenerator)();
           (parent as Node).insertBefore(newTemplate.element.content, target);
+          oldCacheOrder.splice(index, 0, key);
+          oldCacheMap.set(key, newTemplate);
+        } else if (key === oldKey) {
+          // updates do not change repeat state cache, as key order will not change...
+          if (!newTemplateGenerator) {
+            fail();
+          }
+          if (oldTemplate.id === (newTemplateGenerator as ITemplateGenerator).id) {
+            // update in place
+            oldTemplate.update((newTemplateGenerator as ITemplateGenerator).exprs);
+          } else {
+            // replace oldTemplate with newTemplateGenerator()...
+            const oldFirst = oldTemplate.target.first();
+            const newTemplate = (newTemplateGenerator as ITemplateGenerator)();
+            (parent as Node).insertBefore(newTemplate.element.content, oldFirst);
+            oldTemplate.target.remove();
+          }
+        } else {
+          // move
+          // else remove oldCacheMap[key] and move to index with update after remove() to minimize dom operations...
+          const oldFragment = oldTemplate.target.remove();
+          const oldIndex = oldCacheOrder.indexOf(key);
+          if (oldTemplate.id === (newTemplateGenerator as ITemplateGenerator).id) {
+            oldTemplate.update((newTemplateGenerator as ITemplateGenerator).exprs);
+            (parent as Node).insertBefore(oldFragment, target);
+          } else {
+            const newTemplate = (newTemplateGenerator as ITemplateGenerator)();
+            (parent as Node).insertBefore(newTemplate.element.content, target);
+          }
+          oldCacheOrder.splice(oldIndex, 1);
+          oldCacheOrder.splice(index, 0, key);
         }
-        oldCacheOrder.splice(oldIndex, 1);
-        oldCacheOrder.splice(index, 0, key);
       }
+      // if (initComment) {
+      //   (parent as Node).removeChild(initComment);
+      // }
     }
+    part.target.start = oldCacheMap.get(oldCacheOrder[0]);
+    part.target.end = oldCacheMap.get(oldCacheOrder[oldCacheOrder.length - 1]);
+    */
   });
 }
 
