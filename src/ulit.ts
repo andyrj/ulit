@@ -322,29 +322,29 @@ export class Template {
   }
 }
 
-function attachPartListener(
-  part: Part,
-  element: HTMLElement,
-  name: string,
-  capture: boolean
-) {
-  (element as HTMLElement).addEventListener(
-    name,
-    e => {
-      const entry = eventHandlerMap.get(part);
-      if (!entry) {
-        fail();
-      }
-      const handler = (entry as Map<string, Function>).get(name);
-      if (handler) {
-        handler(e);
-      }
-    },
-    capture
-  );
-}
+// function attachPartListener(
+//   part: Part,
+//   element: HTMLElement,
+//   name: string,
+//   capture: boolean
+// ) {
+//   (element as HTMLElement).addEventListener(
+//     name,
+//     e => {
+//       const entry = eventHandlerMap.get(part);
+//       if (!entry) {
+//         fail();
+//       }
+//       const handler = (entry as Map<string, Function>).get(name);
+//       if (handler) {
+//         handler(e);
+//       }
+//     },
+//     capture
+//   );
+// }
 
-const eventHandlerMap = new WeakMap<Part, Map<string, Function>>();
+// const eventHandlerMap = new WeakMap<Part, Map<string, Function>>();
 export class Part {
   public value: PartValue | Template;
   public path: Array<string | number>;
@@ -414,37 +414,8 @@ export class Part {
     }
     const isValFn = isFunction(value);
     if (isValFn) {
-      if (isEventPart(part)) {
-        const cachedEntry = eventHandlerMap.get(part);
-        if (!cachedEntry) {
-          const handlerMap = new Map<string, EventListener>();
-          handlerMap.set(name, value as EventListener);
-          eventHandlerMap.set(part, handlerMap);
-          const isCapture = name.endsWith(CAPTURE);
-          const rawName = name.split(CAPTURE)[0];
-          attachPartListener(
-            part,
-            element as HTMLElement,
-            isCapture ? rawName : name,
-            isCapture
-          );
-          part.disposable.addDisposer(() => {
-            const handler = handlerMap.get(name);
-            if (handler) {
-              (element as HTMLElement).removeEventListener(
-                name,
-                handler as EventListener,
-                isCapture
-              );
-            }
-          });
-          // TODO: add disposer to cleanup the eventHandlerMap on part.dispose()
-        } else {
-          const handler = cachedEntry.get(name);
-          if (handler !== value) {
-            cachedEntry.set(name, value as Function);
-          }
-        }
+      if (isEventPart(part) && (element as any)[name] !== value) {
+        (element as any)[name] = value;
       } else {
         fail();
       }
@@ -744,7 +715,7 @@ export function repeat(
       fail();
     }
     const cacheEntry = repeatCache.get(part);
-    if (!cacheEntry /*isPartComment(cursor)*/) {
+    if (!cacheEntry) {
       const newFragment = document.createDocumentFragment();
       const newCacheEntry: [Key[], Map<Key, Template>] = [[], new Map<Key, Template>()]; 
       const generatorLen = generators.length;

@@ -33,7 +33,7 @@ describe("Template", () => {
     expect((test2.target.start as any).nodeType).to.equal(undefined);
     expect((test2.target.end as any).nodeType).to.equal(undefined); 
   });
-  // TODO: add more tests for Template
+  // TODO: add more tests for Template?
 });
 
 describe("Part", () => {
@@ -169,7 +169,7 @@ describe("Part", () => {
       done();
     }, 500);
   });
-  // TODO: add tests for arrays/iterables and nested templates
+  
   it("should correctly handle iterables/arrays", () => {
     const fragment = document.createDocumentFragment();
     const comment = document.createComment("{{}}");
@@ -179,7 +179,6 @@ describe("Part", () => {
     const iter = new Set<string>();
     iter.add("A");
     iter.add("B");
-    // TODO: find out where it errors and coerces to string...
     part.update(iter);
     expect(fragment.childNodes[0].nodeValue).to.equal("A");
     expect(fragment.childNodes[1].nodeValue).to.equal("B");
@@ -321,8 +320,8 @@ describe("render", () => {
     const template = (str: string) => html`<div>${nested(str)}</div>`;
     render(template("test"));
     expect(document.body.innerHTML).to.equal(`<div><div class="nested">test</div></div>`);
-    // render(template("123"));
-    // expect((document.body.firstChild as any).firstChild.firstChild.nodeValue).to.equal("123");
+    render(template("123"));
+    expect((document.body.firstChild as any).firstChild.firstChild.nodeValue).to.equal("123");
   });
   it("nested templates", () => {
     const nested = html`<div id="test">test</div>`;
@@ -363,7 +362,6 @@ describe("render", () => {
     lastPart.update("test123");
     expect(document.body.firstChild.firstChild.nodeValue).to.equal("test123");
   });
-  /*
   it("setting event handler should work", () => {
     let count = 0;
     const handler = (e: Event) => count++;
@@ -374,6 +372,8 @@ describe("render", () => {
     document.body.firstChild.dispatchEvent(event);
     expect(count).to.equal(1);
   });
+  /*
+  
   it("should handle attribute parts", () => {
     const str = "test3";
     const test3 = val => html`<div id=${val}></div>`;
