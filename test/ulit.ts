@@ -372,16 +372,19 @@ describe("render", () => {
     document.body.firstChild.dispatchEvent(event);
     expect(count).to.equal(1);
   });
-  /*
-  
   it("should handle attribute parts", () => {
     const str = "test3";
     const test3 = val => html`<div id=${val}></div>`;
+    render(test3());
+    expect(document.body.innerHTML).to.equal(`<div></div>`);
+    render(test3(undefined));
+    expect(document.body.innerHTML).to.equal(`<div></div>`);
     render(test3(str));
     expect(document.body.innerHTML).to.equal(`<div id="${str}"></div>`);  
     render(test3(undefined));
     expect(document.body.innerHTML).to.equal(`<div></div>`);
   });
+  /*
   it("attribute directives should work as expected", () => {
     const template = (str: string) => html`<div id=${Directive(part => part.update(str))}>test</div>`;
     render(template("test"));

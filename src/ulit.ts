@@ -41,7 +41,7 @@ const PART = "part";
 const SERIAL_PART_START = `${PART_START}${PART}s:`;
 const PART_MARKER = `${PART_START}${PART_END}`;
 const TEMPLATE = "template";
-const CAPTURE = "Capture";
+// const CAPTURE = "Capture";
 const DIRECTIVE = "directive";
 const ULIT = "ulit";
 const ELEMENT_NODE = 1;
@@ -402,6 +402,11 @@ export class Part {
       value.then(promised => {
         this.updateAttribute(part, promised);
       });
+      return;
+    }
+    if (isDirective(value)) {
+      value(this);
+      return;
     }
     const element = part.target.start as Node;
     if (!element) {
@@ -413,39 +418,31 @@ export class Part {
       fail();
     }
     const isValFn = isFunction(value);
-    if (isValFn) {
-      if (isEventPart(part) && (element as any)[name] !== value) {
+    if (name in element || (isValFn && isEventPart(part))) {
+      if (value && (element as any)[name] !== value) {
         (element as any)[name] = value;
       } else {
-        fail();
+        delete (element as any)[name];
       }
     } else {
-      if (name in element) {
-        if (value) {
-          (element as any)[name] = value;
+      if (isSVG) {
+        if (!value) {
+          (element as HTMLElement).removeAttributeNS(SVG_NS, name);
         } else {
-          delete (element as any)[name];
+          (element as HTMLElement).setAttributeNS(
+            SVG_NS,
+            name,
+            isString(value) ? value : value.toString()
+          );
         }
       } else {
-        if (isSVG) {
-          if (!value) {
-            (element as HTMLElement).removeAttributeNS(SVG_NS, name);
-          } else {
-            (element as HTMLElement).setAttributeNS(
-              SVG_NS,
-              name,
-              isString(value) ? value : value.toString()
-            );
-          }
+        if (!value) {
+          (element as HTMLElement).removeAttribute(name);
         } else {
-          if (!value) {
-            (element as HTMLElement).removeAttribute(name);
-          } else {
-            (element as HTMLElement).setAttribute(
-              name,
-              isString(value) ? value : value.toString()
-            );
-          }
+          (element as HTMLElement).setAttribute(
+            name,
+            isString(value) ? value : value.toString()
+          );
         }
       }
     }
