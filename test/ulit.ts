@@ -393,13 +393,12 @@ describe("render", () => {
   });
   it("arrays", () => {
     const arr = [1, 2 ,3];
-    const template = html`<div>${arr}</div>`;
-    render(template);
-    expect(document.body.innerHTML).to.equal("<div>123</div>");
+    render(arr);
+    expect(document.body.innerHTML).to.equal("123");
     arr[0] = 3;
     arr[1] = 2;
     arr[2] = 1;
-    render(template);
-    expect(document.body.innerHTML).to.equal("<div>321</div>");
+    render(arr);
+    expect(document.body.innerHTML).to.equal("321");
   });
 });

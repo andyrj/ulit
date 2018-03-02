@@ -739,7 +739,9 @@ export function repeat(
     if (!cacheEntry) {
       const newFragment = document.createDocumentFragment();
       const newCacheEntry: [Key[], Map<Key, Template>] = [[], new Map<Key, Template>()]; 
-      const generatorLen = generators.length;
+      const generatorLen = generators.length - 1;
+      let newStart = undefined;
+      let newEnd = undefined;
       generators.forEach((generator, index) => {
         const key = keys[index];
         const template = (generator as ITemplateGenerator)();
@@ -748,14 +750,16 @@ export function repeat(
         newCacheEntry[0].push(key);
         newCacheEntry[1].set(key, template);
         if (index === 0) {
-          part.target.start = template;
+          newStart = template;
         }
-        if (index === generatorLen) {
-          part.target.end = template;
+        if (index === generatorLen ) {
+          newEnd = template;
         }
       });
       (parent as Node).insertBefore(newFragment, cursor);
-      (parent as Node).removeChild(cursor);
+      part.target.remove();
+      part.target.start = newStart;
+      part.target.end = newEnd;
       repeatCache.set(part, newCacheEntry);
     } else {
       // TODO: add update logic from below commented code block...
@@ -1020,10 +1024,9 @@ export function render(
       return;
     } else {
       const newInstance = (view as ITemplateGenerator)();
-      // TODO: this seems un-DRY wtih code below... can't instance.target.first() instead be container.firstChild below?
       container.insertBefore(
         newInstance.element.content,
-        instance.target.first()
+        container.firstChild
       );
       instance.target.remove();
       (container as any).__template = newInstance;
