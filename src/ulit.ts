@@ -37,6 +37,8 @@ const FOREIGN_OBJECT = "FOREIGNOBJECT";
 const PART_START = "{{";
 const PART_END = "}}";
 const PART = "part";
+const STYLE = "style";
+const THREE_DOT = "...";
 // const NODE_TYPE = "nodeType";
 const SERIAL_PART_START = `${PART_START}${PART}s:`;
 const PART_MARKER = `${PART_START}${PART_END}`;
@@ -322,29 +324,62 @@ export class Template {
   }
 }
 
-// function attachPartListener(
-//   part: Part,
-//   element: HTMLElement,
-//   name: string,
-//   capture: boolean
-// ) {
-//   (element as HTMLElement).addEventListener(
-//     name,
-//     e => {
-//       const entry = eventHandlerMap.get(part);
-//       if (!entry) {
-//         fail();
-//       }
-//       const handler = (entry as Map<string, Function>).get(name);
-//       if (handler) {
-//         handler(e);
-//       }
-//     },
-//     capture
-//   );
-// }
+function removeAttribute(element: HTMLElement, name: string, isSVG: boolean = false) {
+  if (!element || !name) {
+    return;
+  }
+  if (!isSVG) {
+    element.removeAttribute(name);
+  } else {
+    element.removeAttributeNS(SVG_NS, name);
+  }
+}
 
-// const eventHandlerMap = new WeakMap<Part, Map<string, Function>>();
+export interface IToString {
+  toString: () => string;
+}
+export type AttributePartValue = string | IToString | {};
+
+function setAttribute(element: HTMLElement, name: string, value: AttributePartValue, isSVG: boolean = false) {
+  if (!element || !name) {
+    return;
+  }
+  if (name === STYLE) {
+    fail();
+  }
+  if (name === THREE_DOT) {
+    if (isString(value)) {
+      fail();
+    }
+    const attrs = element.attributes;
+    const len = attrs.length;
+    let i = 0;
+    for (; i < len; i++) {
+      const attr = attrs.item(i);
+      const key = attr.name;
+      if (key in (value as any)) {
+        const val = (value as any)[key];
+        if (val) {
+          setAttribute(element, key, val, isSVG);
+        } else {
+          removeAttribute(element, key, isSVG);
+        }
+      } else {
+        removeAttribute(element, key, isSVG);
+      }
+    }
+  } else {
+    if (!isString(value)) {
+      value = value.toString();
+    }
+    if (!isSVG) {
+      element.setAttribute(name, value as string);
+    } else {
+      element.setAttributeNS(SVG_NS, name, value as string);
+    }
+  }
+}
+
 export class Part {
   public value: PartValue | Template;
   public path: Array<string | number>;
@@ -424,35 +459,15 @@ export class Part {
         (element as any)[name] = value;
       } else {
         delete (element as any)[name];
-        // TODO: this doesn't seem DRY with code below... clean this up...
         if ((element as HTMLElement).hasAttribute(name)) {
-          if (isSVG) {
-            (element as HTMLElement).removeAttributeNS(SVG_NS, name);
-          } else {
-            (element as HTMLElement).removeAttribute(name);
-          }
+          removeAttribute(element as HTMLElement, name, isSVG);
         }
       }
     } else {
-      if (isSVG) {
-        if (!value) {
-          (element as HTMLElement).removeAttributeNS(SVG_NS, name);
-        } else {
-          (element as HTMLElement).setAttributeNS(
-            SVG_NS,
-            name,
-            isString(value) ? value : value.toString()
-          );
-        }
+      if (!value) {
+        removeAttribute(element as HTMLElement, name, isSVG);
       } else {
-        if (!value) {
-          (element as HTMLElement).removeAttribute(name);
-        } else {
-          (element as HTMLElement).setAttribute(
-            name,
-            isString(value) ? value : value.toString()
-          );
-        }
+        setAttribute(element as HTMLElement, name, value, isSVG);
       }
     }
   }
