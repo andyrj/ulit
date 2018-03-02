@@ -362,7 +362,7 @@ export class Part {
   }
   public update(value?: PartValue) {
     if (isAttributePart(this)) {
-      this.updateAttribute(this, value);
+      this.updateAttribute(value);
       return;
     }
     let val: Optional<PartValue | Template> = value;
@@ -389,18 +389,19 @@ export class Part {
       return; 
     }
     if (isTemplateGenerator(val)) {
-      this.updateTemplate(this, val as ITemplateGenerator);
+      this.updateTemplate(val as ITemplateGenerator);
     } else {
       if (isTemplate(val)) {
         fail();
       }
-      this.updateNode(this, val as Optional<PartValue>);
+      this.updateNode(val as Optional<PartValue>);
     }
   }
-  private updateAttribute(part: Part, value: Optional<PartValue>) {
+
+  private updateAttribute(value: Optional<PartValue>) {
     if (isPromise(value)) {
       value.then(promised => {
-        this.updateAttribute(part, promised);
+        this.updateAttribute(promised);
       });
       return;
     }
@@ -408,21 +409,29 @@ export class Part {
       value(this);
       return;
     }
-    const element = part.target.start as Node;
+    const element = this.target.start as Node;
     if (!element) {
       fail();
     }
-    const name = part.path[part.path.length - 1] as string;
-    const isSVG = part.isSVG;
+    const name = this.path[this.path.length - 1] as string;
+    const isSVG = this.isSVG;
     if (!name) {
       fail();
     }
     const isValFn = isFunction(value);
-    if (name in element || (isValFn && isEventPart(part))) {
+    if (name in element || (isValFn && isEventPart(this))) {
       if (value && (element as any)[name] !== value) {
         (element as any)[name] = value;
       } else {
         delete (element as any)[name];
+        // TODO: this doesn't seem DRY with code below... clean this up...
+        if ((element as HTMLElement).hasAttribute(name)) {
+          if (isSVG) {
+            (element as HTMLElement).removeAttributeNS(SVG_NS, name);
+          } else {
+            (element as HTMLElement).removeAttribute(name);
+          }
+        }
       }
     } else {
       if (isSVG) {
@@ -448,13 +457,13 @@ export class Part {
     }
   }
 
-  private updateTemplate(part: Part, value: ITemplateGenerator) {
-    const first = part.target.first();
+  private updateTemplate(value: ITemplateGenerator) {
+    const first = this.target.first();
     const parent = first.parentNode;
     if (!parent) {
       fail();
     }
-    const instance = isTemplate(part.value) ? part.value : undefined;
+    const instance = isTemplate(this.value) ? this.value : undefined;
     if (instance && (instance as Template).id === value.id) {
       (instance as Template).update(value.exprs);
       return;
@@ -465,27 +474,27 @@ export class Part {
       const newStart = template.target.first();
       const newEnd = template.target.last();
       (parent as Node).insertBefore(fragment, first);
-      part.target.remove();
-      part.target.start = newStart;
-      part.target.end = newEnd;
-      part.value = template;
+      this.target.remove();
+      this.target.start = newStart;
+      this.target.end = newEnd;
+      this.value = template;
     } else {
       fail();
     }
   }
 
-  private updateNode(part: Part, value: Optional<PartValue>) {
+  private updateNode(value: Optional<PartValue>) {
     if (value == null) {
       value = document.createComment(`${PART_START}${PART_END}`);
     }
-    const first = part.target.first();
+    const first = this.target.first();
     const parent = first.parentNode;
     if (parent == null) {
       fail();
     }
     let newStart: Optional<Node> = undefined;
     let newEnd: Optional<Node> = undefined;
-    const partValue = part.value;
+    const partValue = this.value;
     if (isText(partValue)) {
       if (isNode(value)) {
         // replace the text node with node/fragment in value
@@ -496,10 +505,10 @@ export class Part {
           newEnd = value.lastChild;
         }
         (parent as Node).insertBefore(value as Node, first);
-        part.target.remove();
-        part.target.start = newStart;
-        part.target.end = newEnd;
-        part.value = value;
+        this.target.remove();
+        this.target.start = newStart;
+        this.target.end = newEnd;
+        this.value = value;
       } else if (isText(value)) {
         // compare nodeValues
         if (partValue.nodeValue !== value.nodeValue) {
@@ -525,10 +534,10 @@ export class Part {
         newStart = value;
         newEnd = value;
         (parent as Node).insertBefore(value, first);
-        part.target.remove();
-        part.target.start = newStart;
-        part.target.end = newEnd;
-        part.value = value;
+        this.target.remove();
+        this.target.start = newStart;
+        this.target.end = newEnd;
+        this.value = value;
       } else {
         // compare nodes and update if the don't ===
         if (partValue !== value) {
@@ -539,10 +548,10 @@ export class Part {
             newEnd = value.lastChild;
           }
           (parent as Node).insertBefore(value, first);
-          part.target.remove();
-          part.target.start = newStart;
-          part.target.end = newEnd;
-          part.value = value;
+          this.target.remove();
+          this.target.start = newStart;
+          this.target.end = newEnd;
+          this.value = value;
         }
       }
     }
@@ -730,9 +739,8 @@ export function repeat(
           part.target.end = template;
         }
       });
-      // TODO: instead of calling part.update() just handle the logic here for placing nodes
-      // part.update(newFragment);
       (parent as Node).insertBefore(newFragment, cursor);
+      (parent as Node).removeChild(cursor);
       repeatCache.set(part, newCacheEntry);
     } else {
       // TODO: add update logic from below commented code block...

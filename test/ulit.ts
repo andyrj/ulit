@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import "mocha";
-import { Directive, Disposable, DomTarget, html, IDisposer, Part, render, Template, PartGenerator, followPath } from "../src/ulit";
+import { Directive, Disposable, DomTarget, html, IDisposer, Part, render, Template, PartGenerator, followPath, Optional, PartValue } from "../src/ulit";
 
 describe("Template", () => {
   it("should have {disposable, target, id, element, parts, values}", () => {
@@ -374,7 +374,7 @@ describe("render", () => {
   });
   it("should handle attribute parts", () => {
     const str = "test3";
-    const test3 = val => html`<div id=${val}></div>`;
+    const test3 = (val?: PartValue) => html`<div id=${val}></div>`;
     render(test3());
     expect(document.body.innerHTML).to.equal(`<div></div>`);
     render(test3(undefined));
@@ -384,7 +384,6 @@ describe("render", () => {
     render(test3(undefined));
     expect(document.body.innerHTML).to.equal(`<div></div>`);
   });
-  /*
   it("attribute directives should work as expected", () => {
     const template = (str: string) => html`<div id=${Directive(part => part.update(str))}>test</div>`;
     render(template("test"));
@@ -403,5 +402,4 @@ describe("render", () => {
     render(template);
     expect(document.body.innerHTML).to.equal("<div>321</div>");
   });
-  */
 });
