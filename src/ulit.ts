@@ -554,7 +554,7 @@ export class Part {
         this.target.end = newEnd;
         this.value = value;
       } else {
-        // compare nodes and update if the don't ===
+        // compare nodes and update if they don't ===
         if (partValue !== value) {
           newStart = value;
           newEnd = value;
