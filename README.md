@@ -98,10 +98,11 @@ const partApiDirective = Directive(part => {
   part.addDisposer(handler);
   part.removeDisposer(handler);
 
-  // readonly/private typescript classes enforced at runtime in javascript via es6 proxy...
-  part.path; // readonly Array<string | number>, the path from containing templates root to this part
+  // parts and templates share a common key of "target" which is a DomTarget that is used to store
+  // the edges of the part/template
   part.target.first(); // Node that begins this part
   part.target.last(); // Node that ends this part...
+  part.path; // readonly Array<string | number>, the path from containing templates root to this part
   part.target.remove(); // moves the part out of the dom and into a document fragment.
 });
 
