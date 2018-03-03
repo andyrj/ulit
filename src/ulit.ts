@@ -874,11 +874,12 @@ function walkDOM(
   });
 }
 
-const idCache = new Map<string, number>();
-function getId(str: string): number {
-  if (idCache.has(str)) {
-    return idCache.get(str) as number;
+const idCache = new Map<TemplateStringsArray, number>();
+function getId(arr: TemplateStringsArray): number {
+  if (idCache.has(arr)) {
+    return idCache.get(arr) as number;
   }
+  const str = arr.toString();
   let id = 0;
   if (str.length > 0) {
     for (let i = 0; i < str.length; i++) {
@@ -887,7 +888,7 @@ function getId(str: string): number {
       id = id & id;
     }
   }
-  idCache.set(str, id);
+  idCache.set(arr, id);
   return id;
 }
 
@@ -897,12 +898,12 @@ export function html(
   strings: TemplateStringsArray,
   ...expressions: PartValue[]
 ): ITemplateGenerator {
-  const id = getId(strings.toString());
-  const markUp = strings.join(PART_MARKER);
+  const id = getId(strings);
   let factory = factoryCache.get(id);
   if (factory) {
     return factory(expressions);
   }
+  const markUp = strings.join(PART_MARKER);
   factory = function(exprs: PartValue[]) {
     const generator = function() {
       const values = arguments.length === 0 ? exprs : arguments[0];
