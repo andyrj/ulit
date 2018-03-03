@@ -42,13 +42,10 @@ const FOREIGN_OBJECT = "FOREIGNOBJECT";
 const PART_START = "{{";
 const PART_END = "}}";
 const PART = "part";
-// const STYLE = "style";
 const THREE_DOT = "...";
-// const NODE_TYPE = "nodeType";
 const SERIAL_PART_START = `${PART_START}${PART}s:`;
 const PART_MARKER = `${PART_START}${PART_END}`;
 const TEMPLATE = "template";
-// const CAPTURE = "Capture";
 const DIRECTIVE = "directive";
 const ULIT = "ulit";
 const ELEMENT_NODE = 1;
@@ -495,7 +492,6 @@ export class Part {
     const partValue = this.value;
     if (isText(partValue)) {
       if (isNode(value)) {
-        // replace the text node with node/fragment in value
         newStart = value;
         newEnd = value;
         if (isDocumentFragment(value)) {
@@ -507,13 +503,9 @@ export class Part {
         this.target.start = newStart;
         this.target.end = newEnd;
         this.value = value;
-      } else if (isText(value)) {
-        // compare nodeValues
-        if (partValue.nodeValue !== value.nodeValue) {
-          partValue.nodeValue = value.nodeValue;
-        }
+      } else if (isText(value) && partValue.nodeValue !== value.nodeValue) {
+        partValue.nodeValue = value.nodeValue;
       } else {
-        // compare value with partValue.nodeValue
         if (!isString(value)) {
           value = value.toString();
         }
@@ -522,9 +514,9 @@ export class Part {
         }
       } 
     } else {
-      if (isText(value) || !isNode(value)) {
-        // replace node/fragment with new textNode...
-        if (!isText(value)) {
+      const bText = isText(value);
+      if (bText || !isNode(value)) {
+        if (!bText) {
           value = document.createTextNode(!isString(value) ? value.toString() : value);
         }
         newStart = value as Node;
@@ -535,7 +527,6 @@ export class Part {
         this.target.end = newEnd;
         this.value = value;
       } else {
-        // compare nodes and update if they don't ===
         if (partValue !== value) {
           newStart = value;
           newEnd = value;
@@ -632,10 +623,6 @@ function isString(x: any): x is string {
 function isText(x: any): x is Text {
   return x && isNode(x) && (x as Node).nodeType === TEXT_NODE;
 }
-
-// function isNumber(x: any): x is number {
-//   return typeof x === "number";
-// }
 
 function isIterable<T>(x: any): x is Iterable<T> {
   return (
@@ -740,8 +727,6 @@ export function repeat(
       part.target.end = newEnd;
       repeatCache.set(part, newCacheEntry);
     } else {
-      // remove keys no longer in new keys
-      // build LUT for new keys/templates
       const newMap = new Map<Key, ITemplateGenerator>();
       let index = 0;
       const keysLen = keys.length;
@@ -750,8 +735,6 @@ export function repeat(
         newMap.set(key, generators[index]);
       }
       const [oldOrder, oldMap] = cacheEntry;
-      
-      // remove keys no longer in keys/list
       let delta = 0;
       index = 0;
       for (; index + delta < oldOrder.length; index++) {
@@ -766,8 +749,6 @@ export function repeat(
           delta--;
         }
       }
-
-      // move/update and add new
       index = 0;
       for (; index < keysLen; index++) {
         const key = keys[index];
@@ -776,29 +757,21 @@ export function repeat(
         const oldTemplate = oldMap.get(key);
         const oldTargetTemplate = oldMap.get(oldKey);
         const target = oldTargetTemplate ? oldTargetTemplate.target.first() : null;
-
-        // if key is not in oldCacheMap, add new part, be sure to mutate oldCacheOrder and oldCacheMap to match for each iteration...
         if (!oldTemplate) {
-          // add new
           const newTemplate = (newTemplateGenerator as ITemplateGenerator)();
           (parent as Node).insertBefore(newTemplate.element.content, target);
           oldOrder.splice(index, 0, key);
           oldMap.set(key, newTemplate);
         } else if (key === oldKey) {
-          // updates do not change repeat state cache, as key order will not change...
           if (oldTemplate.id === (newTemplateGenerator as ITemplateGenerator).id) {
-            // update in place
             oldTemplate.update((newTemplateGenerator as ITemplateGenerator).exprs);
           } else {
-            // replace oldTemplate with newTemplateGenerator()...
             const oldFirst = oldTemplate.target.first();
             const newTemplate = (newTemplateGenerator as ITemplateGenerator)();
             (parent as Node).insertBefore(newTemplate.element.content, oldFirst);
             oldTemplate.target.remove();
           }
         } else {
-          // move
-          // else remove oldCacheMap[key] and move to index with update after remove() to minimize dom operations...
           const oldFragment = oldTemplate.target.remove();
           const oldIndex = oldOrder.indexOf(key);
           if (oldTemplate.id === (newTemplateGenerator as ITemplateGenerator).id) {
