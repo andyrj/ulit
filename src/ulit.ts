@@ -1,18 +1,18 @@
 export type Optional<T> = T | undefined | null;
 export type Key = symbol | string | number;
 export type PrimitivePart =
-  | boolean
-  | number
+  | IToString
   | string
   | Node
   | DocumentFragment
-  | EventListener;
+  | EventListener
+  | AttributePartValue;
 export type PartValue = Optional<
-  PrimitivePart | IPartPromise | IDirective | IPartArray | ITemplateGenerator | IterablePart
+  PrimitivePart | IPartPromise | IDirective | IPartArray | ITemplateGenerator | IterablePartValue
 >;
 export interface IPartPromise extends Promise<PartValue> {}
 export interface IPartArray extends Array<PartValue> {}
-export interface IterablePart extends Iterable<PartValue> {}
+export interface IterablePartValue extends Iterable<PartValue> {}
 export type PartGenerator = (target: Node) => Part;
 export type KeyFn = (item: any, index: number) => Key;
 export type TemplateFn = (item: any) => ITemplateGenerator;
@@ -30,6 +30,11 @@ export interface ITemplateGenerator {
 type ITemplateGeneratorFactory = (exprs: PartValue[]) => ITemplateGenerator;
 export type IDisposer = () => void;
 export type NodeAttribute = [Node, string];
+export interface IToString {
+  toString: () => string;
+}
+export type AttributePartValue = string | IToString | {};
+
 
 const SVG = "SVG";
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -332,11 +337,6 @@ function removeAttribute(element: HTMLElement, name: string, isSVG: boolean = fa
   }
 }
 
-export interface IToString {
-  toString: () => string;
-}
-export type AttributePartValue = string | IToString | {};
-
 function setAttribute(element: HTMLElement, name: string, value: AttributePartValue, isSVG: boolean = false) {
   if (!element || !name) {
     return;
@@ -541,9 +541,9 @@ export class Part {
         if (!isText(value)) {
           value = document.createTextNode(!isString(value) ? value.toString() : value);
         }
-        newStart = value;
-        newEnd = value;
-        (parent as Node).insertBefore(value, first);
+        newStart = value as Node;
+        newEnd = value as Node;
+        (parent as Node).insertBefore(value as Node, first);
         this.target.remove();
         this.target.start = newStart;
         this.target.end = newEnd;
@@ -651,7 +651,7 @@ function isText(x: any): x is Text {
 //   return typeof x === "number";
 // }
 
-function isIterable(x: any): x is Iterable<any> {
+function isIterable<T>(x: any): x is Iterable<T> {
   return (
     !isString(x) && !Array.isArray(x) && isFunction((x as any)[Symbol.iterator])
   );
@@ -661,7 +661,7 @@ function isPartComment(x: any): x is Comment {
   return isComment(x) && x.textContent === PART_MARKER;
 }
 
-function isPromise(x: any): x is Promise<any> {
+function isPromise<T>(x: any): x is Promise<T> {
   return x && isFunction(x.then);
 }
 
@@ -953,8 +953,8 @@ export function render(
   if (!container) {
     container = document.body;
   }
-  if (isIterable(view)) {
-    view = Array.from(view as any);
+  if (isIterable(view as PartValue)) {
+    view = Array.from(view as IterablePartValue);
   }
   if (!isTemplateGenerator(view)) {
     view = defaultTemplateFn(view as PartValue);
