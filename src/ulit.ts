@@ -8,7 +8,12 @@ export type PrimitivePart =
   | EventListener
   | AttributePartValue;
 export type PartValue = Optional<
-  PrimitivePart | IPartPromise | IDirective | IPartArray | ITemplateGenerator | IterablePartValue
+  | PrimitivePart
+  | IPartPromise
+  | IDirective
+  | IPartArray
+  | ITemplateGenerator
+  | IterablePartValue
 >;
 export interface IPartPromise extends Promise<PartValue> {}
 export interface IPartArray extends Array<PartValue> {}
@@ -34,7 +39,6 @@ export interface IToString {
   toString: () => string;
 }
 export type AttributePartValue = string | IToString | {};
-
 
 const SVG = "SVG";
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -138,23 +142,17 @@ function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
     );
     const templateElement: HTMLTemplateElement = el;
     if (serializedParts && templateElement) {
-      const partGenerators: PartGenerator[] = serializedParts.map(
-        serial => {
-          return (target: Node) => {
-            const path = serial[0];
-            const isSVG = serial[1];
-            const partTarget = followPath(target, path);
-            if (Array.isArray(partTarget)) {
-              return new Part(path, partTarget[0], isSVG);
-            }
-            return new Part(
-              path,
-              partTarget as Node,
-              isSVG
-            );
-          };
-        }
-      );
+      const partGenerators: PartGenerator[] = serializedParts.map(serial => {
+        return (target: Node) => {
+          const path = serial[0];
+          const isSVG = serial[1];
+          const partTarget = followPath(target, path);
+          if (Array.isArray(partTarget)) {
+            return new Part(path, partTarget[0], isSVG);
+          }
+          return new Part(path, partTarget as Node, isSVG);
+        };
+      });
       deserialized = { templateElement, serializedParts, partGenerators };
     }
   }
@@ -192,11 +190,7 @@ function templateSetup(
             serial.push([adjustedPath, isSVG]);
             partGenerators.push((target: Node) => {
               const partTarget = followPath(target, adjustedPath as number[]);
-              return new Part(
-                adjustedPath,
-                partTarget as Node,
-                isSVG
-              );
+              return new Part(adjustedPath, partTarget as Node, isSVG);
             });
             cursor++;
           }
@@ -214,11 +208,7 @@ function templateSetup(
           serial.push([attrPath, isSVG]);
           partGenerators.push((target: Node) => {
             const partTarget = followPath(target, attrPath) as NodeAttribute;
-            return new Part(
-              attrPath,
-              partTarget[0],
-              isSVG
-            );
+            return new Part(attrPath, partTarget[0], isSVG);
           });
           if (isSVG) {
             element.removeAttributeNS(SVG_NS, name);
@@ -271,7 +261,9 @@ export class Template {
     const fragment = element.content;
     const first = fragment.firstChild;
     const last = fragment.lastChild;
-    const parts = this.parts = partGenerators.map(generator => generator(fragment));
+    const parts = (this.parts = partGenerators.map(generator =>
+      generator(fragment)
+    ));
     this.target.start = isPartComment(first) ? parts[0] : first;
     this.target.end = isPartComment(last) ? parts[parts.length - 1] : last;
     parts.forEach((part, i) => part.update(values[i]));
@@ -309,7 +301,11 @@ export class Template {
   }
 }
 
-function removeAttribute(element: HTMLElement, name: string, isSVG: boolean = false) {
+function removeAttribute(
+  element: HTMLElement,
+  name: string,
+  isSVG: boolean = false
+) {
   if (!element || !name) {
     return;
   }
@@ -320,19 +316,24 @@ function removeAttribute(element: HTMLElement, name: string, isSVG: boolean = fa
   }
 }
 
-function setAttribute(element: HTMLElement, name: string, value: AttributePartValue, isSVG: boolean = false) {
+function setAttribute(
+  element: HTMLElement,
+  name: string,
+  value: AttributePartValue,
+  isSVG: boolean = false
+) {
   if (!element || !name) {
     return;
   }
-    if (!isString(value)) {
-      value = value.toString();
-    }
-    if (!isSVG) {
-      element.setAttribute(name, value as string);
-    } else {
-      element.setAttributeNS(SVG_NS, name, value as string);
-    }
+  if (!isString(value)) {
+    value = value.toString();
   }
+  if (!isSVG) {
+    element.setAttribute(name, value as string);
+  } else {
+    element.setAttributeNS(SVG_NS, name, value as string);
+  }
+}
 
 export class Part {
   public value: PartValue | Template;
@@ -385,7 +386,7 @@ export class Part {
       return;
     }
     let val: Optional<PartValue | Template> = value;
-    if ((val == null || arguments.length === 0)) {
+    if (val == null || arguments.length === 0) {
       val = this.value;
     }
     if (isDirective(val)) {
@@ -405,7 +406,7 @@ export class Part {
       const directive = repeat(val);
       this.value = directive;
       directive(this);
-      return; 
+      return;
     }
     if (isTemplateGenerator(val) || isTemplate(val)) {
       this.updateTemplate(val as ITemplateGenerator);
@@ -512,12 +513,14 @@ export class Part {
         if (partValue.nodeValue !== value) {
           partValue.nodeValue = value as string;
         }
-      } 
+      }
     } else {
       const bText = isText(value);
       if (bText || !isNode(value)) {
         if (!bText) {
-          value = document.createTextNode(!isString(value) ? value.toString() : value);
+          value = document.createTextNode(
+            !isString(value) ? value.toString() : value
+          );
         }
         newStart = value as Node;
         newEnd = value as Node;
@@ -703,7 +706,10 @@ export function repeat(
     const cacheEntry = repeatCache.get(part);
     if (!cacheEntry) {
       const newFragment = document.createDocumentFragment();
-      const newCacheEntry: [Key[], Map<Key, Template>] = [[], new Map<Key, Template>()]; 
+      const newCacheEntry: [Key[], Map<Key, Template>] = [
+        [],
+        new Map<Key, Template>()
+      ];
       const generatorLen = generators.length - 1;
       let newStart = undefined;
       let newEnd = undefined;
@@ -717,7 +723,7 @@ export function repeat(
         if (index === 0) {
           newStart = template;
         }
-        if (index === generatorLen ) {
+        if (index === generatorLen) {
           newEnd = template;
         }
       });
@@ -756,26 +762,39 @@ export function repeat(
         const newTemplateGenerator = newMap.get(key);
         const oldTemplate = oldMap.get(key);
         const oldTargetTemplate = oldMap.get(oldKey);
-        const target = oldTargetTemplate ? oldTargetTemplate.target.first() : null;
+        const target = oldTargetTemplate
+          ? oldTargetTemplate.target.first()
+          : null;
         if (!oldTemplate) {
           const newTemplate = (newTemplateGenerator as ITemplateGenerator)();
           (parent as Node).insertBefore(newTemplate.element.content, target);
           oldOrder.splice(index, 0, key);
           oldMap.set(key, newTemplate);
         } else if (key === oldKey) {
-          if (oldTemplate.id === (newTemplateGenerator as ITemplateGenerator).id) {
-            oldTemplate.update((newTemplateGenerator as ITemplateGenerator).exprs);
+          if (
+            oldTemplate.id === (newTemplateGenerator as ITemplateGenerator).id
+          ) {
+            oldTemplate.update(
+              (newTemplateGenerator as ITemplateGenerator).exprs
+            );
           } else {
             const oldFirst = oldTemplate.target.first();
             const newTemplate = (newTemplateGenerator as ITemplateGenerator)();
-            (parent as Node).insertBefore(newTemplate.element.content, oldFirst);
+            (parent as Node).insertBefore(
+              newTemplate.element.content,
+              oldFirst
+            );
             oldTemplate.target.remove();
           }
         } else {
           const oldFragment = oldTemplate.target.remove();
           const oldIndex = oldOrder.indexOf(key);
-          if (oldTemplate.id === (newTemplateGenerator as ITemplateGenerator).id) {
-            oldTemplate.update((newTemplateGenerator as ITemplateGenerator).exprs);
+          if (
+            oldTemplate.id === (newTemplateGenerator as ITemplateGenerator).id
+          ) {
+            oldTemplate.update(
+              (newTemplateGenerator as ITemplateGenerator).exprs
+            );
             (parent as Node).insertBefore(oldFragment, target);
           } else {
             const newTemplate = (newTemplateGenerator as ITemplateGenerator)();
@@ -925,10 +944,7 @@ export function render(
       return;
     } else {
       const newInstance = (view as ITemplateGenerator)();
-      container.insertBefore(
-        newInstance.element.content,
-        container.firstChild
-      );
+      container.insertBefore(newInstance.element.content, container.firstChild);
       instance.target.remove();
       (container as any).__template = newInstance;
     }
