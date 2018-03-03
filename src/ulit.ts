@@ -528,13 +528,11 @@ export class Part {
         }
       } else {
         // compare value with partValue.nodeValue
-        value = !isString(value) ? value.toString() : value;
         if (!isString(value)) {
-          fail();
-        } else {
-          if (partValue.nodeValue !== value) {
-            partValue.nodeValue = value;
-          }
+          value = value.toString();
+        }
+        if (partValue.nodeValue !== value) {
+          partValue.nodeValue = value as string;
         }
       } 
     } else {
@@ -729,9 +727,6 @@ export function repeat(
     });
     let cursor = part.target.first();
     let parent = cursor.parentNode;
-    if (!parent) {
-      fail();
-    }
     const cacheEntry = repeatCache.get(part);
     if (!cacheEntry) {
       const newFragment = document.createDocumentFragment();
@@ -805,9 +800,6 @@ export function repeat(
           oldMap.set(key, newTemplate);
         } else if (key === oldKey) {
           // updates do not change repeat state cache, as key order will not change...
-          if (!newTemplateGenerator) {
-            fail();
-          }
           if (oldTemplate.id === (newTemplateGenerator as ITemplateGenerator).id) {
             // update in place
             oldTemplate.update((newTemplateGenerator as ITemplateGenerator).exprs);
@@ -993,8 +985,6 @@ export function render(
       const parent: Optional<Node> = container;
       (parent as Node).insertBefore(template.element.content, first);
       (container as any).__template = template;
-    } else {
-      fail();
     }
   }
 }
