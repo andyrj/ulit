@@ -14,7 +14,7 @@ export interface IPartPromise extends Promise<PartValue> {}
 export interface IPartArray extends Array<PartValue> {}
 export interface IterablePart extends Iterable<PartValue> {}
 export type PartGenerator = (target: Node) => Part;
-export type KeyFn = (item: any, index?: number) => Key;
+export type KeyFn = (item: any, index: number) => Key;
 export type TemplateFn = (item: any) => ITemplateGenerator;
 export interface ISerialCacheEntry {
   templateElement: HTMLTemplateElement;
@@ -705,7 +705,7 @@ export function Directive(fn: DirectiveFn): IDirective {
   return fn as IDirective;
 }
 
-function defaultKeyFn(item: any, index?: number): Key {
+function defaultKeyFn(item: any, index: number): Key {
   return index as number;
 }
 
@@ -722,7 +722,7 @@ export function repeat(
     let keys: Key[] = [];
     let generators: ITemplateGenerator[] = [];
     items.forEach((item, index) => {
-      keys.push(keyFn(item, index))
+      keys.push(keyFn(item, index));
       generators.push(templateFn(item));
     });
     let cursor = part.target.first();
