@@ -37,7 +37,7 @@ const FOREIGN_OBJECT = "FOREIGNOBJECT";
 const PART_START = "{{";
 const PART_END = "}}";
 const PART = "part";
-const STYLE = "style";
+// const STYLE = "style";
 const THREE_DOT = "...";
 // const NODE_TYPE = "nodeType";
 const SERIAL_PART_START = `${PART_START}${PART}s:`;
@@ -50,7 +50,7 @@ const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const COMMENT_NODE = 8;
 const DOCUMENT_FRAGMENT = 11;
-// const EMPTY_STRING = "";
+const EMPTY_STRING = "";
 
 export class Disposable {
   public disposers: IDisposer[] = [];
@@ -143,18 +143,17 @@ function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
     const templateElement: HTMLTemplateElement = el;
     if (serializedParts && templateElement) {
       const partGenerators: PartGenerator[] = serializedParts.map(
-        (serial, i) => {
+        serial => {
           return (target: Node) => {
             const path = serial[0];
             const isSVG = serial[1];
             const partTarget = followPath(target, path);
             if (Array.isArray(partTarget)) {
-              return new Part(path, partTarget[0], i, isSVG);
+              return new Part(path, partTarget[0], isSVG);
             }
             return new Part(
               path,
               partTarget as Node,
-              partGenerators.length,
               isSVG
             );
           };
@@ -196,11 +195,10 @@ function templateSetup(
             (adjustedPath[len] as number) += cursor;
             serial.push([adjustedPath, isSVG]);
             partGenerators.push((target: Node) => {
-              const partTarget = followPath(target, adjustedPath);
+              const partTarget = followPath(target, adjustedPath as number[]);
               return new Part(
                 adjustedPath,
                 partTarget as Node,
-                partGenerators.length,
                 isSVG
               );
             });
@@ -230,7 +228,6 @@ function templateSetup(
               return new Part(
                 attrPath,
                 partTarget[0],
-                partGenerators.length,
                 isSVG
               );
             });
@@ -274,7 +271,7 @@ export function followPath(
 }
 
 export class Template {
-  public disposable = new Disposable();
+  public disposer = new Disposable();
   public target = new DomTarget();
   public parts: Part[];
   constructor(
@@ -344,31 +341,6 @@ function setAttribute(element: HTMLElement, name: string, value: AttributePartVa
   if (!element || !name) {
     return;
   }
-  if (name === STYLE) {
-    fail();
-  }
-  if (name === THREE_DOT) {
-    if (isString(value)) {
-      fail();
-    }
-    const attrs = element.attributes;
-    const len = attrs.length;
-    let i = 0;
-    for (; i < len; i++) {
-      const attr = attrs.item(i);
-      const key = attr.name;
-      if (key in (value as any)) {
-        const val = (value as any)[key];
-        if (val) {
-          setAttribute(element, key, val, isSVG);
-        } else {
-          removeAttribute(element, key, isSVG);
-        }
-      } else {
-        removeAttribute(element, key, isSVG);
-      }
-    }
-  } else {
     if (!isString(value)) {
       value = value.toString();
     }
@@ -378,26 +350,55 @@ function setAttribute(element: HTMLElement, name: string, value: AttributePartVa
       element.setAttributeNS(SVG_NS, name, value as string);
     }
   }
-}
 
 export class Part {
   public value: PartValue | Template;
+  public prop: string = EMPTY_STRING;
   public path: Array<string | number>;
-  public disposable = new Disposable();
+  public disposer = new Disposable();
   public target: DomTarget;
   constructor(
     path: Array<string | number>,
     target: Node,
-    index: number = -1,
     public isSVG: boolean = false
   ) {
     this.target = new DomTarget(target);
+    if (isString(path[path.length - 1])) {
+      this.prop = path[path.length - 1] as string;
+    }
     this.path = path.slice(0);
     this.value = target;
   }
   public update(value?: PartValue) {
     if (isAttributePart(this)) {
-      this.updateAttribute(value);
+      if (this.prop === THREE_DOT) {
+        if (isString(value)) {
+          fail();
+        }
+        const props = value as any;
+        const keys = Object.keys(value as any);
+        const keysLen = keys.length;
+        const oldProps = this.value as any;
+        const oldKeys = Object.keys(oldProps);
+        const len = oldKeys.length;
+        let i = 0;
+        for (; i < len; i++) {
+          const key = oldKeys[i];
+          if (key in props) {
+            this.updateAttribute(key, props[key]);
+          } else {
+            this.updateAttribute(key, undefined);
+          }
+        }
+        for (i = 0; i < keysLen; i++) {
+          const key = keys[i];
+          if (!(key in oldKeys)) {
+            this.updateAttribute(key, props[key]);
+          }
+        }
+      } else {
+        this.updateAttribute(this.prop, value);
+      }
       return;
     }
     let val: Optional<PartValue | Template> = value;
@@ -423,20 +424,17 @@ export class Part {
       directive(this);
       return; 
     }
-    if (isTemplateGenerator(val)) {
+    if (isTemplateGenerator(val) || isTemplate(val)) {
       this.updateTemplate(val as ITemplateGenerator);
     } else {
-      if (isTemplate(val)) {
-        fail();
-      }
       this.updateNode(val as Optional<PartValue>);
     }
   }
 
-  private updateAttribute(value: Optional<PartValue>) {
+  private updateAttribute(name: string, value: Optional<PartValue>) {
     if (isPromise(value)) {
       value.then(promised => {
-        this.updateAttribute(promised);
+        this.updateAttribute(name, promised);
       });
       return;
     }
@@ -448,7 +446,6 @@ export class Part {
     if (!element) {
       fail();
     }
-    const name = this.path[this.path.length - 1] as string;
     const isSVG = this.isSVG;
     if (!name) {
       fail();
@@ -687,14 +684,14 @@ function isPart(x: any): x is Part {
 }
 
 function isAttributePart(x: any) {
-  if (isPart(x) && isString(x.path[x.path.length - 1])) {
+  if (isPart(x) && x.prop && x.prop !== "") {
     return true;
   }
   return false;
 }
 
 function isEventPart(x: any) {
-  if (isAttributePart(x) && x.path[x.path.length - 1].startsWith("on")) {
+  if (isAttributePart(x) && x.prop.startsWith("on")) {
     return true;
   }
   return false;
