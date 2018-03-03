@@ -965,9 +965,6 @@ export function render(
   }
   if (!isTemplateGenerator(view)) {
     view = defaultTemplateFn(view as PartValue);
-    if (!isTemplateGenerator(view)) {
-      fail();
-    }
   }
   const instance = (container as any).__template;
   if (instance) {
