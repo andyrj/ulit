@@ -62,7 +62,7 @@ npm install --save ulit
 ```js
 // repeat is used for rendering keyed lists of dom nodes
 // until allows you to conditionally load a template that is replaced upon promise completion (code-splitting, fetch, etc...)
-import { Directive, html, render, repeat, until } from "ulit";
+import { directive, html, render, repeat, until } from "ulit";
 
 // "components" are just template functions
 const hello = subject => html`<h1>hello ${subject}</h1>`;
@@ -78,7 +78,7 @@ document.body.innerHTML === "<h1>hello internet</h1>"; // true
 // Build your own directive to extend ulit...
 // the example below passthroughDirective is a dummy directive example that is equivalent to just passing the value to the part
 // in the template expressions.
-const passthroughDirective = value => Directive(part => {
+const passthroughDirective = value => directive(part => {
   part.update(value);
 });
 
@@ -86,7 +86,7 @@ render(html`<h1>${passthroughDirective("pass through example...")}</h1>`);
 document.body.innerHTML === "<h1>pass through example...</h1>"; // true
 
 // Example Part API brain dump
-const partApiDirective = Directive(part => {
+const partApiDirective = directive(part => {
   // update part with a new PartValue
   part.update("test");
 
@@ -115,12 +115,12 @@ document.body.innerHTML === "<h1>hello 0</h1><h1>hello 1</h1>..."; //true
 render(hello(nums));
 document.body.innerHTML === "<h1>hello 012345678910</h1>"; // true NOTE: each number would be it's own textNode in this case...
 
-// Promises are valid PartValues, by default they will leave a HTML comment node where the part will update to whatever PartValue returned to resolve...
+// Promises are valid PartValues, by default they will leave the previous part value in place initially, and update to what is resolved...
 render(hello(new Promise(resolve => {
   const doWork = setTimeout(resolve("async!"), 1000);
 })));
 // initially
-document.body.innerHTML === "<h1>hello <!--{{}}--></h1>"; // true
+document.body.innerHTML === "<h1>hello 012345678910</h1>"; // true
 setTimeout(() => document.body.innerHTML === "<h1>hello async!</h1>", 1001); // true
 
 // until gives better support by allowing you to specify a default template while the promise resolves instead of a comment node

@@ -700,7 +700,7 @@ export interface IDirective {
   directive: boolean;
 }
 export type DirectiveFn = (part: Part) => void;
-export function Directive(fn: DirectiveFn): IDirective {
+export function directive(fn: DirectiveFn): IDirective {
   (fn as any).directive = true;
   return fn as IDirective;
 }
@@ -718,7 +718,7 @@ export function repeat(
   keyFn: KeyFn = defaultKeyFn,
   templateFn: TemplateFn = defaultTemplateFn
 ): IDirective {
-  return Directive((part: Part) => {
+  return directive((part: Part) => {
     let keys: Key[] = [];
     let generators: ITemplateGenerator[] = [];
     items.forEach((item, index) => {
@@ -836,7 +836,7 @@ export function until(
   promise: Promise<PartValue>,
   defaultContent: PartValue
 ): IDirective {
-  return Directive((part: Part) => {
+  return directive((part: Part) => {
     part.update(defaultContent);
     promise.then(value => part.update(value));
   });

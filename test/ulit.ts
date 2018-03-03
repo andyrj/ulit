@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import "mocha";
-import { Directive, Disposable, DomTarget, html, IDisposer, Part, render, Template, PartGenerator, followPath, Optional, PartValue } from "../src/ulit";
+import { directive, Disposable, DomTarget, html, IDisposer, Part, render, Template, PartGenerator, followPath, Optional, PartValue } from "../src/ulit";
 
 describe("Template", () => {
   it("should have {disposer, target, id, element, parts, values}", () => {
@@ -127,8 +127,8 @@ describe("Part", () => {
     part.update();
     expect(fragment.firstChild.nodeType).to.equal(8);
     let directivePart;
-    const directive = Directive((p) => { directivePart = p; });
-    part.update(directive);
+    const testDirective = directive((p) => { directivePart = p; });
+    part.update(testDirective);
     expect(fragment.firstChild.nodeType).to.equal(8);
     directivePart.update("test");
     expect(fragment.firstChild.nodeType).to.equal(3);
@@ -354,7 +354,7 @@ describe("render", () => {
   });
   it("directives", () => {
     let lastPart;
-    const template = html`<div>${Directive(part => {lastPart = part})}</div>`;
+    const template = html`<div>${directive(part => {lastPart = part})}</div>`;
     render(template);
     lastPart.update("test");
     expect(document.body.firstChild.firstChild.nodeValue).to.equal("test");
@@ -384,7 +384,7 @@ describe("render", () => {
     expect(document.body.innerHTML).to.equal(`<div></div>`);
   });
   it("attribute directives should work as expected", () => {
-    const template = (str: string) => html`<div id=${Directive(part => part.update(str))}>test</div>`;
+    const template = (str: string) => html`<div id=${directive(part => part.update(str))}>test</div>`;
     render(template("test"));
     expect((document.body.firstChild as any).id).to.equal("test");
     render(template("test1"));
