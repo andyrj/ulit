@@ -83,10 +83,7 @@ export class Disposable {
   }
 }
 
-function isNodeSVGChild(node: Optional<Node>): boolean {
-  if (!node) {
-    return false;
-  }
+function isNodeSVGChild(node: Node): boolean {
   let result = false;
   let current: Optional<Node> = node;
   while (current) {
@@ -179,7 +176,7 @@ function templateSetup(
   partGenerators: PartGenerator[]
 ): WalkFn {
   return (parent, element, walkPath) => {
-    const isSVG = isNodeSVGChild(element);
+    const isSVG = element ? isNodeSVGChild(element) : false;
     if (isText(element)) {
       const text = element && element.nodeValue;
       const split = text && text.split(PART_MARKER);
