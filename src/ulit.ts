@@ -762,82 +762,41 @@ export function repeat(
       part.target.end = newEnd;
       repeatCache.set(part, newCacheEntry);
     } else {
-      // TODO: add update logic from below commented code block...
-    }
-    /*
-    let target = part.target.first();
-    const parent = target.parentNode;
-    if (!parent) {
-      fail();
-    }
-    const templates = items.map(item => {
-      if (isTemplateGenerator(item)) {
-        return item;
+      // remove keys no longer in new keys
+      // build LUT for new keys/templates
+      const newMap = new Map<Key, ITemplateGenerator>();
+      let index = 0;
+      const keysLen = keys.length;
+      for (; index < keysLen; index++) {
+        const key = keys[index];
+        newMap.set(key, generators[index]);
       }
-      return templateFn(item);
-    }) as ITemplateGenerator[];
-    const keys = items.map((item, index) => keyFn(item, index));
-    const [oldCacheOrder, oldCacheMap] = repeatCache.get(part) || [
-      [],
-      new Map<Key, Template>()
-    ];
-    const newCacheMap = new Map<Key, ITemplateGenerator>();
-    // build LUT for new keys/templates
-    let index = 0;
-    const keysLen = keys.length;
-    for (; index < keysLen; index++) {
-      const key = keys[index];
-      newCacheMap.set(key, templates[index]);
-    }
-    // remove keys no longer in keys/list
-    let delta = 0;
-    index = 0;
-    for (; index + delta < oldCacheOrder.length; index++) {
-      const offset = index + delta;
-      const key = oldCacheOrder[offset];
-      const newEntry = newCacheMap.get(key);
-      const oldEntry = oldCacheMap.get(key);
-      if (oldEntry && !newEntry) {
-        oldEntry.target.remove();
-        oldCacheMap.delete(key);
-        oldCacheOrder.splice(offset, 1);
-        delta--;
-      }
-    }
-    if (oldCacheOrder.length === 0 && isPartComment(part.value)) {
-      if (keysLen === 0) {
-        return;
-      } else {
-        const newFragment = document.createDocumentFragment();
-        index = 0;
-        for (; index < keysLen; index++) {
-          const key = keys[index];
-          const generator = newCacheMap.get(key);
-          if (!generator) {
-            fail();
-          }
-          const newTemplate = (generator as ITemplateGenerator)();
-          oldCacheMap.set(key, newTemplate);
-          oldCacheOrder.push(key);
-          newFragment.appendChild(newTemplate.element.content);
-        }
-        part.update(newFragment);
-        part.value = templates;
-      }
-    } else {
-      // let initComment: Optional<Comment> = undefined;
-      // if (oldCacheOrder.length === 0 && isPartComment((parent as Node).firstChild)) {
-      //   initComment = (parent as Node).firstChild as Comment;
-      // }
+      const [oldOrder, oldMap] = cacheEntry;
       
+      // remove keys no longer in keys/list
+      let delta = 0;
+      index = 0;
+      for (; index + delta < oldOrder.length; index++) {
+        const offset = index + delta;
+        const key = oldOrder[offset];
+        const newEntry = newMap.get(key);
+        const oldEntry = oldMap.get(key);
+        if (oldEntry && !newEntry) {
+          oldEntry.target.remove();
+          oldMap.delete(key);
+          oldOrder.splice(offset, 1);
+          delta--;
+        }
+      }
+
       // move/update and add new
       index = 0;
       for (; index < keysLen; index++) {
         const key = keys[index];
-        const oldKey = oldCacheOrder[index];
-        const newTemplateGenerator = newCacheMap.get(key);
-        const oldTemplate = oldCacheMap.get(key);
-        const oldTargetTemplate = oldCacheMap.get(oldKey);
+        const oldKey = oldOrder[index];
+        const newTemplateGenerator = newMap.get(key);
+        const oldTemplate = oldMap.get(key);
+        const oldTargetTemplate = oldMap.get(oldKey);
         const target = oldTargetTemplate ? oldTargetTemplate.target.first() : null;
 
         // if key is not in oldCacheMap, add new part, be sure to mutate oldCacheOrder and oldCacheMap to match for each iteration...
@@ -845,8 +804,8 @@ export function repeat(
           // add new
           const newTemplate = (newTemplateGenerator as ITemplateGenerator)();
           (parent as Node).insertBefore(newTemplate.element.content, target);
-          oldCacheOrder.splice(index, 0, key);
-          oldCacheMap.set(key, newTemplate);
+          oldOrder.splice(index, 0, key);
+          oldMap.set(key, newTemplate);
         } else if (key === oldKey) {
           // updates do not change repeat state cache, as key order will not change...
           if (!newTemplateGenerator) {
@@ -866,7 +825,7 @@ export function repeat(
           // move
           // else remove oldCacheMap[key] and move to index with update after remove() to minimize dom operations...
           const oldFragment = oldTemplate.target.remove();
-          const oldIndex = oldCacheOrder.indexOf(key);
+          const oldIndex = oldOrder.indexOf(key);
           if (oldTemplate.id === (newTemplateGenerator as ITemplateGenerator).id) {
             oldTemplate.update((newTemplateGenerator as ITemplateGenerator).exprs);
             (parent as Node).insertBefore(oldFragment, target);
@@ -874,17 +833,13 @@ export function repeat(
             const newTemplate = (newTemplateGenerator as ITemplateGenerator)();
             (parent as Node).insertBefore(newTemplate.element.content, target);
           }
-          oldCacheOrder.splice(oldIndex, 1);
-          oldCacheOrder.splice(index, 0, key);
+          oldOrder.splice(oldIndex, 1);
+          oldOrder.splice(index, 0, key);
         }
+        part.target.start = oldMap.get(oldOrder[0]);
+        part.target.end = oldMap.get(oldOrder[oldOrder.length - 1]);
       }
-      // if (initComment) {
-      //   (parent as Node).removeChild(initComment);
-      // }
     }
-    part.target.start = oldCacheMap.get(oldCacheOrder[0]);
-    part.target.end = oldCacheMap.get(oldCacheOrder[oldCacheOrder.length - 1]);
-    */
   });
 }
 
