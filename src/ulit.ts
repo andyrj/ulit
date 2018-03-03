@@ -127,10 +127,7 @@ function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
     el as HTMLTemplateElement,
     true
   );
-  const fragment = clone.content;
-  if (!fragment) {
-    return;
-  }
+  const fragment = clone.content as DocumentFragment;
   const first = fragment.firstChild;
   if (!first) {
     return;
@@ -208,48 +205,40 @@ function templateSetup(
           }
         });
         nodes.forEach(node => {
-          parent.insertBefore(node, element as Node);
+          parent.insertBefore(node, element);
         });
-        if (!element) {
-          fail();
-        } else {
-          parent.removeChild(element);
-        }
+        parent.removeChild(element);
       }
     } else if (isElementNode(element)) {
-      if (!element) {
-        fail();
-      } else {
-        [].forEach.call(element.attributes, (attr: Attr) => {
-          if (attr.nodeValue === PART_MARKER) {
-            const name = attr.nodeName;
-            const attrPath = walkPath.concat(name);
-            serial.push([attrPath, isSVG]);
-            partGenerators.push((target: Node) => {
-              const partTarget = followPath(target, attrPath) as NodeAttribute;
-              return new Part(
-                attrPath,
-                partTarget[0],
-                isSVG
-              );
-            });
-            if (isSVG) {
-              element.removeAttributeNS(SVG_NS, name);
-            } else {
-              element.removeAttribute(name);
-            }
+      [].forEach.call(element.attributes, (attr: Attr) => {
+        if (attr.nodeValue === PART_MARKER) {
+          const name = attr.nodeName;
+          const attrPath = walkPath.concat(name);
+          serial.push([attrPath, isSVG]);
+          partGenerators.push((target: Node) => {
+            const partTarget = followPath(target, attrPath) as NodeAttribute;
+            return new Part(
+              attrPath,
+              partTarget[0],
+              isSVG
+            );
+          });
+          if (isSVG) {
+            element.removeAttributeNS(SVG_NS, name);
+          } else {
+            element.removeAttribute(name);
           }
-        });
-        const keys = Object.keys(element);
-        const len = keys.length;
-        let i = 0;
-        for (; i < len; i++) {
-          const name = keys[i];
-          if ((element as any)[name] === PART_MARKER) {
-            const propPath = walkPath.concat(name);
-            serial.push([propPath, isSVG]);
-            delete (element as any)[name];
-          }
+        }
+      });
+      const keys = Object.keys(element);
+      const len = keys.length;
+      let i = 0;
+      for (; i < len; i++) {
+        const name = keys[i];
+        if ((element as any)[name] === PART_MARKER) {
+          const propPath = walkPath.concat(name);
+          serial.push([propPath, isSVG]);
+          delete (element as any)[name];
         }
       }
     }
