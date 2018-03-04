@@ -269,20 +269,39 @@ export class Template {
     this.target.end = isPartComment(last) ? parts[parts.length - 1] : last;
     parts.forEach((part, i) => part.update(values[i]));
   }
-  public hydrate(element: Node) {
-    this.parts.forEach(part => {
-      const target = followPath(element, part.path);
-      if (!target) {
-        fail();
-      } else {
-        const isArr = Array.isArray(target);
-        this.target.start = isArr
-          ? (target as [Node, string][0])
-          : (target as Node);
-        // TODO: we need to walk from start to end on "un-rendered" parts in fragment, to determine where the "end" node is located, in the hydrated dom...
-        // this.target.end = isArr ? target as [Node, string][0]: target as Node;
+  public hydrate(element: Node): boolean {
+    // TODO: update() in this method or before???
+    // I think before would be better but then I have to walk to the 
+    // first child of element from both start and end
+    let result = true;
+    let i = 0;
+    const len = this.parts.length;
+    for (; i < len; i++) {
+      const part = this.parts[i];
+      const path = part.path;
+      const start = part.target.first();
+      const end = part.target.last();
+      let cursor: Optional<Node> = start;
+      let rank = 0;
+      while (cursor && start !== end) {
+        let next: Optional<Node> = cursor.nextSibling;
+        rank++;
+        if (cursor === end) {
+          next = undefined;
+        }
+        cursor = next;
       }
-    });
+      const onlyNodes = isString(path[len - 1])
+        ? (path.slice(0, -1) as number[])
+        : (path as number[]);
+      const onlyNodesLen = onlyNodes.length;
+      const endPath = onlyNodes
+        .slice(0, -1)
+        .concat(onlyNodes[onlyNodesLen - 1] + rank);
+      console.log(endPath);
+      // TODO: erase log
+    }
+    return result;
   }
   public update(newValues?: Optional<PartValue[]>) {
     if (arguments.length === 0) {
@@ -960,6 +979,7 @@ export function render(
         container.removeChild(container.lastChild as Node);
       }
       template = (view as ITemplateGenerator)();
+      template.update();
     }
   }
   template.update();
