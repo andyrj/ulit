@@ -400,4 +400,24 @@ describe("render", () => {
     render(arr);
     expect(document.body.innerHTML).to.equal("321");
   });
+
+  // TODO: jsdom appears to have a bug and it's a fugly code base, lets just extend undom to have DocumentFragment and HTMLTemplateElement
+  // it("svg parts", () => {
+  //   const template = (num: number) => html`<svg><g><line x1=${num} y1=0 x2=0 y2=0 /></g></svg>`;
+  //   const escaped = (num: number) => html`<svg><foreignObject>${num.toString()}</foreignObject></svg>`;
+  //   render(template(1));
+  //   const line = document.body.firstChild.firstChild.firstChild as Node;
+  //   expect(line.nodeName).to.equal("line");
+  //   console.log("line");
+  //   expect((line as SVGLineElement).getAttributeNS(`http://www.w3.org/2000/svg`, "x1")).to.equal("1");
+  //   expect(document.body.innerHTML).to.equal(`<svg><g><line y1="0" x2="0" y2="0" x1="1"></line></g></svg>`);
+  //   render(escaped(2));
+  //   expect(document.body.innerHTML).to.equal(`<svg><foreignObject>2</foreignObject></svg>`);
+  // });
 });
+
+/*
+describe("html", () => {
+  it("should")
+});
+*/

@@ -955,18 +955,18 @@ export function render(
   if (container.hasChildNodes()) {
     if (template.hydrate(container)) {
       return;
-  } else {
+    } else {
       while (container.hasChildNodes()) {
         container.removeChild(container.lastChild as Node);
       }
       template = (view as ITemplateGenerator)();
     }
   }
-    template.update();
-    if (isTemplateElement(template.element)) {
-      const first: Optional<Node> = container.firstChild;
-      const parent: Optional<Node> = container;
-      (parent as Node).insertBefore(template.element.content, first);
-      (container as any).__template = template;
-    }
+  template.update();
+  if (isTemplateElement(template.element)) {
+    const first: Optional<Node> = container.firstChild;
+    const parent: Optional<Node> = container;
+    (parent as Node).insertBefore(template.element.content, first);
+    (container as any).__template = template;
   }
+}
