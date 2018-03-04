@@ -248,9 +248,22 @@ export function followPath(
   return cursor;
 }
 
-function pathToParent(element: Node, target: Node): number[] {
-  // TODO: walk from start/end to target and record path by cursor.childNodes.indexOf(lastNode);
-  return [];
+function pathToParent(element: Node, target: Node): Optional<number[]> {
+  let result: number[] = [];
+  let cursor: Node = element;
+  while(cursor) {
+    const next: Optional<Node> = cursor.parentNode;
+    if (!next) {
+      return;
+    }
+    result.unshift([].indexOf.call((next as Node).childNodes, cursor));
+    if (next === target) {
+      return result;
+    } else {
+      cursor = next;
+    }
+  }
+  return;
 }
 
 export class Template {
@@ -285,7 +298,10 @@ export class Template {
       const start = part.target.first();
       const end = part.target.last();
       const startPath = pathToParent(start, target);
-      const startTarget = followPath(element, startPath);
+      if (!startPath) {
+        fail();
+      }
+      const startTarget = followPath(element, startPath as number[]);
       const startNode = isArray(startTarget) ? (startTarget as NodeAttribute)[0] : startTarget;
       part.target.start = startNode;
       if (isTemplate(part.value)) {
@@ -298,7 +314,10 @@ export class Template {
         (startNode as any)[part.prop] = part.value;
       } else { 
         const endPath = pathToParent(end, target);
-        const endTarget = startPath === endPath ? startTarget : followPath(element, endPath);
+        if (!endPath) {
+          fail();
+        }
+        const endTarget = startPath === endPath ? startTarget : followPath(element, endPath as number[]);
         part.target.end = isArray(endTarget) ? (endTarget as NodeAttribute)[0] : endTarget;
       }
     }
