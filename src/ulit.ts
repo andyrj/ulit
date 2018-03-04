@@ -46,7 +46,6 @@ const FOREIGN_OBJECT = "FOREIGNOBJECT";
 const PART_START = "{{";
 const PART_END = "}}";
 const PART = "part";
-const THREE_DOT = "...";
 const SERIAL_PART_START = `${PART_START}${PART}s:`;
 const PART_MARKER = `${PART_START}${PART_END}`;
 const TEMPLATE = "template";
@@ -106,8 +105,8 @@ function isFirstChildSerial(parent: DocumentFragment): boolean {
   const child = parent.firstChild;
   return (child &&
     child.nodeType === COMMENT_NODE &&
-    child.nodeValue &&
-    child.nodeValue.startsWith(SERIAL_PART_START)) as boolean;
+    child.textContent &&
+    child.textContent.startsWith(SERIAL_PART_START)) as boolean;
 }
 
 function parseSerializedParts(value?: string): ISerializedPart[] {
@@ -139,7 +138,7 @@ function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
   if (isFirstSerial) {
     const firstChild = fragment.removeChild(first);
     const serializedParts: ISerializedPart[] = parseSerializedParts(
-      firstChild.nodeValue || undefined
+      firstChild.textContent || undefined
     );
     const templateElement: HTMLTemplateElement = el;
     if (serializedParts && templateElement) {
@@ -171,7 +170,7 @@ function templateSetup(
   return (parent, element, walkPath) => {
     const isSVG = element ? isNodeSVGChild(element) : false;
     if (isText(element)) {
-      const text = element && element.nodeValue;
+      const text = element && element.textContent;
       const split = text && text.split(PART_MARKER);
       const end = split ? split.length - 1 : undefined;
       const nodes: Node[] = [];
@@ -203,8 +202,8 @@ function templateSetup(
       }
     } else if (isElementNode(element)) {
       [].forEach.call(element.attributes, (attr: Attr) => {
-        if (attr.nodeValue === PART_MARKER) {
-          const name = attr.nodeName;
+        if (attr.value === PART_MARKER) {
+          const name = attr.name;
           const attrPath = walkPath.concat(name);
           serial.push([attrPath, isSVG]);
           partGenerators.push((target: Node) => {
@@ -265,8 +264,10 @@ export class Template {
     const parts = (this.parts = partGenerators.map(generator =>
       generator(fragment)
     ));
-    this.target.start = isPartComment(first) ? parts[0] : first;
-    this.target.end = isPartComment(last) ? parts[parts.length - 1] : last;
+    const bPartFirst = isPartComment(first);
+    const bPartLast = isPartComment(last);
+    this.target.start = bPartFirst ? parts[0] : first;
+    this.target.end = bPartLast ? parts[parts.length - 1] : last;
     parts.forEach((part, i) => part.update(values[i]));
   }
   public hydrate(element: Node): boolean {
@@ -278,28 +279,29 @@ export class Template {
     const len = this.parts.length;
     for (; i < len; i++) {
       const part = this.parts[i];
+      // TODO: special case when part is a template?
       const path = part.path;
       const start = part.target.first();
       const end = part.target.last();
-      let cursor: Optional<Node> = start;
-      let rank = 0;
-      while (cursor && start !== end) {
-        let next: Optional<Node> = cursor.nextSibling;
-        rank++;
-        if (cursor === end) {
-          next = undefined;
-        }
-        cursor = next;
-      }
-      const onlyNodes = isString(path[len - 1])
-        ? (path.slice(0, -1) as number[])
-        : (path as number[]);
-      const onlyNodesLen = onlyNodes.length;
-      const endPath = onlyNodes
-        .slice(0, -1)
-        .concat(onlyNodes[onlyNodesLen - 1] + rank);
-      console.log(endPath);
-      // TODO: erase log
+
+      // let cursor: Optional<Node> = start;
+      // let rank = 0;
+      // while (cursor && start !== end) {
+      //   let next: Optional<Node> = cursor.nextSibling;
+      //   rank++;
+      //   if (cursor === end) {
+      //     next = undefined;
+      //   }
+      //   cursor = next;
+      // }
+      // const onlyNodes = isString(path[len - 1])
+      //   ? (path.slice(0, -1) as number[])
+      //   : (path as number[]);
+      // const onlyNodesLen = onlyNodes.length;
+      // const endPath = onlyNodes
+      //   .slice(0, -1)
+      //   .concat(onlyNodes[onlyNodesLen - 1] + rank);
+      // console.log(endPath);
     }
     return result;
   }
@@ -375,34 +377,7 @@ export class Part {
   }
   public update(value?: PartValue) {
     if (isAttributePart(this)) {
-      if (this.prop === THREE_DOT) {
-        if (isString(value)) {
-          fail();
-        }
-        const props = value as any;
-        const keys = Object.keys(value as any);
-        const keysLen = keys.length;
-        const oldProps = this.value as any;
-        const oldKeys = Object.keys(oldProps);
-        const len = oldKeys.length;
-        let i = 0;
-        for (; i < len; i++) {
-          const key = oldKeys[i];
-          if (key in props) {
-            this.updateAttribute(key, props[key]);
-          } else {
-            this.updateAttribute(key, undefined);
-          }
-        }
-        for (i = 0; i < keysLen; i++) {
-          const key = keys[i];
-          if (!(key in oldKeys)) {
-            this.updateAttribute(key, props[key]);
-          }
-        }
-      } else {
-        this.updateAttribute(this.prop, value);
-      }
+      this.updateAttribute(this.prop, value);
       return;
     }
     let val: Optional<PartValue | Template> = value;
@@ -524,14 +499,14 @@ export class Part {
         this.target.start = newStart;
         this.target.end = newEnd;
         this.value = value;
-      } else if (isText(value) && partValue.nodeValue !== value.nodeValue) {
-        partValue.nodeValue = value.nodeValue;
+      } else if (isText(value) && partValue.textContent !== value.textContent) {
+        partValue.textContent = value.textContent;
       } else {
         if (!isString(value)) {
           value = value.toString();
         }
-        if (partValue.nodeValue !== value) {
-          partValue.nodeValue = value as string;
+        if (partValue.textContent !== value) {
+          partValue.textContent = value as string;
         }
       }
     } else {
