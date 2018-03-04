@@ -410,22 +410,22 @@ export class Part {
     this.value = target;
   }
   public update(value?: PartValue) {
-    if (isAttributePart(this)) {
-      this.updateAttribute(this.prop, value);
+    if (isDirective(value)) {
+      (value as IDirective)(this);
       return;
     }
     let val: Optional<PartValue | Template> = value;
     if (val == null || arguments.length === 0) {
       val = this.value;
     }
-    if (isDirective(val)) {
-      (val as IDirective)(this);
-      return;
-    }
     if (isPromise(val)) {
       (val as Promise<PartValue>).then(promised => {
         this.update(promised);
       });
+      return;
+    }
+    if (isAttributePart(this)) {
+      this.updateAttribute(this.prop, value);
       return;
     }
     if (isIterable(val)) {
@@ -445,16 +445,6 @@ export class Part {
   }
 
   private updateAttribute(name: string, value: Optional<PartValue>) {
-    if (isPromise(value)) {
-      value.then(promised => {
-        this.updateAttribute(name, promised);
-      });
-      return;
-    }
-    if (isDirective(value)) {
-      value(this);
-      return;
-    }
     const element = this.target.start as Node;
     if (!element) {
       fail();
