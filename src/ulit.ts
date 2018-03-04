@@ -147,7 +147,7 @@ function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
           const path = serial[0];
           const isSVG = serial[1];
           const partTarget = followPath(target, path);
-          if (Array.isArray(partTarget)) {
+          if (isArray(partTarget)) {
             return new Part(path, partTarget[0], isSVG);
           }
           return new Part(path, partTarget as Node, isSVG);
@@ -248,6 +248,11 @@ export function followPath(
   return cursor;
 }
 
+function pathToParent(element: Node, target: Node): number[] {
+  // TODO: walk from start/end to target and record path by cursor.childNodes.indexOf(lastNode);
+  return [];
+}
+
 export class Template {
   public disposer = new Disposable();
   public target = new DomTarget();
@@ -271,37 +276,35 @@ export class Template {
     parts.forEach((part, i) => part.update(values[i]));
   }
   public hydrate(element: Node): boolean {
-    // TODO: update() in this method or before???
-    // I think before would be better but then I have to walk to the 
-    // first child of element from both start and end
     let result = true;
     let i = 0;
     const len = this.parts.length;
+    const target = this.element.content.firstChild as Node;
     for (; i < len; i++) {
       const part = this.parts[i];
-      // TODO: special case when part is a template?
-      const path = part.path;
       const start = part.target.first();
       const end = part.target.last();
-
-      // let cursor: Optional<Node> = start;
-      // let rank = 0;
-      // while (cursor && start !== end) {
-      //   let next: Optional<Node> = cursor.nextSibling;
-      //   rank++;
-      //   if (cursor === end) {
-      //     next = undefined;
-      //   }
-      //   cursor = next;
-      // }
-      // const onlyNodes = isString(path[len - 1])
-      //   ? (path.slice(0, -1) as number[])
-      //   : (path as number[]);
-      // const onlyNodesLen = onlyNodes.length;
-      // const endPath = onlyNodes
-      //   .slice(0, -1)
-      //   .concat(onlyNodes[onlyNodesLen - 1] + rank);
-      // console.log(endPath);
+      const startPath = pathToParent(start, target);
+      const startTarget = followPath(element, startPath);
+      const startNode = isArray(startTarget) ? (startTarget as NodeAttribute)[0] : startTarget;
+      part.target.start = startNode;
+      if (isTemplate(part.value)) {
+        const innerTemplate = part.value as Template;
+        if (!startNode) {
+          fail();
+        }
+        innerTemplate.hydrate(startNode as Node);
+      } else if (isEventPart(part)) {
+        (startNode as any)[part.prop] = part.value;
+      } else { 
+        const endPath = pathToParent(end, target);
+        const endTarget = startPath === endPath ? startTarget : followPath(element, endPath);
+        part.target.end = isArray(endTarget) ? (endTarget as NodeAttribute)[0] : endTarget;
+      }
+    }
+    const fragment = this.element.content;
+    while(fragment.hasChildNodes()) {
+      fragment.removeChild(fragment.lastChild as Node);
     }
     return result;
   }
@@ -397,7 +400,7 @@ export class Part {
     if (isIterable(val)) {
       val = Array.from(val as any);
     }
-    if (Array.isArray(val)) {
+    if (isArray(val)) {
       const directive = repeat(val);
       this.value = directive;
       directive(this);
@@ -618,13 +621,17 @@ function isString(x: any): x is string {
   return typeof x === "string";
 }
 
+function isArray<T>(x: any): x is Array<T> {
+  return Array.isArray(x);
+} 
+
 function isText(x: any): x is Text {
   return x && isNode(x) && (x as Node).nodeType === TEXT_NODE;
 }
 
 function isIterable<T>(x: any): x is Iterable<T> {
   return (
-    !isString(x) && !Array.isArray(x) && isFunction((x as any)[Symbol.iterator])
+    !isString(x) && !isArray(x) && isFunction((x as any)[Symbol.iterator])
   );
 }
 
