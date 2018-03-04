@@ -951,11 +951,17 @@ export function render(
     }
     return;
   }
-  const template = (view as ITemplateGenerator)();
-
+  let template = (view as ITemplateGenerator)();
   if (container.hasChildNodes()) {
-    // TODO: add hydration here...
+    if (template.hydrate(container)) {
+      return;
   } else {
+      while (container.hasChildNodes()) {
+        container.removeChild(container.lastChild as Node);
+      }
+      template = (view as ITemplateGenerator)();
+    }
+  }
     template.update();
     if (isTemplateElement(template.element)) {
       const first: Optional<Node> = container.firstChild;
@@ -964,4 +970,3 @@ export function render(
       (container as any).__template = template;
     }
   }
-}
