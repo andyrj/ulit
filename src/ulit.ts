@@ -88,10 +88,11 @@ function isNodeSVGChild(node: Node): boolean {
   let result = false;
   let current: Optional<Node> = node;
   while (current) {
-    if (current.nodeName === SVG) {
+    const currentName = current.nodeName.toUpperCase();
+    if (currentName === SVG) {
       result = true;
       current = undefined;
-    } else if (current.nodeName === FOREIGN_OBJECT) {
+    } else if (currentName === FOREIGN_OBJECT) {
       result = false;
       current = undefined;
     } else {
