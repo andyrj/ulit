@@ -2,7 +2,7 @@
 	"compilerOptions": {
     "outDir": "./dist",
     "target": "es2015",
-    "module": "es2015",
+    "module": "umd",
     "moduleResolution": "node",
     "sourceMap": true,
     "declaration": true,
