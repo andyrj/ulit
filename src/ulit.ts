@@ -667,7 +667,7 @@ function isTemplate(x: any): x is Template {
 }
 
 function isTemplateElement(x: any): x is HTMLTemplateElement {
-  return x && x instanceof HTMLTemplateElement;
+  return x && isDocumentFragment(x.content);
 }
 
 function isTemplateGenerator(x: any): x is ITemplateGenerator {
