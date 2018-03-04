@@ -256,7 +256,7 @@ export function followPath(
 function pathToParent(element: Node, target: Node): Optional<number[]> {
   let result: number[] = [];
   let cursor: Node = element;
-  while(cursor) {
+  while (cursor) {
     const next: Optional<Node> = cursor.parentNode;
     if (!next) {
       return;
@@ -307,7 +307,9 @@ export class Template {
         fail();
       }
       const startTarget = followPath(element, startPath as number[]);
-      const startNode = isArray(startTarget) ? (startTarget as NodeAttribute)[0] : startTarget;
+      const startNode = isArray(startTarget)
+        ? (startTarget as NodeAttribute)[0]
+        : startTarget;
       part.target.start = startNode;
       if (isTemplate(part.value)) {
         const innerTemplate = part.value as Template;
@@ -317,17 +319,22 @@ export class Template {
         innerTemplate.hydrate(startNode as Node);
       } else if (isEventPart(part)) {
         (startNode as any)[part.prop] = part.value;
-      } else { 
+      } else {
         const endPath = pathToParent(end, target);
         if (!endPath) {
           fail();
         }
-        const endTarget = startPath === endPath ? startTarget : followPath(element, endPath as number[]);
-        part.target.end = isArray(endTarget) ? (endTarget as NodeAttribute)[0] : endTarget;
+        const endTarget =
+          startPath === endPath
+            ? startTarget
+            : followPath(element, endPath as number[]);
+        part.target.end = isArray(endTarget)
+          ? (endTarget as NodeAttribute)[0]
+          : endTarget;
       }
     }
     const fragment = this.element.content;
-    while(fragment.hasChildNodes()) {
+    while (fragment.hasChildNodes()) {
       fragment.removeChild(fragment.lastChild as Node);
     }
     return result;
@@ -647,16 +654,14 @@ function isString(x: any): x is string {
 
 function isArray<T>(x: any): x is Array<T> {
   return Array.isArray(x);
-} 
+}
 
 function isText(x: any): x is Text {
   return x && isNode(x) && (x as Node).nodeType === TEXT_NODE;
 }
 
 function isIterable<T>(x: any): x is Iterable<T> {
-  return (
-    !isString(x) && !isArray(x) && isFunction((x as any)[Symbol.iterator])
-  );
+  return !isString(x) && !isArray(x) && isFunction((x as any)[Symbol.iterator]);
 }
 
 function isPartComment(x: any): x is Comment {
