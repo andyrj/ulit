@@ -1,5 +1,10 @@
 export type Optional<T> = T | undefined | null;
 export type Key = symbol | string | number;
+export interface IDirective {
+  (part: Part): void;
+  directive: boolean;
+}
+export type DirectiveFn = (part: Part) => void;
 export type PrimitivePart =
   | IToString
   | string
@@ -692,11 +697,6 @@ function isEventPart(x: any) {
   return false;
 }
 
-export interface IDirective {
-  (part: Part): void;
-  directive: boolean;
-}
-export type DirectiveFn = (part: Part) => void;
 export function directive(fn: DirectiveFn): IDirective {
   (fn as any).directive = true;
   return fn as IDirective;
