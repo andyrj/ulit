@@ -4,12 +4,7 @@
 [![Codacy Badge](https://api.codacy.com/project/badge/Coverage/74420ad6de824a64a06235becc1810c2)](https://www.codacy.com/app/andyrjohnson82/ulit?utm_source=github.com&utm_medium=referral&utm_content=andyrj/ulit&utm_campaign=Badge_Coverage)
 [![Build Status](https://travis-ci.org/andyrj/ulit.svg?branch=master)](https://travis-ci.org/andyrj/ulit)
 
-*WIP* Tagged Template Literal html template library.  Inspired by lit-html/hyperHTML.
-
-TODO:
-1. Finish typescript conversion and cleanup
-2. Correct repeat()
-3. get test coverage up to 100/100
+Tagged Template Literal html template library.  Inspired by lit-html/hyperHTML.
 
 ## Why another tagged template literal library?
 "I cannot understand what I cannot build." - Feynman
@@ -48,10 +43,7 @@ html`${style`...`}<div></div>`; // template out -> <style>...</style><div></div>
 ```
 
 ## How can I use it?
-
-You shouldn't yet, the version checked into npm is working except for repeat/iterables/arrays, but there are many bug fixes in this rewrite I just haven't quite finished yet...
-
-Once it's finished being built/debugged you can install/use it as normal.
+If your build system/browser supports es2015 modules you can install and use it as normal.
 
 ### Install
 ```
