@@ -248,7 +248,7 @@ export function followPath(
     if (isString(next)) {
       return [cursor, next];
     }
-    cursor = cursor.childNodes[next as number];
+    cursor = (cursor as HTMLElement).childNodes[next as number];
   }
   return cursor;
 }
@@ -261,7 +261,7 @@ function pathToParent(element: Node, target: Node): Optional<number[]> {
     if (!next) {
       return;
     }
-    result.unshift([].indexOf.call((next as Node).childNodes, cursor));
+    result.unshift([].indexOf.call((next as HTMLElement).childNodes, cursor));
     if (next === target) {
       return result;
     } else {
@@ -297,7 +297,7 @@ export class Template {
     let result = true;
     let i = 0;
     const len = this.parts.length;
-    const target = this.element.content.firstChild as Node;
+    const target = this.element.content as DocumentFragment;
     for (; i < len; i++) {
       const part = this.parts[i];
       const start = part.target.first();
@@ -851,7 +851,7 @@ type WalkFn = (
 ) => void | never;
 
 function walkDOM(
-  parent: HTMLElement | DocumentFragment,
+  parent: Node | DocumentFragment,
   element: Optional<Node>,
   fn: WalkFn,
   path: Array<number | string> = []
@@ -861,9 +861,9 @@ function walkDOM(
   } else {
     fn(parent, element, path);
   }
-  [].forEach.call(element.childNodes, (child: Node, index: number) => {
+  [].forEach.call((element as HTMLElement).childNodes, (child: Node, index: number) => {
     path.push(index);
-    walkDOM(element as HTMLElement, child, fn, path);
+    walkDOM(element as Node, child, fn, path);
     path.pop();
   });
 }
@@ -967,6 +967,7 @@ export function render(
     return;
   }
   let template = (view as ITemplateGenerator)();
+  template.update();
   if (container.hasChildNodes()) {
     if (template.hydrate(container)) {
       return;
@@ -978,11 +979,11 @@ export function render(
       template.update();
     }
   }
-  template.update();
-  if (isTemplateElement(template.element)) {
-    const first: Optional<Node> = container.firstChild;
-    const parent: Optional<Node> = container;
-    (parent as Node).insertBefore(template.element.content, first);
-    (container as any).__template = template;
+  if (!isTemplateElement(template.element)) {
+    fail();
   }
+  const first: Optional<Node> = container.firstChild;
+  const parent: Optional<Node> = container;
+  (parent as Node).insertBefore(template.element.content, first);
+  (container as any).__template = template;
 }
