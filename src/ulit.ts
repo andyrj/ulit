@@ -615,7 +615,7 @@ export class DomTarget {
 }
 
 function isNode(x: any): x is Node {
-  return (x as Node) && x.nodeType != null;
+  return x && x.nodeType != null;
 }
 
 function isElementNode(x: any): x is HTMLElement {
@@ -635,23 +635,23 @@ function isComment(x: any): x is Comment {
 }
 
 function isFunction(x: any): x is Function {
-  return typeof x === "function";
+  return x && typeof x === "function";
 }
 
 function isString(x: any): x is string {
-  return typeof x === "string";
+  return x && typeof x === "string";
 }
 
 function isArray<T>(x: any): x is Array<T> {
-  return Array.isArray(x);
+  return x && Array.isArray(x);
 }
 
 function isText(x: any): x is Text {
-  return x && isNode(x) && (x as Node).nodeType === TEXT_NODE;
+  return isNode(x) && (x as Node).nodeType === TEXT_NODE;
 }
 
 function isIterable<T>(x: any): x is Iterable<T> {
-  return !isString(x) && !isArray(x) && isFunction((x as any)[Symbol.iterator]);
+  return x && !isString(x) && !isArray(x) && isFunction((x as any)[Symbol.iterator]);
 }
 
 function isPartComment(x: any): x is Comment {
