@@ -2,6 +2,14 @@ import { expect } from "chai";
 import "mocha";
 import { directive, Disposable, DomTarget, html, IDisposer, Part, render, Template, PartGenerator, followPath, Optional, PartValue } from "../src/ulit";
 
+let target;
+before(() => {
+  const appDiv = document.createElement("div");
+  appDiv.id = "app";
+  document.body.appendChild(appDiv);
+  target = appDiv;
+});
+
 describe("Template", () => {
   it("should have {disposer, target, id, element, parts, values}", () => {
     const test1 = new Template(1, document.createElement("template"), [], []);
@@ -268,137 +276,137 @@ describe("Disposable", () => {
 describe("render", () => {
   it("should handle static templates", () => {
     const test1 = html`<div id="test">test</div>`;
-    render(test1);
-    expect(document.body.innerHTML).to.equal(`<div id="test">test</div>`);
+    render(test1, target);
+    expect(target.innerHTML).to.equal(`<div id="test">test</div>`);
   });
   it("should handle single node templates", () => {
     const str = "test2";
     const test3 = val => html`${val}`;
-    render(test3(str));
-    expect(document.body.innerHTML).to.equal(`${str}`);
+    render(test3(str), target);
+    expect(target.innerHTML).to.equal(`${str}`);
   });
   it("expression can change part types between renders", () => {
     const str = "test3";
     const div = document.createElement("div");
     div.id = str;
     const test2 = val => html`${val}`;
-    render(test2(str));
-    expect(document.body.innerHTML).to.equal(str);
-    render(test2(div));
-    expect(document.body.innerHTML).to.equal(`<div id="${str}"></div>`);
+    render(test2(str), target);
+    expect(target.innerHTML).to.equal(str);
+    render(test2(div), target);
+    expect(target.innerHTML).to.equal(`<div id="${str}"></div>`);
   });
   it("should handle defaultTemplateFn", () => {
     const test4 = "test2";
     const div = document.createElement("div");
-    render(test4);
-    expect(document.body.innerHTML).to.equal(test4);
-    render(html`${div}`);
-    expect(document.body.firstChild).to.equal(div);
+    render(test4, target);
+    expect(target.innerHTML).to.equal(test4);
+    render(html`${div}`, target);
+    expect(target.firstChild).to.equal(div);
   });
   it("templates should be able to start and end with parts", () => {
     const t1 = "test";
     const t2 = "test1";
     const template = html`${t1} and ${t2}`;
-    render(template);
-    expect(document.body.innerHTML).to.equal("test and test1");
+    render(template, target);
+    expect(target.innerHTML).to.equal("test and test1");
   });
   it("should handle dynamic nodes dispersed in static nodes", () => {
     const str = "dynamic";
     const template = html`<div>This is static, this is ${str}</div>`;
-    render(template);
-    expect(document.body.innerHTML).to.equal(`<div>This is static, this is ${str}</div>`);
+    render(template, target);
+    expect(target.innerHTML).to.equal(`<div>This is static, this is ${str}</div>`);
     const template1 = html`<div>${str} is at start</div>`;
-    render(template1);
-    expect(document.body.innerHTML).to.equal(`<div>${str} is at start</div>`);
+    render(template1, target);
+    expect(target.innerHTML).to.equal(`<div>${str} is at start</div>`);
     const template2 = html`<div>in the middle it's ${str}!</div>`;
-    render(template2);
-    expect(document.body.innerHTML).to.equal(`<div>in the middle it's ${str}!</div>`);
+    render(template2, target);
+    expect(target.innerHTML).to.equal(`<div>in the middle it's ${str}!</div>`);
   });
   it("nested templates should update in place", () => {
     const nested = (str: string) => html`<div class=nested>${str}</div>`;
     const template = (str: string) => html`<div>${nested(str)}</div>`;
-    render(template("test"));
-    expect(document.body.innerHTML).to.equal(`<div><div class="nested">test</div></div>`);
-    render(template("123"));
-    expect((document.body.firstChild as any).firstChild.firstChild.nodeValue).to.equal("123");
+    render(template("test"), target);
+    expect(target.innerHTML).to.equal(`<div><div class="nested">test</div></div>`);
+    render(template("123"), target);
+    expect((target.firstChild as any).firstChild.firstChild.nodeValue).to.equal("123");
   });
   it("nested templates", () => {
     const nested = html`<div id="test">test</div>`;
     const template = html`<div>${nested}</div>`;
-    render(template);
-    expect(document.body.innerHTML).to.equal(`<div><div id="test">test</div></div>`);
+    render(template, target);
+    expect(target.innerHTML).to.equal(`<div><div id="test">test</div></div>`);
     const template1 = html`<span>${template}</span>`;
-    render(template1);
-    expect(document.body.innerHTML).to.equal(`<span><div><div id="test">test</div></div></span>`);
+    render(template1, target);
+    expect(target.innerHTML).to.equal(`<span><div><div id="test">test</div></div></span>`);
   });
   it("fragments", () => {
     const f1 = document.createDocumentFragment();
     f1.appendChild(document.createTextNode("test"));
     f1.appendChild(document.createTextNode("test1"));
     const template = (frag: DocumentFragment) => html`<div>${frag}</div>`;
-    render(template(f1));
-    expect(document.body.innerHTML).to.equal("<div>testtest1</div>");
+    render(template(f1), target);
+    expect(target.innerHTML).to.equal("<div>testtest1</div>");
     const f2 = document.createDocumentFragment();
     f2.appendChild(document.createTextNode("test"));
     f2.appendChild(document.createElement("br"));
     f2.appendChild(document.createTextNode("test1"));
-    render(template(f2));
-    expect(document.body.innerHTML).to.equal("<div>test<br>test1</div>");
+    render(template(f2), target);
+    expect(target.innerHTML).to.equal("<div>test<br>test1</div>");
   });
   it("should handle dom nodes", () => {
     const node = document.createElement("div");
     node.id = "test";
     const template = html`<div>${node}</div>`;
-    render(template);
-    expect(document.body.innerHTML).to.equal(`<div><div id="test"></div></div>`);
+    render(template, target);
+    expect(target.innerHTML).to.equal(`<div><div id="test"></div></div>`);
   });
   it("directives", () => {
     let lastPart;
     const template = html`<div>${directive(part => {lastPart = part})}</div>`;
-    render(template);
+    render(template, target);
     lastPart.update("test");
-    expect(document.body.firstChild.firstChild.nodeValue).to.equal("test");
+    expect(target.firstChild.firstChild.nodeValue).to.equal("test");
     lastPart.update("test123");
-    expect(document.body.firstChild.firstChild.nodeValue).to.equal("test123");
+    expect(target.firstChild.firstChild.nodeValue).to.equal("test123");
   });
   it("setting event handler should work", () => {
     let count = 0;
     const handler = (e: Event) => count++;
     const template = html`<div onclick=${handler}>test</div>`;
-    render(template);
+    render(template, target);
     const event = document.createEvent("mouseevent");
     event.initEvent("click", false, true);
-    document.body.firstChild.dispatchEvent(event);
+    target.firstChild.dispatchEvent(event);
     expect(count).to.equal(1);
   });
   it("should handle attribute parts", () => {
     const str = "test3";
     const test3 = (val?: PartValue) => html`<div id=${val}></div>`;
-    render(test3());
-    expect(document.body.innerHTML).to.equal(`<div></div>`);
-    render(test3(undefined));
-    expect(document.body.innerHTML).to.equal(`<div></div>`);
-    render(test3(str));
-    expect(document.body.innerHTML).to.equal(`<div id="${str}"></div>`);  
-    render(test3(undefined));
-    expect(document.body.innerHTML).to.equal(`<div></div>`);
+    render(test3(), target);
+    expect(target.innerHTML).to.equal(`<div></div>`);
+    render(test3(undefined), target);
+    expect(target.innerHTML).to.equal(`<div></div>`);
+    render(test3(str), target);
+    expect(target.innerHTML).to.equal(`<div id="${str}"></div>`);  
+    render(test3(undefined), target);
+    expect(target.innerHTML).to.equal(`<div></div>`);
   });
   it("attribute directives should work as expected", () => {
     const template = (str: string) => html`<div id=${directive(part => part.update(str))}>test</div>`;
-    render(template("test"));
-    expect((document.body.firstChild as any).id).to.equal("test");
-    render(template("test1"));
-    expect((document.body.firstChild as any).id).to.equal("test1");
+    render(template("test"), target);
+    expect((target.firstChild as any).id).to.equal("test");
+    render(template("test1"), target);
+    expect((target.firstChild as any).id).to.equal("test1");
   });
   it("arrays", () => {
     const arr = [1, 2 ,3];
-    render(arr);
-    expect(document.body.innerHTML).to.equal("123");
+    render(arr, target);
+    expect(target.innerHTML).to.equal("123");
     arr[0] = 3;
     arr[1] = 2;
     arr[2] = 1;
-    render(arr);
-    expect(document.body.innerHTML).to.equal("321");
+    render(arr, target);
+    expect(target.innerHTML).to.equal("321");
   });
 
   // TODO: jsdom appears to have a bug and it's a fugly code base, lets just extend undom to have DocumentFragment and HTMLTemplateElement
@@ -406,13 +414,13 @@ describe("render", () => {
   //   const template = (num: number) => html`<svg><g><line x1=${num} y1=0 x2=0 y2=0 /></g></svg>`;
   //   const escaped = (num: number) => html`<svg><foreignObject>${num.toString()}</foreignObject></svg>`;
   //   render(template(1));
-  //   const line = document.body.firstChild.firstChild.firstChild as Node;
+  //   const line = target.firstChild.firstChild.firstChild as Node;
   //   expect(line.nodeName).to.equal("line");
   //   console.log("line");
   //   expect((line as SVGLineElement).getAttributeNS(`http://www.w3.org/2000/svg`, "x1")).to.equal("1");
-  //   expect(document.body.innerHTML).to.equal(`<svg><g><line y1="0" x2="0" y2="0" x1="1"></line></g></svg>`);
+  //   expect(target.innerHTML).to.equal(`<svg><g><line y1="0" x2="0" y2="0" x1="1"></line></g></svg>`);
   //   render(escaped(2));
-  //   expect(document.body.innerHTML).to.equal(`<svg><foreignObject>2</foreignObject></svg>`);
+  //   expect(target.innerHTML).to.equal(`<svg><foreignObject>2</foreignObject></svg>`);
   // });
 });
 
