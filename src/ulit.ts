@@ -951,36 +951,24 @@ export function render(
     view = defaultTemplateFn(view as PartValue);
   }
   const instance = (container as any).__template;
-  if (instance) {
-    if (instance.id === (view as ITemplateGenerator).id) {
-      instance.update((view as ITemplateGenerator).exprs);
-      return;
-    } else {
-      const newInstance = (view as ITemplateGenerator)();
-      container.insertBefore(newInstance.element.content, container.firstChild);
-      instance.target.remove();
-      (container as any).__template = newInstance;
-    }
+  let template: Template;
+  if (instance && instance.id === (view as ITemplateGenerator).id) {
+    instance.update((view as ITemplateGenerator).exprs);
     return;
-  }
-  let template = (view as ITemplateGenerator)();
-  template.update();
-  if (container.hasChildNodes()) {
-    if (template.hydrate(container)) {
+  } else {
+    template = (view as ITemplateGenerator)();
+    template.update();
+    if (!instance && container.hasChildNodes() && template.hydrate(container)) {
       return;
-    } else {
-      while (container.hasChildNodes()) {
-        container.removeChild(container.lastChild as Node);
-      }
-      template = (view as ITemplateGenerator)();
-      template.update();
     }
+    instance && instance.disposer.dispose();
   }
   if (!isTemplateElement(template.element)) {
     fail();
   }
-  const first: Optional<Node> = container.firstChild;
-  const parent: Optional<Node> = container;
-  (parent as Node).insertBefore(template.element.content, first);
+  while (container.hasChildNodes()) {
+    container.removeChild(container.lastChild as Node);
+  }
+  container.appendChild(template.element.content);
   (container as any).__template = template;
 }
