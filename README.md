@@ -56,16 +56,16 @@ npm install --save ulit
 // until allows you to conditionally load a template that is replaced upon promise completion (code-splitting, fetch, etc...)
 import { directive, html, render, repeat, until } from "ulit";
 
+const target = document.getElementById("app");
+
 // "components" are just template functions
 const hello = subject => html`<h1>hello ${subject}</h1>`;
-
-// render defaults to rendering to document.body if no other container is provided
-render(hello("world"), document.body);
-document.body.innerHTML === "<h1>hello world</h1>"; // true
+render(hello("world"), target);
+target.innerHTML === "<h1>hello world</h1>"; // true
 
 // calling render multiple times on the same container will update the current template in place if possible or replace it.
-render(hello("internet"));
-document.body.innerHTML === "<h1>hello internet</h1>"; // true
+render(hello("internet"), target);
+target.innerHTML === "<h1>hello internet</h1>"; // true
 
 // Build your own directive to extend ulit...
 // the example below passthroughDirective is a dummy directive example that is equivalent to just passing the value to the part
@@ -74,8 +74,8 @@ const passthroughDirective = value => directive(part => {
   part.update(value);
 });
 
-render(html`<h1>${passthroughDirective("pass through example...")}</h1>`);
-document.body.innerHTML === "<h1>pass through example...</h1>"; // true
+render(html`<h1>${passthroughDirective("pass through example...")}</h1>`, target);
+target.innerHTML === "<h1>pass through example...</h1>"; // true
 
 // Example Part API brain dump
 const partApiDirective = directive(part => {
@@ -102,18 +102,18 @@ const partApiDirective = directive(part => {
 const nums = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 render(nums.map(num => {
   hello(num);
-}));
-document.body.innerHTML === "<h1>hello 0</h1><h1>hello 1</h1>..."; //true
-render(hello(nums));
-document.body.innerHTML === "<h1>hello 012345678910</h1>"; // true NOTE: each number would be it's own textNode in this case...
+}), target);
+target.innerHTML === "<h1>hello 0</h1><h1>hello 1</h1>..."; //true
+render(hello(nums), target);
+target.innerHTML === "<h1>hello 012345678910</h1>"; // true NOTE: each number would be it's own textNode in this case...
 
 // Promises are valid PartValues, by default they will leave the previous part value in place initially, and update to what is resolved...
 render(hello(new Promise(resolve => {
   const doWork = setTimeout(resolve("async!"), 1000);
-})));
+})), target);
 // initially
-document.body.innerHTML === "<h1>hello 012345678910</h1>"; // true
-setTimeout(() => document.body.innerHTML === "<h1>hello async!</h1>", 1001); // true
+target.innerHTML === "<h1>hello 012345678910</h1>"; // true
+setTimeout(() => target.innerHTML === "<h1>hello async!</h1>", 1001); // true
 
 // until gives better support by allowing you to specify a default template while the promise resolves instead of a comment node
 render(
@@ -121,19 +121,19 @@ render(
     const doWork = setTimeout(resolve("async!"), 1000);
   },
   "loading..."
-  )))
-);
-document.body.innerHTML === "<h1>hello loading...</h1>"; //true
-setTimeout(() => document.body.innerHTML === "<h1>hello async!</h1>", 1001); // true
+  ))), target);
+target.innerHTML === "<h1>hello loading...</h1>"; //true
+setTimeout(() => target.innerHTML === "<h1>hello async!</h1>", 1001); // true
 
 // events
 const eventTemplate = html`<button onclick=${e => console.log(e)}>click me</button>`;
-document.body.innerHTML === "<button>click me</button>"; // true
+render(eventTemplate, target);
+target.innerHTML === "<button>click me</button>"; // true
 
 // nested templates
 const nested = hello(hello("nested"));
-render(nested);
-document.body.innerHTML === "<h1>hello <h1>hello nested</h1></h1>"; // true
+render(nested, target);
+target.innerHTML === "<h1>hello <h1>hello nested</h1></h1>"; // true
 
 ```
 

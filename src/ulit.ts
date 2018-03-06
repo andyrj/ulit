@@ -942,11 +942,8 @@ export function html(
 
 export function render(
   view: PartValue | PartValue[] | Iterable<PartValue>,
-  container?: Optional<Node>
+  container: Node
 ) {
-  if (!container) {
-    container = document.body;
-  }
   if (isIterable(view as PartValue)) {
     view = Array.from(view as IterablePartValue);
   }
