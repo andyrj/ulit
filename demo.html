@@ -1,22 +1,19 @@
 <html>
   <head>
     <script src="./dist/ulit.js"></script>
-    
   </head>
   <body>
     <div id="app"></div>
     <script>
-      const { html, render } = ulit;
-      const appEl = document.getElementById("app");
-      let count = 0;
-      function increment() {
-        count++;
+        const { html, render } = ulit;
+        const appEl = document.getElementById("app");
+        let count = 0;
+        function increment() {
+          count++;
+          render(template(count), appEl);
+        }
+        const template = num => html`<div>${num}<button onclick=${increment}>+</button></div>`;
         render(template(count), appEl);
-      }
-      const template = num => html`<div>${num}<button onclick=${increment}>+</button></div>`;
-      document.body.onload = function() {
-        render(template(count), appEl);
-      }
-    </script>
+      </script>
   </body>
 </html>
