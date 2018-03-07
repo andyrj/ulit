@@ -1,29 +1,25 @@
 export type Optional<T> = T | undefined | null;
 export type Key = symbol | string | number;
 export interface IDirective {
-  (part: Part): void;
+  (part: AttributePart | EventPart | NodePart): void;
   directive: boolean;
 }
-export type DirectiveFn = (part: Part) => void;
-export type PrimitivePart =
-  | IToString
-  | string
-  | Node
-  | DocumentFragment
-  | EventListener
-  | AttributePartValue;
+export type DirectiveFn = (part: AttributePart | EventPart | NodePart) => void;
+export type AttributePartValue = string | IToString | {};
+export type NodePartValue = string | IToString | Node | DocumentFragment;
+export type PrimitivePartValue = AttributePartValue | NodePartValue;
 export type PartValue = Optional<
-  | PrimitivePart
+  | PrimitivePartValue
   | IPartPromise
   | IDirective
   | IPartArray
   | ITemplateGenerator
   | IterablePartValue
 >;
-export interface IPartPromise extends Promise<PartValue> {}
-export interface IPartArray extends Array<PartValue> {}
-export interface IterablePartValue extends Iterable<PartValue> {}
-export type PartGenerator = (target: Node) => Part;
+export interface IPartPromise extends Promise<PrimitivePartValue> {}
+export interface IPartArray extends Array<NodePartValue> {}
+export interface IterablePartValue extends Iterable<NodePartValue> {}
+export type PartGenerator = (target: Node) => NodePart | AttributePart | EventPart;
 export type KeyFn = (item: any, index: number) => Key;
 export type TemplateFn = (item: any) => ITemplateGenerator;
 export interface ISerialCacheEntry {
@@ -43,8 +39,6 @@ export type NodeAttribute = [Node, string];
 export interface IToString {
   toString: () => string;
 }
-export type AttributePartValue = string | IToString | {};
-
 const SVG = "SVG";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FOREIGN_OBJECT = "FOREIGNOBJECT";
@@ -153,18 +147,32 @@ function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
           const isSVG = serial[1];
           const partTarget = followPath(target, path);
           if (isArray(partTarget)) {
-            return new Part(path, partTarget[0], isSVG);
+            return createAttributePart(partTarget[0], path, isSVG);
           }
-          return new Part(path, partTarget as Node, isSVG);
+          return new NodePart(path, partTarget as Node, isSVG);
         };
       });
       deserialized = { templateElement, serializedParts, partGenerators };
     }
   }
   serialCache.set(id, deserialized as ISerialCacheEntry);
-    return deserialized;
+  return deserialized;
+}
+
+function createAttributePart(target: Node, path: Array<string | number>, isSVG: boolean = false) {
+  const partTarget = followPath(target, path) as NodeAttribute;
+  const element = partTarget[0];
+  const name = partTarget[1];
+  let newPart: EventPart | AttributePart;
+  const newPropsSet = removedPropsCache.get(element) || createNewPropsSet(element);
+  newPropsSet.add(name);
+  if (partTarget[1].startsWith("on")) {
+    newPart = new EventPart(path, element, isSVG);
+  } else {
+    newPart = new AttributePart(path, element, isSVG);
   }
-  return;
+  removedPropsCache.set(element, newPropsSet);
+  return newPart;
 }
 
 function templateSetup(
@@ -194,7 +202,7 @@ function templateSetup(
             serial.push([adjustedPath, isSVG]);
             partGenerators.push((target: Node) => {
               const partTarget = followPath(target, adjustedPath as number[]);
-              return new Part(adjustedPath, partTarget as Node, isSVG);
+              return new NodePart(adjustedPath, partTarget as Node, isSVG);
             });
             cursor++;
           }
@@ -205,15 +213,13 @@ function templateSetup(
         parent.removeChild(element);
       }
     } else if (isElementNode(element)) {
+      // TODO: re-write, change to be like lit-extended and use data-stuff$="attribute" id="prop"
       [].forEach.call(element.attributes, (attr: Attr) => {
         if (attr.value === PART_MARKER) {
           const name = attr.name;
           const attrPath = walkPath.concat(name);
           serial.push([attrPath, isSVG]);
-          partGenerators.push((target: Node) => {
-            const partTarget = followPath(target, attrPath) as NodeAttribute;
-            return new Part(attrPath, partTarget[0], isSVG);
-          });
+          partGenerators.push((target: Node) => createAttributePart(target, attrPath, isSVG));
           if (isSVG) {
             element.removeAttributeNS(SVG_NS, name);
           } else {
@@ -229,6 +235,7 @@ function templateSetup(
         if ((element as any)[name] === PART_MARKER) {
           const propPath = walkPath.concat(name);
           serial.push([propPath, isSVG]);
+          partGenerators.push((target: Node) => createAttributePart(target, propPath, isSVG));
           delete (element as any)[name];
         }
       }
@@ -273,7 +280,7 @@ function pathToParent(element: Node, target: Node): Optional<number[]> {
 export class Template {
   public disposer = new Disposable();
   public target = new DomTarget();
-  public parts: Part[];
+  public parts: Array<NodePart | AttributePart | EventPart>;
   constructor(
     public id: number,
     public element: HTMLTemplateElement,
@@ -290,7 +297,7 @@ export class Template {
     const bPartLast = isPartComment(last);
     this.target.start = bPartFirst ? parts[0] : first;
     this.target.end = bPartLast ? parts[parts.length - 1] : last;
-    parts.forEach((part, i) => part.update(values[i]));
+    parts.forEach((part, i) => (part as any).update(values[i]));
   }
   public hydrate(element: Node): boolean {
     let result = true;
@@ -338,17 +345,17 @@ export class Template {
     }
     return result;
   }
-  public update(newValues?: Optional<PartValue[]>) {
+  public update<T>(newValues?: Array<PartValue>) {
     if (arguments.length === 0) {
-      newValues = this.values;
+      newValues = this.values as Array<T>;
     }
-    const templateParts = this.parts as Part[];
+    const templateParts = this.parts as Array<AttributePart | EventPart | NodePart>;
     let i = 0;
     const len = templateParts.length;
     for (; i < len; i++) {
       const part = templateParts[i];
       const newVal = newValues ? newValues[i] : undefined;
-      part.update(newVal);
+      (part as any).update(newVal);
     }
     if (newValues != null) {
       this.values = newValues;
@@ -408,22 +415,31 @@ export class Part {
     this.path = path.slice(0);
     this.value = target;
   }
-    }
+  public update(value?: Optional<PrimitivePartValue>) {}
+}
 
-function createNewPropsSet(part: Part) {
+function createNewPropsSet(node: Node) {
   const newSet = new Set<string>();
-  removedPropsCache.set(part, newSet);
+  removedPropsCache.set(node, newSet);
   return newSet;
-    }
-const removedPropsCache = new Map<Part, Set<string>>();
+}
+const removedPropsCache = new Map<Node, Set<string>>();
 export class AttributePart extends Part {
-  public name: string = "";
-  constructor(path: Array<string | number>, target: Node, isSVG: boolean) {
+  constructor(path: Array<string | number>, target: Node, isSVG: boolean = false) {
     super(path, target, isSVG);
-    this.name = path[path.length - 1] as string;
+  }
+  public update(value?: Optional<AttributePartValue>) {
+    if (isDirective(value)) {
+      (value as IDirective)(this);
+      return;
     }
-  public update(value?: Optional<PartValue>) {
-    const name = this.name;
+    if (isPromise(value)) {
+      (value as Promise<PartValue>).then(promised => {
+        this.update(promised as AttributePartValue);
+      });
+      return;
+    }
+    const name = this.prop;
     const element = this.target.start as Node;
     if (!element) {
       fail();
@@ -432,7 +448,7 @@ export class AttributePart extends Part {
     if (!name) {
       fail();
     }
-    const removedPropsEntry = removedPropsCache.get(this) || createNewPropsSet(this); 
+    const removedPropsEntry = removedPropsCache.get(element) || createNewPropsSet(element); 
     if (name in element || removedPropsEntry.has(name)) {
       if (value && (element as any)[name] !== value) {
         (element as any)[name] = value;
@@ -454,16 +470,26 @@ export class AttributePart extends Part {
 }
 
 export class EventPart extends AttributePart {
-  constructor(path: Array<string | number>, target: Node, isSVG: boolean) {
+  constructor(path: Array<string | number>, target: Node, isSVG: boolean = false) {
     super(path, target, isSVG);
   }
   public update(value?: Optional<EventListener>) {
+    if (isDirective(value)) {
+      (value as IDirective)(this);
+      return;
+    }
+    if (isPromise(value)) {
+      (value as Promise<PartValue>).then(promised => {
+        this.update(promised as EventListener);
+      });
+      return;
+    }
     if (!value) {
-      delete (this.target.start as any)[this.name];
+      delete (this.target.start as any)[this.prop];
       value = undefined;
     } else {
       if (this.value !== value) {
-        (this.target.start as any)[this.name] = value;
+        (this.target.start as any)[this.prop] = value;
         this.value = value;
       }
     }
@@ -472,7 +498,7 @@ export class EventPart extends AttributePart {
 }
 
 export class NodePart extends Part {
-  constructor(path: Array<string | number>, target: Node, isSVG: boolean) {
+  constructor(path: Array<string | number>, target: Node, isSVG: boolean = false) {
     super(path, target, isSVG);
   }
   public update(value?: Optional<NodePartValue>) {
@@ -501,88 +527,88 @@ export class NodePart extends Part {
     const first = this.target.first();
     const parent = first.parentNode;
     if (isTemplateGenerator(value)) { 
-    const instance = isTemplate(this.value) ? this.value : undefined;
-    if (instance && (instance as Template).id === value.id) {
-      (instance as Template).update(value.exprs);
-      return;
-    }
-    const template = value();
-    if (isTemplateElement(template.element)) {
-      const fragment = template.element.content;
-      const newStart = template.target.first();
-      const newEnd = template.target.last();
-      (parent as Node).insertBefore(fragment, first);
-      this.target.remove();
-      this.target.start = newStart;
-      this.target.end = newEnd;
-      this.value = template;
-    } else {
-      fail();
-    }
-    } else {
-      // this.updateNode(value);
-    if (value == null) {
-      value = document.createComment(`${PART_START}${PART_END}`);
-    }
-    let newStart: Optional<Node> = undefined;
-    let newEnd: Optional<Node> = undefined;
-    const partValue = this.value;
-    if (isText(partValue)) {
-      if (isNode(value)) {
-        newStart = value;
-        newEnd = value;
-        if (isDocumentFragment(value)) {
-          newStart = value.firstChild;
-          newEnd = value.lastChild;
-        }
-        (parent as Node).insertBefore(value as Node, first);
+      const instance = isTemplate(this.value) ? this.value : undefined;
+      if (instance && (instance as Template).id === value.id) {
+        (instance as Template).update(value.exprs);
+        return;
+      }
+      const template = value();
+      if (isTemplateElement(template.element)) {
+        const fragment = template.element.content;
+        const newStart = template.target.first();
+        const newEnd = template.target.last();
+        (parent as Node).insertBefore(fragment, first);
         this.target.remove();
         this.target.start = newStart;
         this.target.end = newEnd;
-        this.value = value;
-      } else if (isText(value) && partValue.textContent !== value.textContent) {
-        partValue.textContent = value.textContent;
+        this.value = template;
       } else {
-        if (!isString(value)) {
-          value = value.toString();
-        }
-        if (partValue.textContent !== value) {
-          partValue.textContent = value as string;
-        }
+        fail();
       }
     } else {
-      const bText = isText(value);
-      if (bText || !isNode(value)) {
-        if (!bText) {
-          value = document.createTextNode(
-            !isString(value) ? value.toString() : value
-          );
-        }
-        newStart = value as Node;
-        newEnd = value as Node;
-        (parent as Node).insertBefore(value as Node, first);
-        this.target.remove();
-        this.target.start = newStart;
-        this.target.end = newEnd;
-        this.value = value;
-      } else {
-        if (partValue !== value) {
+      // this.updateNode(value);
+      if (value == null) {
+        value = document.createComment(`${PART_START}${PART_END}`);
+      }
+      let newStart: Optional<Node> = undefined;
+      let newEnd: Optional<Node> = undefined;
+      const partValue = this.value;
+      if (isText(partValue)) {
+        if (isNode(value)) {
           newStart = value;
           newEnd = value;
           if (isDocumentFragment(value)) {
             newStart = value.firstChild;
             newEnd = value.lastChild;
           }
-          (parent as Node).insertBefore(value, first);
+          (parent as Node).insertBefore(value as Node, first);
           this.target.remove();
           this.target.start = newStart;
           this.target.end = newEnd;
           this.value = value;
+        } else if (isText(value) && partValue.textContent !== value.textContent) {
+          partValue.textContent = value.textContent;
+        } else {
+          if (!isString(value)) {
+            value = value.toString();
+          }
+          if (partValue.textContent !== value) {
+            partValue.textContent = value as string;
+          }
+        }
+      } else {
+        const bText = isText(value);
+        if (bText || !isNode(value)) {
+          if (!bText) {
+            value = document.createTextNode(
+              !isString(value) ? value.toString() : value
+            );
+          }
+          newStart = value as Node;
+          newEnd = value as Node;
+          (parent as Node).insertBefore(value as Node, first);
+          this.target.remove();
+          this.target.start = newStart;
+          this.target.end = newEnd;
+          this.value = value;
+        } else {
+          if (partValue !== value) {
+            newStart = value;
+            newEnd = value;
+            if (isDocumentFragment(value)) {
+              newStart = value.firstChild;
+              newEnd = value.lastChild;
+            }
+            (parent as Node).insertBefore(value, first);
+            this.target.remove();
+            this.target.start = newStart;
+            this.target.end = newEnd;
+            this.value = value;
+          }
         }
       }
     }
   }
-}
 }
 
 export class DomTarget {
@@ -845,12 +871,12 @@ export function repeat(
 }
 
 export function until(
-  promise: Promise<PartValue>,
-  defaultContent: PartValue
+  promise: Promise<PrimitivePartValue>,
+  defaultContent: PrimitivePartValue
 ): IDirective {
-  return directive((part: Part) => {
-    part.update(defaultContent);
-    promise.then(value => part.update(value));
+  return directive(<T extends any>(part: T) => {
+    part.update(defaultContent as T);
+    promise.then(value => part.update(value as T));
   });
 }
 
@@ -959,14 +985,14 @@ export function html(
 }
 
 export function render(
-  view: PartValue | PartValue[] | Iterable<PartValue>,
+  view: ITemplateGenerator | PartValue | PartValue[] | IterablePartValue,
   container: Node
 ) {
-  if (isIterable(view as PartValue)) {
+  if (isIterable(view)) {
     view = Array.from(view as IterablePartValue);
   }
   if (!isTemplateGenerator(view)) {
-    view = defaultTemplateFn(view as PartValue);
+    view = defaultTemplateFn(view);
   }
   const instance = (container as any).__template;
   let template: Template;
