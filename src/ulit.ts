@@ -441,13 +441,7 @@ export class AttributePart extends Part {
     }
     const name = this.prop;
     const element = this.target.start as Node;
-    if (!element) {
-      fail();
-    }
     const isSVG = this.isSVG;
-    if (!name) {
-      fail();
-    }
     const removedPropsEntry = removedPropsCache.get(element) || createNewPropsSet(element); 
     if (name in element || removedPropsEntry.has(name)) {
       if (value && (element as any)[name] !== value) {
