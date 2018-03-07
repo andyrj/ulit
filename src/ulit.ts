@@ -105,7 +105,8 @@ function isFirstChildSerial(parent: DocumentFragment): boolean {
   return (child &&
     child.nodeType === COMMENT_NODE &&
     child.textContent &&
-    child.textContent.startsWith(SERIAL_PART_START)) as boolean;
+    child.textContent[0] === "{" &&
+    child.textContent[1] === "{") as boolean;
 }
 
 function parseSerializedParts(value?: string): ISerializedPart[] {
@@ -166,7 +167,7 @@ function createAttributePart(target: Node, path: Array<string | number>, isSVG: 
   let newPart: EventPart | AttributePart;
   const newPropsSet = removedPropsCache.get(element) || createNewPropsSet(element);
   newPropsSet.add(name);
-  if (partTarget[1].startsWith("on")) {
+  if (name[0] === "o" && name[1] === "n") {
     newPart = new EventPart(path, element, isSVG);
   } else {
     newPart = new AttributePart(path, element, isSVG);
@@ -717,7 +718,7 @@ function isAttributePart(x: any) {
 }
 
 function isEventPart(x: any) {
-  if (isAttributePart(x) && x.prop.startsWith("on")) {
+  if (isAttributePart(x) && x.prop[0] === "o" && x.prop[1] == "n") {
     return true;
   }
   return false;
