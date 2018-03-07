@@ -368,9 +368,6 @@ function removeAttribute(
   name: string,
   isSVG: boolean = false
 ) {
-  if (!element || !name) {
-    return;
-  }
   if (!isSVG) {
     element.removeAttribute(name);
   } else {
@@ -384,9 +381,6 @@ function setAttribute(
   value: AttributePartValue,
   isSVG: boolean = false
 ) {
-  if (!element || !name) {
-    return;
-  }
   if (!isString(value)) {
     value = value.toString();
   }
