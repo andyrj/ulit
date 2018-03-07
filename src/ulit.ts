@@ -161,8 +161,7 @@ function getSerializedTemplate(id: number): Optional<ISerialCacheEntry> {
       deserialized = { templateElement, serializedParts, partGenerators };
     }
   }
-  if (deserialized) {
-    serialCache.set(id, deserialized);
+  serialCache.set(id, deserialized as ISerialCacheEntry);
     return deserialized;
   }
   return;
