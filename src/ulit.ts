@@ -405,8 +405,9 @@ export class Part {
     public isSVG: boolean = false
   ) {
     this.target = new DomTarget(target);
-    if (isString(path[path.length - 1])) {
-      this.prop = path[path.length - 1] as string;
+    const len = path.length - 1;
+    if (isString(path[len])) {
+      this.prop = path[len] as string;
     }
     this.path = path.slice(0);
     this.value = target;
