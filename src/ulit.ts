@@ -426,6 +426,7 @@ export class AttributePart extends Part {
     super(path, target, isSVG);
   }
   public update(value?: Optional<AttributePartValue>) {
+    // TODO: trace why this AttributePart Directive fails to update correctly...
     if (isDirective(value)) {
       (value as IDirective)(this);
       return;
@@ -537,7 +538,6 @@ export class NodePart extends Part {
         fail();
       }
     } else {
-      // this.updateNode(value);
       if (value == null) {
         value = document.createComment(`${PART_START}${PART_END}`);
       }
