@@ -613,9 +613,6 @@ export class DomTarget {
   }
   public first(): Node {
     const start = this.start;
-    if (!start || !this.end) {
-      fail();
-    }
     if (isNode(start)) {
       return start;
     } else {
@@ -624,9 +621,6 @@ export class DomTarget {
   }
   public last(): Node {
     const end = this.end;
-    if (!end || !this.start) {
-      fail();
-    }
     if (isNode(end)) {
       return end;
     } else {
@@ -634,9 +628,6 @@ export class DomTarget {
     }
   }
   public remove(): DocumentFragment {
-    if (!this.start || !this.end) {
-      fail();
-    }
     const fragment = document.createDocumentFragment();
     const last = this.last();
     let cursor: Optional<Node> = this.first();
@@ -997,9 +988,6 @@ export function render(
       return;
     }
     instance && instance.disposer.dispose();
-  }
-  if (!isTemplateElement(template.element)) {
-    fail();
   }
   while (container.hasChildNodes()) {
     container.removeChild(container.lastChild as Node);
