@@ -408,7 +408,74 @@ export class Part {
     this.path = path.slice(0);
     this.value = target;
   }
-  public update(value?: PartValue) {
+    }
+
+function createNewPropsSet(part: Part) {
+  const newSet = new Set<string>();
+  removedPropsCache.set(part, newSet);
+  return newSet;
+    }
+const removedPropsCache = new Map<Part, Set<string>>();
+export class AttributePart extends Part {
+  public name: string = "";
+  constructor(path: Array<string | number>, target: Node, isSVG: boolean) {
+    super(path, target, isSVG);
+    this.name = path[path.length - 1] as string;
+    }
+  public update(value?: Optional<PartValue>) {
+    const name = this.name;
+    const element = this.target.start as Node;
+    if (!element) {
+      fail();
+    }
+    const isSVG = this.isSVG;
+    if (!name) {
+      fail();
+    }
+    const removedPropsEntry = removedPropsCache.get(this) || createNewPropsSet(this); 
+    if (name in element || removedPropsEntry.has(name)) {
+      if (value && (element as any)[name] !== value) {
+        (element as any)[name] = value;
+      } else {
+        removedPropsEntry.add(name);
+        delete (element as any)[name];
+        if ((element as HTMLElement).hasAttribute(name)) {
+          removeAttribute(element as HTMLElement, name, isSVG);
+        }
+      }
+    } else {
+      if (!value) {
+        removeAttribute(element as HTMLElement, name, isSVG);
+      } else {
+        setAttribute(element as HTMLElement, name, value, isSVG);
+      }
+    }
+  }
+}
+
+export class EventPart extends AttributePart {
+  constructor(path: Array<string | number>, target: Node, isSVG: boolean) {
+    super(path, target, isSVG);
+  }
+  public update(value?: Optional<EventListener>) {
+    if (!value) {
+      delete (this.target.start as any)[this.name];
+      value = undefined;
+    } else {
+      if (this.value !== value) {
+        (this.target.start as any)[this.name] = value;
+        this.value = value;
+      }
+    }
+    this.value = value;
+  }
+}
+
+export class NodePart extends Part {
+  constructor(path: Array<string | number>, target: Node, isSVG: boolean) {
+    super(path, target, isSVG);
+  }
+  public update(value?: Optional<NodePartValue>) {
     if (isDirective(value)) {
       (value as IDirective)(this);
       return;
@@ -423,60 +490,17 @@ export class Part {
       });
       return;
     }
-    if (isAttributePart(this)) {
-      this.updateAttribute(this.prop, value);
-      return;
-    }
     if (isIterable(val)) {
       val = Array.from(val as any);
     }
     if (isArray(val)) {
       const directive = repeat(val);
-      this.value = directive;
       directive(this);
       return;
     }
-    if (isTemplateGenerator(val) || isTemplate(val)) {
-      this.updateTemplate(val as ITemplateGenerator);
-    } else {
-      this.updateNode(val as Optional<PartValue>);
-    }
-  }
-
-  private updateAttribute(name: string, value: Optional<PartValue>) {
-    const element = this.target.start as Node;
-    if (!element) {
-      fail();
-    }
-    const isSVG = this.isSVG;
-    if (!name) {
-      fail();
-    }
-    const isValFn = isFunction(value);
-    if (name in element || (isValFn && isEventPart(this))) {
-      if (value && (element as any)[name] !== value) {
-        (element as any)[name] = value;
-      } else {
-        delete (element as any)[name];
-        if ((element as HTMLElement).hasAttribute(name)) {
-          removeAttribute(element as HTMLElement, name, isSVG);
-        }
-      }
-    } else {
-      if (!value) {
-        removeAttribute(element as HTMLElement, name, isSVG);
-      } else {
-        setAttribute(element as HTMLElement, name, value, isSVG);
-      }
-    }
-  }
-
-  private updateTemplate(value: ITemplateGenerator) {
     const first = this.target.first();
     const parent = first.parentNode;
-    if (!parent) {
-      fail();
-    }
+    if (isTemplateGenerator(value)) { 
     const instance = isTemplate(this.value) ? this.value : undefined;
     if (instance && (instance as Template).id === value.id) {
       (instance as Template).update(value.exprs);
@@ -495,16 +519,10 @@ export class Part {
     } else {
       fail();
     }
-  }
-
-  private updateNode(value: Optional<PartValue>) {
+    } else {
+      // this.updateNode(value);
     if (value == null) {
       value = document.createComment(`${PART_START}${PART_END}`);
-    }
-    const first = this.target.first();
-    const parent = first.parentNode;
-    if (parent == null) {
-      fail();
     }
     let newStart: Optional<Node> = undefined;
     let newEnd: Optional<Node> = undefined;
@@ -564,6 +582,7 @@ export class Part {
       }
     }
   }
+}
 }
 
 export class DomTarget {
