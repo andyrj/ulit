@@ -985,7 +985,7 @@ export function html(
 }
 
 export function render(
-  view: ITemplateGenerator | PartValue | PartValue[] | IterablePartValue,
+  view: PartValue,
   container: Node
 ) {
   if (isIterable(view)) {
