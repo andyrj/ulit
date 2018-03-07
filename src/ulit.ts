@@ -42,8 +42,10 @@ export interface IToString {
 const SVG = "SVG";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FOREIGN_OBJECT = "FOREIGNOBJECT";
-const PART_START = "{{";
-const PART_END = "}}";
+const CURLY_OPEN="{";
+const CURLY_CLOSE="}";
+const PART_START = `${CURLY_OPEN}${CURLY_OPEN}`;
+const PART_END = `${CURLY_CLOSE}${CURLY_CLOSE}`;
 const PART = "part";
 const SERIAL_PART_START = `${PART_START}${PART}s:`;
 const PART_MARKER = `${PART_START}${PART_END}`;
@@ -105,8 +107,8 @@ function isFirstChildSerial(parent: DocumentFragment): boolean {
   return (child &&
     child.nodeType === COMMENT_NODE &&
     child.textContent &&
-    child.textContent[0] === "{" &&
-    child.textContent[1] === "{") as boolean;
+    child.textContent[0] === CURLY_OPEN &&
+    child.textContent[1] === CURLY_OPEN) as boolean;
 }
 
 function parseSerializedParts(value?: string): ISerializedPart[] {
