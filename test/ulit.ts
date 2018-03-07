@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import "mocha";
-import { directive, Disposable, DomTarget, html, IDisposer, Part, render, Template, PartGenerator, followPath, Optional, PartValue } from "../src/ulit";
+import { directive, Disposable, DomTarget, html, IDisposer, AttributePart, EventPart, NodePart, render, Template, PartGenerator, followPath, Optional, PartValue } from "../src/ulit";
 
 let target;
 before(() => {
@@ -29,7 +29,7 @@ describe("Template", () => {
     paths.forEach(path => {
       generators.push((target: Node) => {
         const partTarget = followPath(target, path);
-        return new Part(
+        return new NodePart(
           path,
           partTarget as Node,
           false
@@ -48,7 +48,7 @@ describe("Part", () => {
     const fragment = document.createDocumentFragment();
     const target = document.createElement("div");
     fragment.appendChild(target);
-    const test1 = new Part([0], target);
+    const test1 = new NodePart([0], target);
     expect(test1.value !== undefined).to.equal(true);
     expect(test1.path !== undefined).to.equal(true);
     expect(test1.disposer !== undefined).to.equal(true);
@@ -60,7 +60,7 @@ describe("Part", () => {
     const fragment = document.createDocumentFragment();
     const comment = document.createComment("{{}}");
     fragment.appendChild(comment);
-    const part = new Part([0], comment, false);
+    const part = new NodePart([0], comment, false);
     expect(fragment.firstChild.nodeType).to.equal(8);
     part.update();
     expect(fragment.firstChild.nodeType).to.equal(8);
@@ -72,7 +72,7 @@ describe("Part", () => {
     const fragment = document.createDocumentFragment();
     const comment = document.createComment("{{}}");
     fragment.appendChild(comment);
-    const part = new Part([0], comment, false);
+    const part = new NodePart([0], comment, false);
     expect(fragment.firstChild.nodeType).to.equal(8);
     const str = "test";
     part.update(str);
@@ -87,7 +87,7 @@ describe("Part", () => {
     const fragment = document.createDocumentFragment();
     const comment = document.createComment("{{}}");
     fragment.appendChild(comment);
-    const part = new Part([0], comment, false);
+    const part = new NodePart([0], comment, false);
     expect(fragment.firstChild.nodeType).to.equal(8);
     const div = document.createElement("div");
     const span = document.createElement("span");
@@ -101,7 +101,7 @@ describe("Part", () => {
     const fragment = document.createDocumentFragment();
     const comment = document.createComment("{{}}");
     fragment.appendChild(comment);
-    const part = new Part([0], comment, false);
+    const part = new NodePart([0], comment, false);
     expect(fragment.firstChild.nodeType).to.equal(8);
     const frag1 = document.createDocumentFragment();
     const frag2 = document.createDocumentFragment();
@@ -131,7 +131,7 @@ describe("Part", () => {
     const fragment = document.createDocumentFragment();
     const comment = document.createComment("{{}}");
     fragment.appendChild(comment);
-    const part = new Part([0], comment, false);
+    const part = new NodePart([0], comment, false);
     part.update();
     expect(fragment.firstChild.nodeType).to.equal(8);
     let directivePart;
@@ -146,7 +146,7 @@ describe("Part", () => {
     const fragment = document.createDocumentFragment();
     const comment = document.createComment("{{}}");
     fragment.appendChild(comment);
-    const part = new Part([0], comment, false);
+    const part = new NodePart([0], comment, false);
     part.update();
     expect(fragment.firstChild.nodeType).to.equal(8);
     part.update(new Promise((resolve, reject) => {
@@ -162,7 +162,7 @@ describe("Part", () => {
     const fragment = document.createDocumentFragment();
     const div = document.createElement("div");
     fragment.appendChild(div);
-    const part = new Part([0, "id"], div, false);
+    const part = new AttributePart([0, "id"], div, false);
     expect((fragment.firstChild as HTMLElement).id).to.equal("");
     part.update();
     expect((fragment.firstChild as HTMLElement).id).to.equal("");
@@ -181,7 +181,7 @@ describe("Part", () => {
     const fragment = document.createDocumentFragment();
     const comment = document.createComment("{{}}");
     fragment.appendChild(comment);
-    const part = new Part([0], comment, false);
+    const part = new NodePart([0], comment, false);
     expect(fragment.firstChild.nodeType === 8).to.equal(true);
     const iter = new Set<string>();
     iter.add("A");
@@ -212,8 +212,8 @@ describe("DomTarget", () => {
     const partNode = document.createComment("{{}}");
     fragment.appendChild(partNode);
     const t1 = new DomTarget();
-    t1.start = new Part([0], partNode, false);
-    t1.end = new Part([1], partNode, false);
+    t1.start = new NodePart([0], partNode, false);
+    t1.end = new NodePart([1], partNode, false);
     expect(t1.first()).to.equal(partNode);
     expect(t1.last()).to.equal(partNode);
     t1.start = partNode;
@@ -392,7 +392,7 @@ describe("render", () => {
     expect(target.innerHTML).to.equal(`<div></div>`);
   });
   it("attribute directives should work as expected", () => {
-    const template = (str: string) => html`<div id=${directive(part => part.update(str))}>test</div>`;
+    const template = (str: string) => html`<div id=${directive(part => (part as AttributePart).update(str))}>test</div>`;
     render(template("test"), target);
     expect((target.firstChild as any).id).to.equal("test");
     render(template("test1"), target);
