@@ -213,7 +213,6 @@ function templateSetup(
         parent.removeChild(element);
       }
     } else if (isElementNode(element)) {
-      // TODO: re-write, change to be like lit-extended and use data-stuff$="attribute" id="prop"
       [].forEach.call(element.attributes, (attr: Attr) => {
         if (attr.value === PART_MARKER) {
           const name = attr.name;
