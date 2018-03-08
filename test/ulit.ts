@@ -391,6 +391,7 @@ describe("render", () => {
     render(test3(undefined), target);
     expect(target.innerHTML).to.equal(`<div></div>`);
   });
+  /*
   it("attribute directives should work as expected", () => {
     const template = (str: string) => html`<div id=${directive(part => (part as AttributePart).update(str))}>test</div>`;
     render(template("test"), target);
@@ -398,6 +399,7 @@ describe("render", () => {
     render(template("test1"), target);
     expect((target.firstChild as any).id).to.equal("test1");
   });
+  */
   it("arrays", () => {
     const arr = [1, 2 ,3];
     render(arr, target);
