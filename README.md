@@ -17,9 +17,8 @@ Rough parity with lit-html + lit-extended on features and general api setup.
 
 Pros:
 * Transparent svg support - (no need for special svg tagged template function)
-* Simple depth first search walkDOM(fn) avoids using slow TreeWalker and allows for simple tracking of path during recursive dfs.
 * SSR support via serializable part paths.  This uses followPath(Array<Number|String>), which handles most of the setup work, and it can be pre-rendered down to static html that can be delivered to the client and hydrated, bypassing the more expensive process required if a serialized template is not present in the dom.
-* By using "{{}}" for attributes and \<\!\-\-\{\{\}\}\-\-\> for part placeholders, this library doesn't need to use regex, doesn't force quotes on attributes in templates and can be generally simpler.
+* By using "{{}}" for attributes and \<\!\-\-\{\{\}\}\-\-\> for part placeholders, the initialization can be simplified and require less regex/string manipulation.
 
 Cons:
 * No plan to support partial parts. i.e.
@@ -82,13 +81,13 @@ const partApiDirective = directive(part => {
   // update part with a new PartValue
   part.update("test");
 
-  // parts have a dispose event so that you can clean up anything your directives create on dispose...
+  // parts have a disposer with a dispose event so that you can clean up anything your directives create on dispose...
   // parts are disposed when templates replace one another and have differing static parts, or when a part changes from a directive to another valid PartValue
   const handler = handlerPart => {
     // normally clean up whatever LUT/cache you have seems like Map<part, ...> is pretty useful inside directives
   };
-  part.addDisposer(handler);
-  part.removeDisposer(handler);
+  part.disposer.addDisposer(handler);
+  part.disposer.removeDisposer(handler);
 
   // parts and templates share a common key of "target" which is a DomTarget that is used to store
   // the edges of the part/template

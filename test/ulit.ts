@@ -412,7 +412,7 @@ describe("render", () => {
     };
     const view = (state, dispatch) => html`
       <button onclick=${_ => dispatch("down")}>-</button>
-      <div>${state.num}</div>
+      ${state.num}
       <button onclick=${_ => dispatch("up")}>+</button>
     `;
     const app = ({ state, actions, view, target }) => {
@@ -428,6 +428,7 @@ describe("render", () => {
     expect(typeof target.firstChild.onclick).to.equal("function");
     expect(target.lastChild.onclick !== "{{}}").to.equal(true);
     expect(typeof target.lastChild.onclick).to.equal("function");
+    expect(target.innerHTML).to.equal(`<button>-</button><div>0</div><button>+</button>`);
   });
   it("arrays", () => {
     const arr = [1, 2 ,3];
