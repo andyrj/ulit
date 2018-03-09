@@ -923,7 +923,7 @@ export function html(
   if (factory) {
     return factory(expressions);
   }
-  const markUp = strings.join(PART_MARKER);
+  const markUp = strings.join(PART_MARKER).trim();
   factory = function(exprs: PartValue[]) {
     const generator = function() {
       const values = arguments.length === 0 ? exprs : arguments[0];

@@ -391,7 +391,6 @@ describe("render", () => {
     render(test3(undefined), target);
     expect(target.innerHTML).to.equal(`<div></div>`);
   });
-  /*
   it("attribute directives should work as expected", () => {
     const template = (str: string) => html`<div id=${directive(part => (part as AttributePart).update(str))}>test</div>`;
     render(template("test"), target);
@@ -399,7 +398,37 @@ describe("render", () => {
     render(template("test1"), target);
     expect((target.firstChild as any).id).to.equal("test1");
   });
-  */
+  it("event handler bug case, issue #2", () => {
+    const state = {
+      num: 0
+    };
+    const actions = {
+      up: (state, dispatch) => data => ({
+        num: state.num + 1
+      }),
+      down: (state, dispatch) => data => ({
+        num: state.num - 1
+      })
+    };
+    const view = (state, dispatch) => html`
+      <button onclick=${_ => dispatch("down")}>-</button>
+      <div>${state.num}</div>
+      <button onclick=${_ => dispatch("up")}>+</button>
+    `;
+    const app = ({ state, actions, view, target }) => {
+      const dispatch = (name, data) => {
+        state = Object.assign({}, state, actions[name](state, actions)(data));
+        render(view(state, dispatch), target);
+      }
+      const generator = view(state, dispatch);
+      render(generator, target);
+    };
+    app({ state, actions, view, target });
+    expect(target.firstChild.onclick !== "{{}}").to.equal(true);
+    expect(typeof target.firstChild.onclick).to.equal("function");
+    expect(target.lastChild.onclick !== "{{}}").to.equal(true);
+    expect(typeof target.lastChild.onclick).to.equal("function");
+  });
   it("arrays", () => {
     const arr = [1, 2 ,3];
     render(arr, target);
