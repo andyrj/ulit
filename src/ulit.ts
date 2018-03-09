@@ -832,7 +832,7 @@ function normalizeMarkUp(strings: TemplateStringsArray) {
 }
 
 // TODO: breakout the logic in templateSetup() and use TreeWalker instead to fix the missed nodes in some templates with walkDOM...
-//  also consider changing to use 
+//  also consider changing to use html`<div id=${"prop"} data-stuff$=${"attribute"} onSomething=${eventHandler}`
 /*
 function templateSetup(
   serial: ISerializedPart[],
