@@ -178,73 +178,6 @@ function createAttributePart(target: Node, path: Array<string | number>, isSVG: 
   return newPart;
 }
 
-function templateSetup(
-  serial: ISerializedPart[],
-  partGenerators: PartGenerator[]
-): WalkFn {
-  return (parent, element, walkPath) => {
-    const isSVG = element ? isNodeSVGChild(element) : false;
-    if (isText(element)) {
-      const text = element && element.textContent;
-      const split = text && text.split(PART_MARKER);
-      const end = split ? split.length - 1 : undefined;
-      const nodes: Node[] = [];
-      let cursor = 0;
-      if (split && split.length > 0 && end) {
-        split.forEach((node, i) => {
-          if (node !== "") {
-            nodes.push(document.createTextNode(node));
-            cursor++;
-          }
-          if (i < end) {
-            const newPartComment = document.createComment(PART_MARKER);
-            nodes.push(newPartComment);
-            const adjustedPath = walkPath.slice(0);
-            const len = adjustedPath.length - 1;
-            (adjustedPath[len] as number) += cursor;
-            serial.push([adjustedPath, isSVG]);
-            partGenerators.push((target: Node) => {
-              const partTarget = followPath(target, adjustedPath as number[]);
-              return new NodePart(adjustedPath, partTarget as Node, isSVG);
-            });
-            cursor++;
-          }
-        });
-        nodes.forEach(node => {
-          parent.insertBefore(node, element);
-        });
-        parent.removeChild(element);
-      }
-    } else if (isElementNode(element)) {
-      [].forEach.call(element.attributes, (attr: Attr) => {
-        if (attr.value === PART_MARKER) {
-          const name = attr.name;
-          const attrPath = walkPath.concat(name);
-          serial.push([attrPath, isSVG]);
-          partGenerators.push((target: Node) => createAttributePart(target, attrPath, isSVG));
-          if (isSVG) {
-            element.removeAttributeNS(SVG_NS, name);
-          } else {
-            element.removeAttribute(name);
-          }
-        }
-      });
-      const keys = Object.keys(element);
-      const len = keys.length;
-      let i = 0;
-      for (; i < len; i++) {
-        const name = keys[i];
-        if ((element as any)[name] === PART_MARKER) {
-          const propPath = walkPath.concat(name);
-          serial.push([propPath, isSVG]);
-          partGenerators.push((target: Node) => createAttributePart(target, propPath, isSVG));
-          delete (element as any)[name];
-        }
-      }
-    }
-  };
-}
-
 export function followPath(
   target: Node,
   pointer: Array<string | number>
@@ -870,30 +803,6 @@ function fail(msg?: Optional<string>): never {
   }
 }
 
-type WalkFn = (
-  parent: Node,
-  element: Optional<Node>,
-  path: Array<string | number>
-) => void | never;
-
-function walkDOM(
-  parent: Node | DocumentFragment,
-  element: Optional<Node>,
-  fn: WalkFn,
-  path: Array<number | string> = []
-) {
-  if (!element) {
-    element = parent;
-  } else {
-    fn(parent, element, path);
-  }
-  [].forEach.call((element as HTMLElement).childNodes, (child: Node, index: number) => {
-    path.push(index);
-    walkDOM(element as Node, child, fn, path);
-    path.pop();
-  });
-}
-
 const idCache = new Map<TemplateStringsArray, number>();
 function getId(arr: TemplateStringsArray): number {
   if (idCache.has(arr)) {
@@ -912,6 +821,88 @@ function getId(arr: TemplateStringsArray): number {
   return id;
 }
 
+function normalizeMarkUp(strings: TemplateStringsArray) {
+  const result: string[] = [];
+  let i = 0;
+  const len = strings.length;
+  for (; i < len; i++) {
+    result.push(strings[i].replace(/(\r\n\t|\n|\r\t)/gm,"").replace(/>\s*</gm, "><"));
+  }
+  return result.join(PART_MARKER).trim();
+}
+
+// TODO: breakout the logic in templateSetup() and use TreeWalker instead to fix the missed nodes in some templates with walkDOM...
+//  also consider changing to use 
+/*
+function templateSetup(
+  serial: ISerializedPart[],
+  partGenerators: PartGenerator[]
+): WalkFn {
+  return (element, walkPath) => {
+    const parent = element.ParentNode;
+    const isSVG = element ? isNodeSVGChild(element) : false;
+    if (isText(element)) {
+      const text = element && element.textContent;
+      const split = text && text.split(PART_MARKER);
+      const end = split ? split.length - 1 : undefined;
+      const nodes: Node[] = [];
+      let cursor = 0;
+      if (split && split.length > 0 && end) {
+        split.forEach((node, i) => {
+          if (node !== "") {
+            nodes.push(document.createTextNode(node));
+            cursor++;
+          }
+          if (i < end) {
+            const newPartComment = document.createComment(PART_MARKER);
+            nodes.push(newPartComment);
+            const adjustedPath = walkPath.slice(0);
+            const len = adjustedPath.length - 1;
+            (adjustedPath[len] as number) += cursor;
+            serial.push([adjustedPath, isSVG]);
+            partGenerators.push((target: Node) => {
+              const partTarget = followPath(target, adjustedPath as number[]);
+              return new NodePart(adjustedPath, partTarget as Node, isSVG);
+            });
+            cursor++;
+          }
+        });
+        nodes.forEach(node => {
+          parent.insertBefore(node, element);
+        });
+        parent.removeChild(element);
+      }
+    } else if (isElementNode(element)) {
+      [].forEach.call(element.attributes, (attr: Attr) => {
+        if (attr.value === PART_MARKER) {
+          const name = attr.name;
+          const attrPath = walkPath.concat(name);
+          serial.push([attrPath, isSVG]);
+          partGenerators.push((target: Node) => createAttributePart(target, attrPath, isSVG));
+          if (isSVG) {
+            element.removeAttributeNS(SVG_NS, name);
+          } else {
+            element.removeAttribute(name);
+          }
+        }
+      });
+      const keys = Object.keys(element);
+      const len = keys.length;
+      let i = 0;
+      for (; i < len; i++) {
+        const name = keys[i];
+        if ((element as any)[name] === PART_MARKER) {
+          const propPath = walkPath.concat(name);
+          serial.push([propPath, isSVG]);
+          partGenerators.push((target: Node) => createAttributePart(target, propPath, isSVG));
+          delete (element as any)[name];
+        }
+      }
+    }
+  };
+}
+*/
+
 const factoryCache = new Map<number, ITemplateGeneratorFactory>();
 const serialCache = new Map<number, ISerialCacheEntry>();
 export function html(
@@ -923,7 +914,7 @@ export function html(
   if (factory) {
     return factory(expressions);
   }
-  const markUp = strings.join(PART_MARKER).trim();
+  const markUp = normalizeMarkUp(strings);
   factory = function(exprs: PartValue[]) {
     const generator = function() {
       const values = arguments.length === 0 ? exprs : arguments[0];
@@ -940,11 +931,14 @@ export function html(
       if (!templateElement.hasChildNodes()) {
         templateElement.innerHTML = markUp;
         const fragment = templateElement.content;
+        // TODO: changeto TreeWalker...
+        /*
         walkDOM(
           fragment,
           undefined,
           templateSetup(serializedParts, partGenerators)
         );
+        */
         serialCache.set(id, {
           templateElement,
           partGenerators,
